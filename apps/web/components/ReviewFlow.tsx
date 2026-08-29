@@ -183,11 +183,13 @@ export function ReviewFlow({ business, qrCode }: ReviewFlowProps) {
         />
       )}
 
-      <a
-        className="btn btn-text"
-        href={`/${business.slug}/feedback`}
-        onClick={() => track('private_feedback_open')}
-      >
+      {/*
+        No private_feedback_open here. The feedback page emits it on render, which is what the
+        taxonomy means by "Private feedback form opened" — emitting on the click as well would
+        double-count every visitor who arrives from this flow, and inflate the denominator that
+        private_feedback_submit is measured against.
+      */}
+      <a className="btn btn-text" href={`/${business.slug}/feedback`}>
         Send private feedback instead
       </a>
 

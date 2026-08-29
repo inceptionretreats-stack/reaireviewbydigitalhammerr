@@ -1,0 +1,17 @@
+{
+  // Why this file exists.
+  //
+  // `packages/ui/tsconfig.json` sets `"jsx": "preserve"`, which is correct for the package's
+  // own `tsc --noEmit` and for Next.js, which does its own JSX transform. Vite (and therefore
+  // Vitest) reads the nearest tsconfig for each file it transforms, and refuses to transform
+  // `.tsx` when it finds `preserve` — "Failed to parse source for import analysis ... make sure
+  // to not set jsx to preserve". The root `vitest.config.ts` is shared by every package and is
+  // out of this module's scope to change.
+  //
+  // Scoping the automatic JSX runtime to this directory fixes the test transform without
+  // altering how the package is built or type-checked. If a React plugin is added to the root
+  // Vitest config later, this file can be deleted.
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "jsx": "react-jsx" },
+  "include": ["**/*.ts", "**/*.tsx"]
+}

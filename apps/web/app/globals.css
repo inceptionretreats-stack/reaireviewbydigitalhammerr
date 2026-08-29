@@ -2,19 +2,25 @@
  * Customer-facing styling is mobile-first and deliberately plain (18_UI_UX_Design_System_Brief).
  * Accessibility here is an acceptance criterion, not a preference: AC-037 requires keyboard
  * operation with visible focus, and AC-038 requires WCAG AA contrast.
+ *
+ * The shared kit's stylesheet is imported first: it is the Tailwind v4 entry point, so without
+ * it no utility class in @ai-review/ui resolves and the dashboard renders as unstyled markup —
+ * a failure that shows up visually rather than as a build error. It also owns the design
+ * tokens. The :root block below therefore keeps only the aliases the hand-written public-flow
+ * CSS uses, mapped onto those tokens, so the two cannot drift apart.
  */
+@import '@ai-review/ui/styles.css';
 
 :root {
-  --bg: #ffffff;
-  --surface: #f6f7f9;
-  --border: #d8dce3;
-  --text: #14181f;
-  --text-muted: #4d5765;
-  --accent: #1a56db;
-  --accent-text: #ffffff;
-  --danger: #b3261e;
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --border: var(--color-border);
+  --text: var(--color-ink);
+  --text-muted: var(--color-ink-muted);
+  --accent: var(--color-accent);
+  --accent-text: var(--color-accent-ink);
+  --danger: var(--color-danger);
   --radius: 10px;
-  color-scheme: light;
 }
 
 * {
@@ -168,18 +174,4 @@ textarea {
   color: var(--text-muted);
   text-align: center;
   margin-top: 1.5rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #10131a;
-    --surface: #1a1f29;
-    --border: #333b49;
-    --text: #f2f4f8;
-    --text-muted: #a9b2c0;
-    --accent: #7aa2f7;
-    --accent-text: #0b0e14;
-    --danger: #f2857c;
-    color-scheme: dark;
-  }
 }

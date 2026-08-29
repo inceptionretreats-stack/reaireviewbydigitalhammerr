@@ -233,3 +233,57 @@ describe('prompt construction', () => {
     expect(used).toBeLessThan(business.contextTerms.length);
   });
 });
+
+describe('generation time budget', () => {
+  /**
+   * options.timeoutMs is the budget for the whole call. Giving each of two attempts the full
+   * 8 seconds would let the quality-gate retry reach 16s — past the point the customer has
+   * abandoned the page, while still billing both calls.
+   */
+  it('shares one deadline across the retry rather than restarting it', async () => {
+    const budgets: number[] = [];
+    const store = new MemoryQuotaStore();
+    store.seed(BIZ, { mode: 'FREE', used: 0, limit: 10 });
+
+    const recordingProvider = {
+      name: 'recording',
+      generate(params: { timeoutMs: number }) {
+        budgets.push(params.timeoutMs);
+        return Promise.resolve({
+          output: {
+            // Always identical, so the variation gate rejects and forces the retry.
+            review_text:
+              'Visited recently and found the whole thing straightforward. Staff were helpful when I had a question, and I would happily come back another time.',
+            used_context_terms: [],
+            claim_risk: 'low' as const,
+            internal_quality_notes: [],
+          },
+          inputTokens: 10,
+          outputTokens: 10,
+          providerRequestId: 'rec',
+          latencyMs: 1,
+        });
+      },
+    };
+
+    const generator = new ReviewGenerator(recordingProvider, new QuotaService(store));
+    await generator.generate(options([PRIOR_DRAFT], 2));
+
+    expect(budgets).toHaveLength(2);
+    expect(budgets[0]).toBeLessThanOrEqual(8000);
+    // The second attempt gets what is left, never a fresh 8s.
+    expect(budgets[1]!).toBeLessThanOrEqual(budgets[0]!);
+    expect(budgets[0]! + budgets[1]!).toBeLessThanOrEqual(16000);
+  });
+
+  it('does not start an attempt with too little budget to finish', async () => {
+    const { generator } = makeGenerator('repetitive');
+
+    const outcome = await generator.generate({
+      ...options([PRIOR_DRAFT], 2),
+      timeoutMs: 100,
+    });
+
+    expect(outcome).toMatchObject({ ok: false });
+  });
+});

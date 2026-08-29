@@ -61,6 +61,12 @@ export type GenerationFailure =
 export type GenerationOutcome =
   { ok: true; draft: GeneratedDraft } | { ok: false; failure: GenerationFailure };
 
+/**
+ * Floor below which a retry is not attempted. Roughly the time a short structured generation
+ * needs to complete at all; starting one with less remaining wastes a billed call.
+ */
+const MIN_ATTEMPT_BUDGET_MS = 1500;
+
 export class ReviewGenerator {
   constructor(
     private readonly provider: AiProvider,
@@ -105,17 +111,36 @@ export class ReviewGenerator {
   /**
    * Generates, checks, and retries at most once — the spec allows exactly one internal retry
    * with a stronger variation instruction (regeneration algorithm step 4).
+   *
+   * options.timeoutMs is the budget for the WHOLE call, not per attempt. That distinction
+   * matters: 09_AI_Prompt_and_Generation_Spec.md sets an 8-second server-side budget, and
+   * giving each of two attempts the full 8s would let a retry reach 16s — past the point where
+   * the customer has given up, while still billing for both calls. The deadline is therefore
+   * shared, and a retry is skipped when too little of it remains to be worth spending.
    */
   private async produceAcceptableDraft(
     options: GenerateOptions,
   ): Promise<Omit<GeneratedDraft, 'countedTowardQuota'>> {
     const threshold = options.similarityThreshold ?? DEFAULT_SIMILARITY_THRESHOLD;
     const maxAttempts = 2;
+    const deadline = Date.now() + options.timeoutMs;
 
     let lastRejections: string[] = [];
     let providerCalls = 0;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const remainingMs = deadline - Date.now();
+
+      // A retry needs enough budget left to plausibly finish. Below the floor the honest move
+      // is to stop and surface the rejection rather than start a call that will time out and
+      // be billed anyway.
+      if (remainingMs < MIN_ATTEMPT_BUDGET_MS) {
+        if (attempt === 1) {
+          throw new AiProviderError('generation budget exhausted', 'TIMEOUT', true);
+        }
+        break;
+      }
+
       const prompt = buildPrompt(
         attempt === 1 ? options.request : withStrongerVariation(options.request),
         options.promptVersion.systemPrompt,
@@ -126,7 +151,7 @@ export class ReviewGenerator {
         model: options.promptVersion.model,
         maxOutputTokens: options.promptVersion.maxOutputTokens,
         reasoningEffort: options.promptVersion.reasoningEffort,
-        timeoutMs: options.timeoutMs,
+        timeoutMs: remainingMs,
         outputSchema: options.promptVersion.outputSchema,
       });
       providerCalls += 1;

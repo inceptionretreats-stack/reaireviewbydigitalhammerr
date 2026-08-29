@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import {
+  assets,
   businessSlugs,
   businesses,
   qrCodes,
@@ -103,18 +104,24 @@ async function loadPublicConfig(
   db: Database,
   businessId: string,
 ): Promise<Omit<PublicBusinessConfig, 'qrCodeId' | 'qrSourceLabel'> | null> {
+  // Left-joined rather than selected separately: the logo is optional, and an inner join
+  // would silently hide every business that has not uploaded one.
   const [business] = await db
     .select({
       id: businesses.id,
       name: businesses.name,
       status: businesses.status,
+      deletedAt: businesses.deletedAt,
+      logoStorageKey: assets.storageKey,
     })
     .from(businesses)
+    .leftJoin(assets, eq(assets.id, businesses.logoAssetId))
     .where(eq(businesses.id, businessId))
     .limit(1);
 
   // Flow J: a suspended or draft tenant shows an unavailable state rather than its page.
-  if (!business || business.status !== 'ACTIVE') return null;
+  // deleted_at is checked too — a soft-deleted row left at ACTIVE would otherwise keep serving.
+  if (!business || business.status !== 'ACTIVE' || business.deletedAt) return null;
 
   const [primarySlug] = await db
     .select({ slug: businessSlugs.slug })
@@ -138,8 +145,23 @@ async function loadPublicConfig(
     businessId: business.id,
     slug: primarySlug?.slug ?? '',
     name: business.name,
-    logoUrl: null,
+    logoUrl: buildAssetUrl(business.logoStorageKey),
     reviewUrl: destination?.url ?? null,
     reviewPlatformLabel: destination?.label ?? 'Google',
   };
+}
+
+/**
+ * Resolves a stored object key to a public CDN URL.
+ *
+ * Returns null when the business has no logo or no CDN base is configured, so the caller
+ * renders no image rather than a broken one.
+ */
+function buildAssetUrl(storageKey: string | null): string | null {
+  if (!storageKey) return null;
+  const base = process.env.S3_PUBLIC_BASE_URL;
+  if (!base) return null;
+  const trimmedBase = base.endsWith('/') ? base.slice(0, -1) : base;
+  const trimmedKey = storageKey.startsWith('/') ? storageKey.slice(1) : storageKey;
+  return `${trimmedBase}/${trimmedKey}`;
 }

@@ -12,6 +12,7 @@ const config: NextConfig = {
     '@ai-review/config',
     '@ai-review/contracts',
     '@ai-review/analytics',
+    '@ai-review/ui',
   ],
 
   async headers() {

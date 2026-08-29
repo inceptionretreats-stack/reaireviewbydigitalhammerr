@@ -1,0 +1,131 @@
+/*
+ * Design tokens for the shared component kit (18_UI_UX_Design_System_Brief.md).
+ *
+ * This file is the Tailwind entry point. `apps/web/app/globals.css` styles the public review
+ * flow with hand-written CSS and its own `:root` custom properties; the values below are the
+ * same palette, re-declared under Tailwind's `--color-*` namespace so that utilities such as
+ * `bg-accent` and `text-ink-muted` exist. The names differ only where the original ones would
+ * have produced unusable utility names (`--text` would collide with Tailwind's font-size
+ * namespace and yield `text-text`):
+ *
+ *   globals.css      ->  here
+ *   --bg             ->  --color-bg
+ *   --surface        ->  --color-surface
+ *   --border         ->  --color-line
+ *   --text           ->  --color-ink
+ *   --text-muted     ->  --color-ink-muted
+ *   --accent         ->  --color-accent
+ *   --accent-text    ->  --color-on-accent
+ *   --danger         ->  --color-danger
+ *
+ * Dark mode is a token swap under `prefers-color-scheme`, exactly as globals.css does it, and
+ * deliberately not a `dark:` variant on every component. One set of values means a component
+ * cannot accidentally ship a light-only contrast pair, which is what AC-038 (WCAG AA in *all*
+ * provided themes) actually fails on in practice.
+ *
+ * Every foreground/background pair defined here was checked against WCAG 2.2: >= 4.5:1 for text
+ * and >= 3:1 for control borders and focus rings (1.4.3 and 1.4.11). The lowest text pair is
+ * 5.35:1 and the lowest non-text pair is 3.78:1. `--color-line` is decorative only (card edges,
+ * table rules); anything that bounds an interactive control uses `--color-line-strong`, which is
+ * the pair that has to clear 3:1.
+ */
+
+@import 'tailwindcss';
+
+/*
+ * Tailwind v4 skips node_modules during automatic source detection, and this kit reaches the app
+ * through a pnpm workspace symlink, so its own class names would otherwise never be discovered.
+ * The path resolves relative to this file.
+ */
+@source '.';
+
+@theme {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-bg: #ffffff;
+  --color-surface: #f6f7f9;
+  --color-line: #d8dce3;
+  --color-line-strong: #767f8c;
+  --color-ink: #14181f;
+  --color-ink-muted: #4d5765;
+
+  --color-accent: #1a56db;
+  --color-accent-hover: #1748b8;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #e8effc;
+
+  --color-danger: #b3261e;
+  --color-danger-hover: #8f1e17;
+  --color-on-danger: #ffffff;
+  --color-danger-soft: #fdeceb;
+
+  --color-success: #0b5f3b;
+  --color-success-soft: #e7f6ee;
+
+  --color-warning: #8a5300;
+  --color-warning-soft: #fdf1de;
+
+  --color-neutral-soft: #eef0f4;
+
+  /* Semantic radii rather than an override of Tailwind's t-shirt scale, so both remain usable. */
+  --radius-control: 10px;
+  --radius-card: 12px;
+  --radius-pill: 999px;
+}
+
+:root {
+  color-scheme: light;
+}
+
+/*
+ * Order matters: these declarations must follow the `@theme` block so they win over the values
+ * Tailwind emits into `:root`.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-bg: #10131a;
+    --color-surface: #1a1f29;
+    --color-line: #333b49;
+    --color-line-strong: #8b95a5;
+    --color-ink: #f2f4f8;
+    --color-ink-muted: #a9b2c0;
+
+    --color-accent: #7aa2f7;
+    --color-accent-hover: #9ab8f9;
+    --color-on-accent: #0b0e14;
+    --color-accent-soft: #1b2740;
+
+    --color-danger: #f2857c;
+    --color-danger-hover: #f6a49e;
+    --color-on-danger: #1c0705;
+    --color-danger-soft: #3a1512;
+
+    --color-success: #6fd39f;
+    --color-success-soft: #10301f;
+
+    --color-warning: #f0b757;
+    --color-warning-soft: #3a2a10;
+
+    --color-neutral-soft: #232a36;
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  /*
+   * AC-037 backstop. Components set their own focus styling, but anything focusable that this
+   * kit does not own (a raw anchor in page content, for example) still gets a visible ring
+   * rather than the ring Preflight would otherwise leave to the browser default.
+   */
+  :focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
