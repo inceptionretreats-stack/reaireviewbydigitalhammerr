@@ -1,0 +1,23 @@
+erDiagram
+  USERS ||--o{ BUSINESSES : owns
+  BUSINESSES ||--o{ BUSINESS_LINKS : has
+  BUSINESSES ||--o{ REVIEW_DESTINATIONS : has
+  BUSINESSES ||--|| AI_BUSINESS_CONTEXTS : configures
+  BUSINESSES ||--o{ REVIEW_MODES : has
+  BUSINESSES ||--o{ QR_CODES : issues
+  BUSINESSES ||--o{ ANONYMOUS_SESSIONS : receives
+  BUSINESSES ||--o{ AI_GENERATIONS : produces
+  AI_PROMPT_VERSIONS ||--o{ AI_GENERATIONS : governs
+  REVIEW_MODES ||--o{ AI_GENERATIONS : contextualizes
+  QR_CODES ||--o{ AI_GENERATIONS : attributes
+  BUSINESSES ||--|| SUBSCRIPTIONS : entitled_by
+  BUSINESSES ||--o{ PAYMENTS : pays
+  BUSINESSES ||--o{ PRIVATE_FEEDBACK : receives
+  BUSINESSES ||--o{ CUSTOMERS : stores
+  CUSTOMERS ||--o{ REVIEW_REQUESTS : receives
+  REVIEW_REQUEST_TEMPLATES ||--o{ REVIEW_REQUESTS : renders
+  BUSINESSES ||--o{ CUSTOM_DOMAINS : maps
+  BUSINESSES ||--o{ ANALYTICS_EVENTS : emits
+  BUSINESSES ||--o{ ANALYTICS_DAILY_BUSINESS : aggregates
+  USERS ||--o{ ADMIN_AUDIT_LOGS : acts
+  BUSINESSES ||--o{ ADMIN_AUDIT_LOGS : affected

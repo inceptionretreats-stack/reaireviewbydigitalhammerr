@@ -1,0 +1,185 @@
+/*
+ * Customer-facing styling is mobile-first and deliberately plain (18_UI_UX_Design_System_Brief).
+ * Accessibility here is an acceptance criterion, not a preference: AC-037 requires keyboard
+ * operation with visible focus, and AC-038 requires WCAG AA contrast.
+ */
+
+:root {
+  --bg: #ffffff;
+  --surface: #f6f7f9;
+  --border: #d8dce3;
+  --text: #14181f;
+  --text-muted: #4d5765;
+  --accent: #1a56db;
+  --accent-text: #ffffff;
+  --danger: #b3261e;
+  --radius: 10px;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    16px/1.55 system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.shell {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+.identity {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.identity img {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0.6rem 0 0.2rem;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* Minimum 44x44 touch target on primary mobile controls (18_UI_UX brief). */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.btn-secondary {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-text {
+  background: none;
+  color: var(--accent);
+  border: none;
+  min-height: 44px;
+  font-weight: 500;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* AC-037: focus must be visible, and never removed for mouse users only. */
+.btn:focus-visible,
+textarea:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.stack > * + * {
+  margin-top: 0.75rem;
+}
+
+textarea {
+  width: 100%;
+  min-height: 11rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  resize: vertical;
+}
+
+.confirm {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  padding: 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.confirm input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.confirm label {
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.notice {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.93rem;
+}
+
+.notice-error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.disclosure {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 1.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10131a;
+    --surface: #1a1f29;
+    --border: #333b49;
+    --text: #f2f4f8;
+    --text-muted: #a9b2c0;
+    --accent: #7aa2f7;
+    --accent-text: #0b0e14;
+    --danger: #f2857c;
+    color-scheme: dark;
+  }
+}

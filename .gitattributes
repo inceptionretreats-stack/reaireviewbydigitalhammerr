@@ -1,0 +1,18 @@
+# Normalize line endings. Development happens on Windows while CI and production run Linux;
+# without this every file churns on checkout and diffs become unreadable.
+* text=auto eol=lf
+
+# Binary — never touch.
+*.docx binary
+*.png  binary
+*.jpg  binary
+*.webp binary
+*.ico  binary
+
+# Generated; keep out of diffs and language stats.
+pnpm-lock.yaml            linguist-generated=true
+*.generated.ts            linguist-generated=true
+packages/db/drizzle/meta/ linguist-generated=true
+
+# The delivered spec pack is a frozen contract, not authored source.
+docs/spec/** linguist-documentation=true

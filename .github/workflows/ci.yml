@@ -1,0 +1,139 @@
+name: CI
+
+# Pipeline order follows 14_DevOps_Deployment_Runbook.md:
+#   format -> lint -> typecheck -> unit -> integration -> build -> vulnerability scan
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # analytics_events is partitioned by hand-written DDL that drizzle-kit cannot model, so
+      # its snapshot describes an unpartitioned table. Guards against a generated migration
+      # silently dropping it. See scripts/check-migrations.mjs.
+      - name: Migration guard
+        run: pnpm check:migrations
+
+      # The event catalogue is derived from 11_Analytics_Event_Taxonomy.csv, a delivered
+      # contract. Regenerating must be a no-op; a diff means code and contract have drifted,
+      # which AN-01-01 forbids.
+      - name: Analytics taxonomy is in sync
+        run: |
+          pnpm --filter @ai-review/analytics generate
+          git diff --exit-code -- packages/analytics/src/events.generated.ts
+
+      - name: Unit tests
+        run: pnpm test
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # PostgreSQL 17 is the floor, not a preference: analytics_events declares GENERATED
+        # ALWAYS AS IDENTITY on a PARTITION BY RANGE table, which earlier majors reject.
+        # Recorded as ADR-AMEND-C in docs/SPEC_AMENDMENTS.md.
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ai_review_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_review_test
+      DATABASE_SSL: disable
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Proves the migration applies at all — including the citext/pgcrypto extensions and the
+      # partition DDL that Drizzle cannot express, none of which any unit test can reach.
+      - name: Run migrations
+        run: pnpm db:migrate
+
+      # Selected by PATH via vitest.integration.config.ts, with passWithNoTests disabled.
+      # The previous form used `--testNamePattern integration`, which matched zero of the six
+      # unit-test files: it started Postgres, ran the migration, selected nothing and reported
+      # success. A green pipeline that asserts nothing is worse than none, because it is
+      # trusted. If this step ever reports "No test files found", it must fail.
+      - name: Integration tests
+        run: pnpm test:integration
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build web
+        run: pnpm --filter @ai-review/web build
+
+  audit:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit dependencies
+        run: pnpm audit --audit-level high

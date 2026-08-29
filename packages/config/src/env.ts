@@ -1,0 +1,109 @@
+import { z } from 'zod';
+
+/**
+ * Configuration contract, mirroring 15_Environment_Variables.example.
+ *
+ * Validated once at process start so a missing or malformed secret fails the boot rather than
+ * surfacing as a runtime error on a customer request. Values that 19_Admin_Panel_Spec.md puts
+ * under admin control (free quota, annual price) appear here only as bootstrap defaults —
+ * platform_settings in the database is the source of truth once seeded.
+ */
+
+const nonEmpty = z.string().min(1);
+const secret = z
+  .string()
+  .min(16, 'secrets must be at least 16 characters')
+  .refine((v) => !v.startsWith('CHANGE_ME'), 'placeholder secret must be replaced');
+
+export const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+
+  // App
+  APP_BASE_URL: z.url(),
+  API_BASE_URL: z.url(),
+  SESSION_COOKIE_NAME: nonEmpty.default('dh_session'),
+  SESSION_SECRET: secret,
+  APP_ENCRYPTION_KEY: secret.min(32, 'encryption key must be at least 32 bytes'),
+  HASH_PEPPER: secret,
+
+  // Database
+  DATABASE_URL: z.string().startsWith('postgres'),
+  DATABASE_POOL_MIN: z.coerce.number().int().min(0).default(2),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(20),
+  // Managed Postgres mandates TLS; local docker has no certificate. Defaults are resolved
+  // per-host in createDatabase, so this only needs setting to override that.
+  DATABASE_SSL: z.enum(['disable', 'require', 'verify-full']).optional(),
+  DATABASE_SSL_ROOT_CERT: z.string().optional(),
+
+  // Redis
+  REDIS_URL: z.string().startsWith('redis'),
+
+  // AI. The model is a bootstrap default only: ADR-006 puts the live model and prompt in
+  // ai_prompt_versions so quality can be rolled back without an application deploy.
+  OPENAI_API_KEY: secret,
+  OPENAI_DEFAULT_MODEL: nonEmpty,
+  OPENAI_FALLBACK_MODEL: nonEmpty.optional(),
+  OPENAI_REASONING_EFFORT: nonEmpty.default('none'),
+  AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(220),
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+
+  // Razorpay — not required until E10, so optional at boot.
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RAZORPAY_ANNUAL_PLAN_ID: z.string().optional(),
+
+  // Cloudflare — not required until E11.
+  CLOUDFLARE_API_TOKEN: z.string().optional(),
+  CLOUDFLARE_ZONE_ID: z.string().optional(),
+  CLOUDFLARE_SAAS_FALLBACK_ORIGIN: z.string().optional(),
+
+  // Object storage
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: nonEmpty.default('ap-south-1'),
+  S3_BUCKET: nonEmpty,
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_PUBLIC_BASE_URL: z.url().optional(),
+
+  // Email
+  EMAIL_FROM: z.email(),
+  SES_REGION: nonEmpty.default('ap-south-1'),
+
+  // Observability
+  SENTRY_DSN: z.string().optional(),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+
+  // Bootstrap defaults; platform_settings takes over once seeded (ADMIN-04).
+  FREE_AI_GENERATION_LIMIT: z.coerce.number().int().positive().default(10),
+  PRO_ANNUAL_PRICE_PAISE: z.coerce.number().int().positive().default(99900),
+  DEFAULT_TIMEZONE: nonEmpty.default('Asia/Kolkata'),
+});
+
+export type Env = z.infer<typeof envSchema>;
+
+export class EnvValidationError extends Error {
+  constructor(public readonly issues: string[]) {
+    super(`Invalid environment configuration:\n${issues.map((i) => `  - ${i}`).join('\n')}`);
+    this.name = 'EnvValidationError';
+  }
+}
+
+/**
+ * Parses and validates process environment. Throws with every problem listed at once, rather
+ * than one per restart.
+ */
+export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  const result = envSchema.safeParse(source);
+
+  if (!result.success) {
+    const issues = result.error.issues.map((issue) => {
+      const path = issue.path.join('.') || '(root)';
+      return `${path}: ${issue.message}`;
+    });
+    throw new EnvValidationError(issues);
+  }
+
+  return result.data;
+}

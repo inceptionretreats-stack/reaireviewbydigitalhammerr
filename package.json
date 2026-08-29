@@ -1,0 +1,33 @@
+{
+  "name": "ai-review",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Review by Digital Hammerr — multi-tenant review-writing assistant for local businesses",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "pnpm --filter @ai-review/db generate",
+    "db:migrate": "pnpm --filter @ai-review/db migrate",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "check:migrations": "node scripts/check-migrations.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.4.0",
+    "eslint": "^10.9.1",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^4.1.11"
+  }
+}

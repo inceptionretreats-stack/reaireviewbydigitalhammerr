@@ -1,0 +1,9 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Postinstall scripts must be allow-listed explicitly (pnpm 10+).
+allowBuilds:
+  esbuild: true
+  '@tailwindcss/oxide': true
+  sharp: true

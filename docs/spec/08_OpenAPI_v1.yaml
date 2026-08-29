@@ -1,0 +1,309 @@
+openapi: 3.1.0
+info:
+  title: AI Review by Digital Hammerr API
+  version: 1.0.0
+  description: V1 REST contract. All authenticated business endpoints infer tenant from the server session.
+servers:
+  - url: https://review.digitalhammerr.com/api/v1
+security:
+  - sessionCookie: []
+tags:
+  - name: Auth
+  - name: Public
+  - name: Business
+  - name: AI
+  - name: QR
+  - name: CRM
+  - name: Analytics
+  - name: Domains
+  - name: Subscription
+  - name: Admin
+paths:
+  /auth/signup:
+    post:
+      security: []
+      tags: [Auth]
+      summary: Create owner account and onboarding tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SignupRequest'}
+      responses:
+        '201': {description: Created}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /auth/login:
+    post:
+      security: []
+      tags: [Auth]
+      summary: Create authenticated session
+      responses:
+        '200': {description: Authenticated}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Destroy current session
+      responses: {'204': {description: Logged out}}
+  /auth/forgot-password:
+    post:
+      security: []
+      tags: [Auth]
+      summary: Request password reset
+      responses: {'202': {description: Accepted}}
+  /business:
+    get:
+      tags: [Business]
+      summary: Get active business tenant
+      responses: {'200': {description: Business}}
+    patch:
+      tags: [Business]
+      summary: Update business identity/settings
+      responses: {'200': {description: Updated}, '422': {$ref: '#/components/responses/ValidationError'}}
+  /business/publish:
+    post:
+      tags: [Business]
+      summary: Publish completed tenant
+      responses: {'200': {description: Published}, '409': {$ref: '#/components/responses/Conflict'}}
+  /business/links:
+    get: {tags: [Business], summary: List profile links/sections, responses: {'200': {description: OK}}}
+    post: {tags: [Business], summary: Add profile link/section, responses: {'201': {description: Created}}}
+  /business/links/{id}:
+    patch:
+      tags: [Business]
+      summary: Update visibility/content/order
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      responses: {'200': {description: Updated}}
+    delete:
+      tags: [Business]
+      summary: Delete optional custom section
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      responses: {'204': {description: Deleted}}
+  /business/links/reorder:
+    post:
+      tags: [Business]
+      summary: Persist ordered section IDs
+      responses: {'200': {description: Reordered}}
+  /business/review-destinations:
+    get: {tags: [Business], summary: List external review destinations, responses: {'200': {description: OK}}}
+    post: {tags: [Business], summary: Add review destination, responses: {'201': {description: Created}}}
+  /ai/context:
+    get: {tags: [AI], summary: Get tenant AI context, responses: {'200': {description: OK}}}
+    put: {tags: [AI], summary: Replace tenant AI context, responses: {'200': {description: Updated}}}
+  /ai/modes:
+    get: {tags: [AI], summary: List review modes, responses: {'200': {description: OK}}}
+    post: {tags: [AI], summary: Create review mode, responses: {'201': {description: Created}}}
+  /ai/modes/{id}:
+    patch:
+      tags: [AI]
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      summary: Edit/archive review mode
+      responses: {'200': {description: Updated}}
+  /ai/modes/{id}/activate:
+    post:
+      tags: [AI]
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      summary: Atomically make this the active mode
+      responses: {'200': {description: Activated}}
+  /ai/test-preview:
+    post:
+      tags: [AI]
+      summary: Generate non-quota business preview
+      responses: {'200': {description: Preview}}
+  /public/qr/{code}:
+    get:
+      security: []
+      tags: [Public]
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: {type: string}
+      summary: Resolve dynamic QR and return public landing config
+      responses:
+        '200': {description: Public config}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /public/business/{slug}:
+    get:
+      security: []
+      tags: [Public]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: {type: string}
+      summary: Get public business configuration
+      responses: {'200': {description: Public config}, '404': {$ref: '#/components/responses/NotFound'}}
+  /public/review/generate:
+    post:
+      security: []
+      tags: [Public, AI]
+      summary: Generate one editable AI-assisted review draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [public_business_ref]
+              properties:
+                public_business_ref: {type: string}
+                qr_code: {type: string}
+                previous_generation_id: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Draft
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReviewGeneration'}
+        '402': {$ref: '#/components/responses/QuotaExhausted'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/AIUnavailable'}
+  /public/events:
+    post:
+      security: []
+      tags: [Public]
+      summary: Record allow-listed public analytics event
+      responses: {'202': {description: Accepted}}
+  /public/feedback:
+    post:
+      security: []
+      tags: [Public]
+      summary: Submit private feedback
+      responses: {'201': {description: Submitted}, '429': {$ref: '#/components/responses/RateLimited'}}
+  /qr:
+    get: {tags: [QR], summary: List tenant QR sources, responses: {'200': {description: OK}}}
+    post: {tags: [QR], summary: Create dynamic QR source, responses: {'201': {description: Created}}}
+  /qr/{id}:
+    patch:
+      tags: [QR]
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      summary: Rename/enable/disable QR
+      responses: {'200': {description: Updated}}
+  /qr/{id}/download:
+    get:
+      tags: [QR]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - in: query
+          name: format
+          schema: {type: string, enum: [svg,png], default: svg}
+      summary: Download QR image
+      responses: {'200': {description: QR binary/image}}
+  /customers:
+    get: {tags: [CRM], summary: List/search customer contacts, responses: {'200': {description: OK}}}
+    post: {tags: [CRM], summary: Add contact, responses: {'201': {description: Created}}}
+  /customers/{id}:
+    patch: {tags: [CRM], parameters: [{$ref: '#/components/parameters/Id'}], summary: Update contact/status, responses: {'200': {description: Updated}}}
+    delete: {tags: [CRM], parameters: [{$ref: '#/components/parameters/Id'}], summary: Soft delete contact, responses: {'204': {description: Deleted}}}
+  /review-requests/preview:
+    post: {tags: [CRM], summary: Render manual request message, responses: {'200': {description: Preview}}}
+  /review-requests:
+    post: {tags: [CRM], summary: Create tracked manual review request, responses: {'201': {description: Created}}}
+  /review-requests/{id}/mark-sent:
+    post: {tags: [CRM], parameters: [{$ref: '#/components/parameters/Id'}], summary: Manually mark sent, responses: {'200': {description: Updated}}}
+  /feedback:
+    get: {tags: [Business], summary: List private feedback for tenant, responses: {'200': {description: OK}}}
+  /feedback/{id}:
+    patch: {tags: [Business], parameters: [{$ref: '#/components/parameters/Id'}], summary: Mark read/archive, responses: {'200': {description: Updated}}}
+  /analytics/overview:
+    get: {tags: [Analytics], summary: KPI/funnel overview, responses: {'200': {description: Metrics}}}
+  /analytics/qr:
+    get: {tags: [Analytics], summary: QR source performance, responses: {'200': {description: Metrics}}}
+  /analytics/links:
+    get: {tags: [Analytics], summary: Public profile link clicks, responses: {'200': {description: Metrics}}}
+  /domains:
+    get: {tags: [Domains], summary: Get tenant custom domain state, responses: {'200': {description: Domain}}}
+    post: {tags: [Domains], summary: Start custom-domain onboarding, responses: {'201': {description: Domain created}}}
+  /domains/{id}/check:
+    post: {tags: [Domains], parameters: [{$ref: '#/components/parameters/Id'}], summary: Refresh provider status, responses: {'200': {description: Status}}}
+  /domains/{id}:
+    delete: {tags: [Domains], parameters: [{$ref: '#/components/parameters/Id'}], summary: Remove custom domain, responses: {'204': {description: Removed}}}
+  /subscription:
+    get: {tags: [Subscription], summary: Get plan/entitlement/usage, responses: {'200': {description: Subscription}}}
+  /subscription/checkout:
+    post: {tags: [Subscription], summary: Create Razorpay checkout/subscription, responses: {'201': {description: Checkout config}}}
+  /webhooks/razorpay:
+    post:
+      security: []
+      tags: [Subscription]
+      summary: Receive verified Razorpay webhook
+      responses: {'200': {description: Processed}}
+  /admin/businesses:
+    get: {tags: [Admin], summary: Search/list tenants, responses: {'200': {description: OK}}}
+  /admin/businesses/{id}:
+    get: {tags: [Admin], parameters: [{$ref: '#/components/parameters/Id'}], summary: Tenant detail, responses: {'200': {description: OK}}}
+    patch: {tags: [Admin], parameters: [{$ref: '#/components/parameters/Id'}], summary: Audited support/admin mutation, responses: {'200': {description: Updated}}}
+  /admin/ai/prompt-versions:
+    get: {tags: [Admin], summary: List prompt versions, responses: {'200': {description: OK}}}
+    post: {tags: [Admin], summary: Create draft prompt version, responses: {'201': {description: Created}}}
+  /admin/ai/prompt-versions/{id}/activate:
+    post: {tags: [Admin], parameters: [{$ref: '#/components/parameters/Id'}], summary: Activate prompt version, responses: {'200': {description: Activated}}}
+  /admin/settings:
+    get: {tags: [Admin], summary: Get platform configuration, responses: {'200': {description: OK}}}
+    patch: {tags: [Admin], summary: Versioned platform settings update, responses: {'200': {description: Updated}}}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: dh_session
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    SignupRequest:
+      type: object
+      required: [full_name,email,mobile,password,accept_terms]
+      properties:
+        full_name: {type: string, minLength: 2, maxLength: 80}
+        email: {type: string, format: email}
+        mobile: {type: string, minLength: 8, maxLength: 20}
+        password: {type: string, minLength: 12}
+        accept_terms: {type: boolean, const: true}
+    ReviewGeneration:
+      type: object
+      required: [generation_id,review_text,prompt_version,requires_experience_confirmation]
+      properties:
+        generation_id: {type: string, format: uuid}
+        review_text: {type: string, minLength: 20, maxLength: 1200}
+        prompt_version: {type: string}
+        requires_experience_confirmation: {type: boolean, const: true}
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code,message,request_id]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            request_id: {type: string}
+            details: {type: object, additionalProperties: true}
+  responses:
+    ValidationError:
+      description: Validation failed
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Unauthorized:
+      description: Authentication required/invalid
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    RateLimited:
+      description: Too many requests
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    NotFound:
+      description: Resource not found
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Conflict:
+      description: Resource state conflict
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    QuotaExhausted:
+      description: Business AI entitlement exhausted
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    AIUnavailable:
+      description: AI provider temporarily unavailable
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}

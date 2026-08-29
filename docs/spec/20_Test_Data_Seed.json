@@ -1,0 +1,84 @@
+{
+  "business": {
+    "name": "Demo South Cafe",
+    "slug": "demo-south-cafe",
+    "category": "Restaurant",
+    "description": "Demo business used only in staging tests.",
+    "city": "Udaipur",
+    "state": "Rajasthan",
+    "links": [
+      {
+        "type": "GOOGLE_REVIEW",
+        "enabled": true,
+        "url": "https://example.com/test-google-review"
+      },
+      {
+        "type": "WHATSAPP",
+        "enabled": true,
+        "phone": "+919999999999"
+      },
+      {
+        "type": "CALL",
+        "enabled": true,
+        "phone": "+919999999999"
+      },
+      {
+        "type": "INSTAGRAM",
+        "enabled": true,
+        "url": "https://instagram.com/example"
+      },
+      {
+        "type": "FACEBOOK",
+        "enabled": true,
+        "url": "https://facebook.com/example"
+      }
+    ],
+    "ai_context": {
+      "services": [
+        "Dosa",
+        "Idli",
+        "Filter Coffee"
+      ],
+      "context_terms": [
+        "South Indian food",
+        "Udaipur"
+      ]
+    },
+    "modes": [
+      {
+        "name": "Balanced",
+        "active": true,
+        "context_terms": []
+      },
+      {
+        "name": "Breakfast",
+        "active": false,
+        "context_terms": [
+          "Breakfast",
+          "Filter Coffee"
+        ]
+      }
+    ],
+    "qrs": [
+      {
+        "source_label": "Reception"
+      },
+      {
+        "source_label": "Billing Counter"
+      }
+    ]
+  },
+  "customers": [
+    {
+      "name": "Demo Customer A",
+      "mobile": "+919800000001",
+      "status": "NOT_CONTACTED"
+    },
+    {
+      "name": "Demo Customer B",
+      "mobile": "+919800000002",
+      "status": "MESSAGE_SENT_MANUAL"
+    }
+  ],
+  "notes": "Never use real customer PII or a live Google review URL in automated tests."
+}

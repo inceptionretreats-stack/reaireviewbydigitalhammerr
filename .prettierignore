@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+coverage/
+pnpm-lock.yaml
+drizzle/
+
+# The delivered spec pack is a frozen contract — never reformat it.
+docs/spec/
+
+# Generated output — the generator is canonical, and CI verifies it by regenerating.
+*.generated.ts

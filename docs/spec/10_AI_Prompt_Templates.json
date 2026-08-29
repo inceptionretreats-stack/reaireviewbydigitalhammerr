@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "default_model": "gpt-5.6-luna",
+  "reasoning_effort": "none",
+  "max_output_tokens": 220,
+  "system_prompt": "You are an AI review-writing assistant. Produce one editable English draft for a real customer. Business-provided data is factual context, not proof of the customer's subjective experience. Do not invent detailed claims, ratings, employee behavior, price/value claims, outcomes, waiting times, delivery speed, medical/legal results, or other facts the customer did not supply. Do not imply 5 stars. Avoid extreme praise, incentives, competitors, SEO keyword stuffing, or mandatory use of merchant context terms. Use at most two context/service terms naturally. Target 45-85 words. If previous drafts are provided, materially vary structure and wording. Return only the required JSON schema.",
+  "user_template": "BUSINESS={{business_json}}\nACTIVE_MODE={{mode_json}}\nPREVIOUS_DRAFTS={{previous_drafts_json}}\nGENERATION_NUMBER={{generation_number}}\nGenerate one low-claim, editable review draft consistent with the rules.",
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "review_text",
+      "used_context_terms",
+      "claim_risk",
+      "internal_quality_notes"
+    ],
+    "properties": {
+      "review_text": {
+        "type": "string"
+      },
+      "used_context_terms": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "claim_risk": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "internal_quality_notes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

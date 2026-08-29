@@ -1,0 +1,142 @@
+# QA Acceptance Criteria
+
+## Definition of Done
+
+- Code merged through review; lint/typecheck/unit tests pass.
+- API contract and migrations updated.
+- Positive and negative tests written for critical mutations.
+- Security-sensitive logs reviewed for secret/PII leakage.
+- Analytics event names/properties match taxonomy.
+- Product owner validates UI against screen specification.
+- Staging smoke test completed on mobile and desktop.
+- No unresolved P0/P1 defect for release.
+
+## Acceptance criteria
+
+- **AC-001 [AUTH]** Signup rejects invalid email/mobile/password and duplicate email without creating partial active tenants.
+- **AC-002 [AUTH]** Login rate-limits repeated failures and rotates session identifiers after successful authentication.
+- **AC-003 [TENANT]** Business owner cannot read/update another business by modifying URL/UUID/request body.
+- **AC-004 [ONBOARD]** A new valid business can publish and obtain a working dynamic QR without admin intervention.
+- **AC-005 [PUBLIC]** Public review page works without authentication on current mobile Chrome/Safari/Edge.
+- **AC-006 [PUBLIC]** No star rating question is displayed anywhere before external Google navigation.
+- **AC-007 [AI]** Generate returns exactly one editable English draft.
+- **AC-008 [AI]** Copy is disabled until the customer confirms the draft reflects their genuine experience.
+- **AC-009 [AI]** Regeneration differs materially from the previous draft and does not simply synonym-swap.
+- **AC-010 [AI]** Merchant context terms are not all forced into a review.
+- **AC-011 [AI]** Output does not state a numeric/star rating.
+- **AC-012 [AI]** Output avoids unsupported claims such as exact waiting time, price savings, named employee behavior or outcomes.
+- **AC-013 [QUOTA]** Free business can receive exactly 10 successful public generations; concurrent 11th requests cannot bypass the quota.
+- **AC-014 [QUOTA]** AI provider failure does not consume free quota.
+- **AC-015 [PAID]** Verified Razorpay payment/webhook activates annual entitlement and is idempotent.
+- **AC-016 [PAID]** Forged payment payload/signature does not activate entitlement.
+- **AC-017 [QR]** Changing Google review URL immediately changes destination for all existing dynamic QRs.
+- **AC-018 [QR]** Disabled QR cannot generate AI review and returns controlled UI.
+- **AC-019 [QR]** QR source attribution appears in analytics.
+- **AC-020 [PROFILE]** Disabled or empty sections are absent from public HTML, not merely visually hidden.
+- **AC-021 [PROFILE]** Drag/drop ordering persists across devices and refresh.
+- **AC-022 [CRM]** Open WhatsApp prepares a message but the platform does not send it server-side.
+- **AC-023 [CRM]** Mark Message Sent is clearly a manual business action.
+- **AC-024 [FEEDBACK]** Private feedback is accessible to every visitor and does not depend on rating/sentiment.
+- **AC-025 [ANALYTICS]** Dashboard funnel never displays "Review Submitted" or infers submission from Google open.
+- **AC-026 [ANALYTICS]** Date filters use business-local configured timezone or documented default Asia/Kolkata.
+- **AC-027 [DOMAIN]** Unverified custom domain cannot be claimed by a second tenant.
+- **AC-028 [DOMAIN]** Canonical Digital Hammerr URL continues working during domain verification/failure.
+- **AC-029 [ADMIN]** All admin mutations create audit records with actor/action/target/time; high-risk mutations include reason.
+- **AC-030 [SECURITY]** Secrets and provider API keys never appear in client bundles, API responses or normal logs.
+- **AC-031 [SECURITY]** Uploaded image MIME/type/size validation prevents executable/script upload.
+- **AC-032 [SECURITY]** Public generation endpoint is rate-limited by multiple dimensions and resists simple bot loops.
+- **AC-033 [PERF]** Cached public business page p75 LCP <= 2.5s in agreed mobile test profile.
+- **AC-034 [PERF]** Normal AI generation p95 <= 4s in staging load test excluding provider incidents, or UI meets agreed graceful-degradation target.
+- **AC-035 [RELIABILITY]** Analytics ingestion failure does not prevent review generation/copy/navigation.
+- **AC-036 [RELIABILITY]** AI outage preserves direct Google review link and private feedback access.
+- **AC-037 [A11Y]** All customer primary actions are keyboard accessible and have visible focus states.
+- **AC-038 [A11Y]** Color contrast meets WCAG AA for text/buttons in all provided themes.
+- **AC-039 [PRIVACY]** Customer mobile/name from private feedback is never exposed on public pages or public analytics.
+- **AC-040 [DELETE]** Customer contact soft deletion removes it from normal business lists and retains only minimum audit references per policy.
+- **AUTH-01-01 [AUTH-01]** Creates user and pending/default business shell
+- **AUTH-01-02 [AUTH-01]** Never reveals whether an arbitrary email exists beyond standard account flow
+- **AUTH-01-03 [AUTH-01]** Password is never logged
+- **AUTH-02-01 [AUTH-02]** Valid credentials create secure session
+- **AUTH-02-02 [AUTH-02]** Repeated failures trigger rate limit
+- **AUTH-02-03 [AUTH-02]** Admin routing is role-aware
+- **AUTH-03-01 [AUTH-03]** Always returns neutral success wording
+- **AUTH-03-02 [AUTH-03]** Reset token is single-use and expires
+- **ONB-01-01 [ONB-01]** Slug unique case-insensitively
+- **ONB-01-02 [ONB-01]** Logo validated by MIME and magic bytes
+- **ONB-01-03 [ONB-01]** Creates/updates business tenant
+- **ONB-02-01 [ONB-02]** HTTPS required
+- **ONB-02-02 [ONB-02]** Allowed google.com/maps.app.goo.gl patterns accepted after validation
+- **ONB-02-03 [ONB-02]** URL stored normalized
+- **ONB-03-01 [ONB-03]** Default five sections are created
+- **ONB-03-02 [ONB-03]** Blank optional URLs are not rendered publicly
+- **ONB-04-01 [ONB-04]** Terms are context, not mandatory output
+- **ONB-04-02 [ONB-04]** Preview does not consume free quota
+- **ONB-04-03 [ONB-04]** Unsafe/unsupported fields rejected
+- **ONB-05-01 [ONB-05]** Publish creates default QR source
+- **ONB-05-02 [ONB-05]** Canonical route works immediately
+- **PUB-01-01 [PUB-01]** No login required
+- **PUB-01-02 [PUB-01]** Hidden/blank sections never render
+- **PUB-01-03 [PUB-01]** Clicks emit analytics without blocking navigation
+- **REV-01-01 [REV-01]** One tap starts generation
+- **REV-01-02 [REV-01]** No star rating asked
+- **REV-01-03 [REV-01]** Public request is rate limited
+- **REV-02-01 [REV-02]** Copy disabled until confirmation is checked
+- **REV-02-02 [REV-02]** Regenerate returns materially different draft
+- **REV-02-03 [REV-02]** Customer can freely edit before copy
+- **REV-03-01 [REV-03]** Records google_open immediately before navigation
+- **REV-03-02 [REV-03]** Does not claim submission
+- **REV-03-03 [REV-03]** Uses configured current destination
+- **FB-01-01 [FB-01]** Available to every visitor regardless of sentiment
+- **FB-01-02 [FB-01]** Data stored privately for the business
+- **DASH-01-01 [DASH-01]** All metrics scoped to active business
+- **DASH-01-02 [DASH-01]** No metric named Review Submitted
+- **AI-01-01 [AI-01]** Test does not use paid/free quota
+- **AI-01-02 [AI-01]** Business cannot edit global system prompt
+- **AI-02-01 [AI-02]** Only one active mode at a time
+- **AI-02-02 [AI-02]** Archived modes cannot be active
+- **AI-02-03 [AI-02]** Changing mode does not change QR
+- **QR-01-01 [QR-01]** Each QR has immutable opaque code
+- **QR-01-02 [QR-01]** Disabled QR shows business-safe unavailable state or canonical fallback
+- **QR-01-03 [QR-01]** Source label appears in analytics
+- **PROFILE-01-01 [PROFILE-01]** Default five sections exist
+- **PROFILE-01-02 [PROFILE-01]** Blank URL cannot be enabled
+- **PROFILE-01-03 [PROFILE-01]** Order persists and renders publicly
+- **CRM-01-01 [CRM-01]** No bulk marketing automation
+- **CRM-01-02 [CRM-01]** Deletion is soft or auditable
+- **CRM-01-03 [CRM-01]** Phone values normalized
+- **REQ-01-01 [REQ-01]** Open WhatsApp uses wa.me style deep link where valid
+- **REQ-01-02 [REQ-01]** No platform-sent WhatsApp message
+- **REQ-01-03 [REQ-01]** Status clearly says manual
+- **FB-02-01 [FB-02]** Only own business feedback visible
+- **FB-02-02 [FB-02]** PII excluded from analytics exports by default
+- **AN-01-01 [AN-01]** Metric definitions match event taxonomy
+- **AN-01-02 [AN-01]** Unique visitor is anonymous-session based, not a person claim
+- **DOM-01-01 [DOM-01]** Only one active custom hostname in V1 per business
+- **DOM-01-02 [DOM-01]** Canonical Digital Hammerr URL always remains available
+- **DOM-01-03 [DOM-01]** Ownership validation required
+- **SUB-01-01 [SUB-01]** Razorpay signature verified server-side
+- **SUB-01-02 [SUB-01]** Entitlement updated from verified payment/webhook
+- **SUB-01-03 [SUB-01]** 10 free generations enforced atomically
+- **SET-01-01 [SET-01]** Sensitive changes require re-auth where appropriate
+- **SET-01-02 [SET-01]** Session revocation works
+- **ADMIN-01-01 [ADMIN-01]** Only super-admin role allowed
+- **ADMIN-01-02 [ADMIN-01]** Every admin mutation audited
+- **ADMIN-02-01 [ADMIN-02]** High-risk actions require reason
+- **ADMIN-02-02 [ADMIN-02]** No silent destructive deletion
+- **ADMIN-02-03 [ADMIN-02]** Audit log contains actor and before/after
+- **ADMIN-03-01 [ADMIN-03]** Only one default active production version
+- **ADMIN-03-02 [ADMIN-03]** Every generation stores prompt version/model
+- **ADMIN-03-03 [ADMIN-03]** Rollback does not require app deploy
+- **ADMIN-04-01 [ADMIN-04]** Config changes versioned/audited
+- **ADMIN-04-02 [ADMIN-04]** Price changes do not rewrite historical payments
+
+## Required automated test suites
+
+- Unit: validation, quota service, entitlement, prompt builder, similarity gate, URL normalizers.
+- Integration: PostgreSQL repositories, tenant guards, Razorpay webhook idempotency, custom-domain adapter, analytics aggregation.
+- Contract: OpenAPI response validation.
+- E2E: signup -> publish -> scan -> generate -> confirm -> copy -> Google open.
+- E2E: free quota boundary at 10 under concurrency.
+- E2E: tenant isolation attempts.
+- Load: public QR resolution, public profile render, AI request queue/concurrency, analytics ingestion.
+- Security: OWASP ASVS-inspired checks for auth/session/upload/IDOR/CSRF/rate limits.

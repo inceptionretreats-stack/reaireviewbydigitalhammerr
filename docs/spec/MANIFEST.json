@@ -1,0 +1,113 @@
+{
+  "generated_on": "29 August 2026",
+  "files": [
+    {
+      "file": "00_Master_PRD_AI_Review.docx",
+      "bytes": 45093
+    },
+    {
+      "file": "01_Product_Scope_and_Roadmap.md",
+      "bytes": 3838
+    },
+    {
+      "file": "02_System_Architecture.md",
+      "bytes": 5757
+    },
+    {
+      "file": "03_Screen_Field_Button_Spec.md",
+      "bytes": 13649
+    },
+    {
+      "file": "04_User_Flows.md",
+      "bytes": 5453
+    },
+    {
+      "file": "05_RBAC_Permissions.md",
+      "bytes": 2237
+    },
+    {
+      "file": "06_Database_Schema.sql",
+      "bytes": 15185
+    },
+    {
+      "file": "07_ERD.mmd",
+      "bytes": 1019
+    },
+    {
+      "file": "08_OpenAPI_v1.yaml",
+      "bytes": 12850
+    },
+    {
+      "file": "09_AI_Prompt_and_Generation_Spec.md",
+      "bytes": 5666
+    },
+    {
+      "file": "10_AI_Prompt_Templates.json",
+      "bytes": 1736
+    },
+    {
+      "file": "11_Analytics_Event_Taxonomy.csv",
+      "bytes": 2487
+    },
+    {
+      "file": "12_QA_Acceptance_Criteria.md",
+      "bytes": 10156
+    },
+    {
+      "file": "13_Security_Privacy_Compliance.md",
+      "bytes": 3852
+    },
+    {
+      "file": "14_DevOps_Deployment_Runbook.md",
+      "bytes": 2872
+    },
+    {
+      "file": "15_Environment_Variables.example",
+      "bytes": 1367
+    },
+    {
+      "file": "16_Repository_Folder_Structure.md",
+      "bytes": 2274
+    },
+    {
+      "file": "17_Backlog_Epics_User_Stories.md",
+      "bytes": 37709
+    },
+    {
+      "file": "18_UI_UX_Design_System_Brief.md",
+      "bytes": 2806
+    },
+    {
+      "file": "19_Admin_Panel_Spec.md",
+      "bytes": 2557
+    },
+    {
+      "file": "20_Test_Data_Seed.json",
+      "bytes": 1752
+    },
+    {
+      "file": "21_Release_Checklist.md",
+      "bytes": 2412
+    },
+    {
+      "file": "22_Decision_Log.md",
+      "bytes": 2119
+    },
+    {
+      "file": "23_API_Error_Codes.md",
+      "bytes": 1845
+    },
+    {
+      "file": "24_Glossary.md",
+      "bytes": 1639
+    },
+    {
+      "file": "25_Architecture_Decisions_ADRs.md",
+      "bytes": 3077
+    },
+    {
+      "file": "README_FIRST.md",
+      "bytes": 4344
+    }
+  ]
+}
