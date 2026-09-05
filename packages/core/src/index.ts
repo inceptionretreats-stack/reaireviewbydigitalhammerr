@@ -10,3 +10,4 @@ export * from './qr/code';
 export * from './quota/index';
 export * from './ai/index';
 export * from './rate-limit/index';
+export * from './business/slug-service';
