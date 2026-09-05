@@ -56,6 +56,23 @@ export interface RateLimitConfig {
   readonly loginFailuresPerIpPrefix: number;
   readonly loginIpPrefixWindowMs: number;
   readonly loginFailuresPerIdentityPerDay: number;
+
+  /**
+   * Private-feedback submission (E8-02, and the WAF/rate-limit line in
+   * 13_Security_Privacy_Compliance.md, which names the feedback endpoint alongside AI and auth).
+   *
+   * The threat here is spam rather than cost: feedback is free to serve but lands in a business
+   * owner's inbox, and an inbox flooded with junk is an inbox they stop opening. Limits are
+   * therefore tighter than generation but generous against real use — a customer with a genuine
+   * complaint may legitimately send a second message after remembering something.
+   *
+   * D-010 constrains how tight this may be: private feedback is available to EVERY visitor, so
+   * this must never become a de facto gate on being heard.
+   */
+  readonly feedbackPerSession: number;
+  readonly feedbackSessionWindowMs: number;
+  readonly feedbackPerIpPrefix: number;
+  readonly feedbackIpPrefixWindowMs: number;
 }
 
 export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
@@ -86,6 +103,12 @@ export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   // Blunts the slow drip that waits out each 15-minute window: 5 per window would otherwise
   // be 480 guesses a day against one account.
   loginFailuresPerIdentityPerDay: 20,
+
+  feedbackPerSession: 3,
+  feedbackSessionWindowMs: 10 * MINUTE_MS,
+  // Sized for a shared venue connection, per the same NAT reasoning as the generation prefix.
+  feedbackPerIpPrefix: 20,
+  feedbackIpPrefixWindowMs: HOUR_MS,
 };
 
 export interface RateLimitRuleSet {
@@ -95,6 +118,8 @@ export interface RateLimitRuleSet {
   readonly loginIdentity: RateLimitRule;
   readonly loginIpPrefix: RateLimitRule;
   readonly loginIdentityDaily: RateLimitRule;
+  readonly feedbackSession: RateLimitRule;
+  readonly feedbackIpPrefix: RateLimitRule;
 }
 
 export function rules(config: RateLimitConfig): RateLimitRuleSet {
@@ -132,6 +157,20 @@ export function rules(config: RateLimitConfig): RateLimitRuleSet {
       limit: config.loginFailuresPerIpPrefix,
       windowMs: config.loginIpPrefixWindowMs,
       code: 'AUTH_RATE_LIMITED',
+      enforcement: 'ENFORCE',
+    },
+    feedbackSession: {
+      name: 'public.feedback_session',
+      limit: config.feedbackPerSession,
+      windowMs: config.feedbackSessionWindowMs,
+      code: 'PUBLIC_RATE_LIMITED',
+      enforcement: 'ENFORCE',
+    },
+    feedbackIpPrefix: {
+      name: 'public.feedback_ip_prefix',
+      limit: config.feedbackPerIpPrefix,
+      windowMs: config.feedbackIpPrefixWindowMs,
+      code: 'PUBLIC_RATE_LIMITED',
       enforcement: 'ENFORCE',
     },
     loginIdentityDaily: {
@@ -338,4 +377,48 @@ function identityDimensions(subject: LoginSubject, config: RateLimitConfig): Rat
     { rule: rule.loginIdentity, key: rateLimitKey(rule.loginIdentity.name, identity) },
     { rule: rule.loginIdentityDaily, key: rateLimitKey(rule.loginIdentityDaily.name, identity) },
   ];
+}
+
+export interface PublicFeedbackSubject {
+  readonly businessId: string;
+  readonly anonymousSessionId: string;
+  /** Raw client IP. Truncated to a prefix and hashed here; never stored or keyed as-is. */
+  readonly ip: string;
+  /** HASH_PEPPER from packages/config. */
+  readonly pepper: string;
+}
+
+/**
+ * Private-feedback submission check (E8-02).
+ *
+ * Two dimensions, session before prefix, for the same reason the generation check orders burst
+ * first: the tripped dimension is what the caller reports, and "you have sent several already"
+ * describes the situation better than a shared-connection limit the visitor cannot see.
+ *
+ * `onStoreUnavailable: 'ALLOW'` matches the generation check. The reasoning in service.ts
+ * applies with more force here, not less: D-010 makes private feedback available to every
+ * visitor, so a Redis outage must not silence someone trying to complain to a business.
+ */
+export function publicFeedbackCheck(
+  subject: PublicFeedbackSubject,
+  config: RateLimitConfig = DEFAULT_RATE_LIMIT_CONFIG,
+): RateLimitCheck {
+  const rule = rules(config);
+  const session = privacyHash(subject.anonymousSessionId, subject.pepper);
+  const prefix = ipPrefixHash(subject.ip, subject.pepper);
+
+  return {
+    name: 'public_feedback',
+    dimensions: [
+      {
+        rule: rule.feedbackSession,
+        key: rateLimitKey(rule.feedbackSession.name, session, subject.businessId),
+      },
+      {
+        rule: rule.feedbackIpPrefix,
+        key: rateLimitKey(rule.feedbackIpPrefix.name, prefix),
+      },
+    ],
+    onStoreUnavailable: 'ALLOW',
+  };
 }

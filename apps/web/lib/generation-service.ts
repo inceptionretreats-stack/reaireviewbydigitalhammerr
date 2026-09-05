@@ -5,6 +5,7 @@ import {
   aiPromptVersions,
   businesses,
   reviewModes,
+  subscriptions,
   type Database,
 } from '@ai-review/db';
 import {
@@ -162,4 +163,25 @@ export function buildGenerator(db: Database, provider: AiProvider): ReviewGenera
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
+/**
+ * The plan, for the rate limiter's fair-use dimension.
+ *
+ * A separate small read rather than a value threaded out of the generator: the limiter runs
+ * *before* generation (a denied request must not reach the provider or the quota counter), so
+ * the entitlement the generator resolves later is not available yet. D-006 means this only
+ * changes whether the OBSERVE dimension is attached, so a stale answer costs an alert, not a
+ * wrong decision.
+ */
+export async function loadPlan(db: Database, businessId: string): Promise<'FREE' | 'PRO'> {
+  const [row] = await db
+    .select({ status: subscriptions.status, expiresAt: subscriptions.expiresAt })
+    .from(subscriptions)
+    .where(eq(subscriptions.businessId, businessId))
+    .limit(1);
+
+  if (!row || row.status !== 'PRO_ACTIVE') return 'FREE';
+  if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return 'FREE';
+  return 'PRO';
 }

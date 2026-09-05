@@ -7,6 +7,8 @@ import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
 import { resolvePublicRef } from '@/lib/resolve-public-ref';
+import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
+import { env } from '@/lib/env';
 
 /**
  * POST /api/v1/public/feedback — FB-01, private feedback.
@@ -66,7 +68,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const field = issue.path.join('.') || '(root)';
       fields[field] ??= issue.message;
     }
-    return apiError('VALIDATION_FAILED', 'Please check the details you entered.', { fields });
+    return apiError('VALIDATION_FAILED', 'Please check the details you entered.', {
+      details: { fields },
+    });
   }
 
   const { slug, name, mobile, message } = parsed.data;
@@ -81,6 +85,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { businessId } = resolved.ref;
   const database = db();
   const session = await resolveAnonymousSession(request, businessId);
+
+  // Two layers, deliberately. Redis is primary and is the only one that sees the IP prefix,
+  // so it is what catches a client cycling cookies. The database check below survives a Redis
+  // outage, when the limiter degrades to per-process counting.
+  if (session) {
+    const decision = await rateLimiter().publicFeedback({
+      businessId,
+      anonymousSessionId: session.sessionId,
+      ip: clientIp(request),
+      pepper: env().HASH_PEPPER,
+    });
+
+    if (isDenied(decision)) {
+      return apiError(
+        'PUBLIC_RATE_LIMITED',
+        'You have sent several messages already. Please try again a little later.',
+        { retryAfterSeconds: decision.retryAfterSeconds },
+      );
+    }
+  }
 
   if (session && (await isThrottled(database, businessId, session.sessionId))) {
     return apiError(

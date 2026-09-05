@@ -8,9 +8,11 @@ import { resolvePublicRef } from '@/lib/resolve-public-ref';
 import {
   buildGenerator,
   loadGenerationContext,
+  loadPlan,
   loadPreviousDrafts,
   selectProvider,
 } from '@/lib/generation-service';
+import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 
 /**
  * POST /api/v1/public/review/generate — REV-01 and Flow D.
@@ -48,6 +50,35 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { businessId, qrCodeId } = resolved.ref;
   const database = db();
   const session = await resolveAnonymousSession(request, businessId);
+
+  // AC-032, and before anything expensive: a denied request must not reach the provider, and
+  // must not consume the free quota either. Four dimensions in one atomic decision — session
+  // burst, session hourly, adaptive IP prefix, and fair-use observation for Pro tenants.
+  if (session) {
+    const decision = await rateLimiter().publicGeneration({
+      businessId,
+      anonymousSessionId: session.sessionId,
+      ip: clientIp(request),
+      pepper: env().HASH_PEPPER,
+      plan: await loadPlan(database, businessId),
+    });
+
+    if (isDenied(decision)) {
+      await recordEvent(database, {
+        businessId,
+        sessionId: session.sessionId,
+        qrCodeId,
+        name: 'ai_generate_failure',
+        properties: { error_class: decision.code, provider: 'rate_limit' },
+      });
+
+      return apiError(
+        decision.code,
+        'You have requested several drafts already. Please wait a moment and try again.',
+        { retryAfterSeconds: decision.retryAfterSeconds },
+      );
+    }
+  }
 
   const context = await loadGenerationContext(database, businessId);
   if (!context) {

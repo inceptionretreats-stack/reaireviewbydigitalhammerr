@@ -3,9 +3,11 @@ import {
   ipSessionSetKey,
   loginFailureCheck,
   loginSuccessCheck,
+  publicFeedbackCheck,
   publicGenerationCheck,
   sessionMember,
   type LoginSubject,
+  type PublicFeedbackSubject,
   type PublicGenerationSubject,
   type RateLimitConfig,
 } from './policies';
@@ -127,6 +129,11 @@ export class RateLimiter {
     const now = this.clock();
     const distinctSessions = await this.countDistinctSessions(subject, now);
     return this.consume(publicGenerationCheck(subject, distinctSessions, this.config));
+  }
+
+  /** Private-feedback submission (E8-02). Two dimensions, one atomic decision. */
+  publicFeedback(subject: PublicFeedbackSubject): Promise<RateLimitDecision> {
+    return this.consume(publicFeedbackCheck(subject, this.config));
   }
 
   /** AC-002: called *before* verifying the password, so a locked-out identity never gets to. */

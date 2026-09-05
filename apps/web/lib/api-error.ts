@@ -37,14 +37,36 @@ export const ERROR_STATUS: Record<string, number> = {
   INTERNAL_ERROR: 500,
 };
 
+export interface ApiErrorOptions {
+  details?: Record<string, unknown>;
+  /**
+   * Emitted as Retry-After on a 429. Required for a well-behaved client to back off rather
+   * than hammer, and AC-032 is not really satisfied by a bare 429 that gives no interval.
+   */
+  retryAfterSeconds?: number;
+}
+
 export function apiError(
   code: keyof typeof ERROR_STATUS | string,
   message: string,
-  details?: Record<string, unknown>,
+  options: ApiErrorOptions = {},
 ): NextResponse {
   const status = ERROR_STATUS[code] ?? 500;
+  const headers: Record<string, string> = {};
+
+  if (options.retryAfterSeconds !== undefined) {
+    headers['Retry-After'] = String(Math.max(1, Math.ceil(options.retryAfterSeconds)));
+  }
+
   return NextResponse.json(
-    { error: { code, message, request_id: randomUUID(), ...(details ? { details } : {}) } },
-    { status },
+    {
+      error: {
+        code,
+        message,
+        request_id: randomUUID(),
+        ...(options.details ? { details: options.details } : {}),
+      },
+    },
+    { status, headers },
   );
 }

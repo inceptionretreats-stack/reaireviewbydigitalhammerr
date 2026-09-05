@@ -14,11 +14,12 @@
     "@ai-review/contracts": "workspace:*",
     "@ai-review/core": "workspace:*",
     "@ai-review/db": "workspace:*",
+    "@ai-review/ui": "workspace:*",
     "drizzle-orm": "^0.45.2",
+    "ioredis": "^5.11.1",
     "next": "^16.3.3",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "@ai-review/ui": "workspace:*"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
