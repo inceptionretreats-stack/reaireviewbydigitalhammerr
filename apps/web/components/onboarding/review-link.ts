@@ -1,4 +1,4 @@
-import type { ReviewUrlRejection } from '@ai-review/core';
+import type { ReviewDestinationKind, ReviewUrlRejection } from '@ai-review/core';
 import type { SubmitFailure } from '@/components/auth/use-form-submit';
 
 /**
@@ -39,7 +39,7 @@ export const REASONS_WORTH_INSTRUCTIONS: readonly ReviewUrlRejection[] = [
 
 /** The verdict from the server-side validator, returned by the Server Action the page supplies. */
 export type ReviewLinkCheck =
-  | { ok: true; url: string; host: string }
+  | { ok: true; url: string; host: string; kind: ReviewDestinationKind }
   | { ok: false; reason: ReviewUrlRejection; message: string };
 
 /** Which footer button the merchant pressed. They do not agree about an empty field. */

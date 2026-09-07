@@ -2,7 +2,12 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { and, eq } from 'drizzle-orm';
 import { reviewDestinations } from '@ai-review/db';
-import { TenantGuard, describeReviewUrlRejection, validateGoogleReviewUrl } from '@ai-review/core';
+import {
+  TenantGuard,
+  classifyReviewDestination,
+  describeReviewUrlRejection,
+  validateGoogleReviewUrl,
+} from '@ai-review/core';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 import { ReviewLinkStep, type ReviewLinkCheck } from '@/components/onboarding/ReviewLinkStep';
@@ -60,7 +65,7 @@ async function checkReviewUrl(url: string): Promise<ReviewLinkCheck> {
   const result = validateGoogleReviewUrl(url);
 
   return result.ok
-    ? { ok: true, url: result.url, host: result.host }
+    ? { ok: true, url: result.url, host: result.host, kind: result.kind }
     : { ok: false, reason: result.reason, message: describeReviewUrlRejection(result.reason) };
 }
 
@@ -85,5 +90,16 @@ export default async function Page() {
     )
     .limit(1);
 
-  return <ReviewLinkStep savedUrl={destination?.url ?? null} checkUrl={checkReviewUrl} />;
+  // Classified here rather than in the client: the function is pure, but importing a value from
+  // the @ai-review/core barrel into a client component drags the whole package toward the browser
+  // bundle — which is how PasswordHasher nearly ended up there once already.
+  const savedUrlKind = destination?.url ? classifyReviewDestination(destination.url) : null;
+
+  return (
+    <ReviewLinkStep
+      savedUrl={destination?.url ?? null}
+      savedUrlKind={savedUrlKind}
+      checkUrl={checkReviewUrl}
+    />
+  );
 }

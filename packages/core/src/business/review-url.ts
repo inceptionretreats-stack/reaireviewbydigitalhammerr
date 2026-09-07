@@ -36,8 +36,20 @@ const STRIPPED_PARAMS = [
 export type ReviewUrlRejection =
   'NOT_A_URL' | 'NOT_HTTPS' | 'UNSUPPORTED_HOST' | 'MISSING_PLACE_REFERENCE';
 
+/**
+ * Where the stored link actually lands the customer.
+ *
+ * The distinction the product lives on. `composer` opens Google's write-a-review dialog with the
+ * box ready for a paste; `listing` opens the business page, where the customer has to find
+ * "Write a review" themselves. Both are valid Google links and ONB-02-02 accepts both, so nothing
+ * here rejects a listing — but a customer who has just copied their words and is looking at a map
+ * is one tap from giving up, and the owner should be told that rather than left to discover it.
+ */
+export type ReviewDestinationKind = 'composer' | 'listing' | 'unknown';
+
 export type ReviewUrlValidation =
-  { ok: true; url: string; host: string } | { ok: false; reason: ReviewUrlRejection };
+  | { ok: true; url: string; host: string; kind: ReviewDestinationKind }
+  | { ok: false; reason: ReviewUrlRejection };
 
 export function validateGoogleReviewUrl(input: string): ReviewUrlValidation {
   const trimmed = input.trim();
@@ -67,7 +79,65 @@ export function validateGoogleReviewUrl(input: string): ReviewUrlValidation {
     return { ok: false, reason: 'MISSING_PLACE_REFERENCE' };
   }
 
-  return { ok: true, url: normalizeGoogleReviewUrl(parsed), host };
+  const upgraded = upgradeToComposer(parsed);
+  return {
+    ok: true,
+    url: normalizeGoogleReviewUrl(upgraded),
+    host,
+    kind: classifyReviewDestination(upgraded),
+  };
+}
+
+/**
+ * Rewrites a link to the review composer where that can be done safely.
+ *
+ * Two cases only, both documented and lossless:
+ *
+ *  - `g.page/r/{code}` is the Business Profile short link; adding `/review` is what Google's own
+ *    "Ask for reviews" produces, and the bare form is the commonest thing an owner copies from
+ *    their profile header by mistake.
+ *  - anything already carrying a `placeid` is expressed directly as the writereview endpoint.
+ *
+ * A Maps share link is deliberately *not* converted. Turning `maps.app.goo.gl/…` into a composer
+ * link needs the place id, which is only obtainable from the Places API — explicitly out of scope
+ * for V1 — and guessing at an undocumented URL shape would send real customers somewhere that
+ * silently stops working. It is classified as a listing and reported instead.
+ */
+export function upgradeToComposer(input: URL | string): URL {
+  const url = typeof input === 'string' ? new URL(input.trim()) : new URL(input.toString());
+  const host = url.hostname.toLowerCase();
+
+  const placeId = url.searchParams.get('placeid') ?? url.searchParams.get('place_id');
+  if (placeId) {
+    const composer = new URL('https://search.google.com/local/writereview');
+    composer.searchParams.set('placeid', placeId);
+    return composer;
+  }
+
+  if (host === 'g.page') {
+    const segments = url.pathname.split('/').filter(Boolean);
+    if (segments[0] === 'r' && segments.length === 2) {
+      url.pathname = `/r/${segments[1]}/review`;
+      return url;
+    }
+  }
+
+  return url;
+}
+
+export function classifyReviewDestination(input: URL | string): ReviewDestinationKind {
+  const url = typeof input === 'string' ? new URL(input.trim()) : new URL(input.toString());
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.toLowerCase();
+
+  if (host === 'search.google.com' && path.startsWith('/local/writereview')) return 'composer';
+  if (host === 'g.page' && path.endsWith('/review')) return 'composer';
+
+  // A Maps place or share link. It resolves to the business page, not the review box.
+  if (host === 'maps.app.goo.gl' || host === 'maps.google.com') return 'listing';
+  if (path.startsWith('/maps')) return 'listing';
+
+  return 'unknown';
 }
 
 /** ONB-02-03: lowercase host, drop tracking params and any fragment, trim trailing slash. */

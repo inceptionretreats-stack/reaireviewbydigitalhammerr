@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import type { ReviewDestinationKind } from '@ai-review/core';
 import { Badge, Button, Field, FOCUS_RING, Input } from '@ai-review/ui';
 // The screen's decisions — what Continue writes, which blur asks the server, and which of two
 // concurrent answers owns the screen — live in `./review-link` so they can be unit-tested without a
@@ -87,12 +88,18 @@ export interface ReviewLinkStepProps {
    * authoritative validator runs where it already lives instead of being reimplemented here.
    */
   checkUrl: (url: string) => Promise<ReviewLinkCheck>;
+  /** Where the already-saved link lands, classified server-side so this stays a pure client. */
+  savedUrlKind?: ReviewDestinationKind | null;
 }
 
-export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
+export function ReviewLinkStep({ savedUrl, checkUrl, savedUrlKind = null }: ReviewLinkStepProps) {
   const [value, setValue] = useState(savedUrl ?? '');
   const [storedUrl, setStoredUrl] = useState(savedUrl);
-  const [valid, setValid] = useState<{ url: string; host: string } | null>(null);
+  const [valid, setValid] = useState<{
+    url: string;
+    host: string;
+    kind: ReviewDestinationKind;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'checking' | 'saving' | null>(null);
   // Open by default for someone who has no link yet: on this step the instructions are the work,
@@ -116,6 +123,7 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
    * and host checks exist to keep out of this field.
    */
   const testableUrl = isSaved ? storedUrl : (valid?.url ?? null);
+  const testableKind = isSaved ? savedUrlKind : (valid?.kind ?? null);
 
   const clearVerdict = useCallback(() => {
     // Any edit invalidates what is displayed and any answer still in flight.
@@ -142,7 +150,7 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
         if (!ownsVerdict(slot.current, ticket, candidate)) return;
 
         if (result.ok) {
-          setValid({ url: result.url, host: result.host });
+          setValid({ url: result.url, host: result.host, kind: result.kind });
           setError(null);
         } else {
           setValid(null);
@@ -313,6 +321,32 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
             </p>
           )}
         </div>
+
+        {/*
+          A listing link is valid and accepted (ONB-02-02), and it is still the wrong one. It opens
+          the business page, so a customer who has just copied their words has to spot "Write a
+          review" and tap again — which is exactly where people give up. Said plainly here rather
+          than left for the owner to discover from a customer who never posted.
+        */}
+        {testableKind === 'listing' && (
+          <div className="flex flex-col gap-1.5 rounded-card border border-warning bg-warning-soft p-4 text-sm">
+            <p className="font-semibold text-ink">
+              This link opens your listing, not the review box.
+            </p>
+            <p className="text-ink-muted">
+              It works, but your customer lands on your Google page and has to find “Write a review”
+              themselves. The link from <strong>Ask for reviews</strong> in your Business Profile
+              opens the review box straight away, with their draft ready to paste.
+            </p>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              className={`self-start rounded font-semibold text-accent ${FOCUS_RING}`}
+            >
+              Show me how to find it
+            </button>
+          </div>
+        )}
 
         {testableUrl !== null && (
           <div className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 text-sm">

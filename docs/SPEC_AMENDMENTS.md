@@ -339,6 +339,35 @@ write their own.
 
 ---
 
+### AMENDMENT-023 — a review link is classified by where it actually lands
+
+ONB-02-02 accepts `google.com` and `maps.app.goo.gl` links, and the product treated every accepted
+link as equivalent. They are not. A Business Profile link (`g.page/r/{code}/review`, or
+`search.google.com/local/writereview?placeid=…`) opens Google's write-a-review box with the paste
+target on screen. A Maps share link opens the business listing, and a customer who has just copied
+their words has to spot "Write a review" and tap again — which is where they stop.
+
+The validator now reports a `kind` alongside the URL, and upgrades what can be upgraded safely:
+
+- `g.page/r/{code}` gains `/review`. That is precisely what Google's own "Ask for reviews" button
+  produces, and the bare form is the commonest thing an owner copies from their profile header.
+- anything carrying a `placeid` is rewritten to the `writereview` endpoint.
+
+A Maps share link is **not** converted. Reaching the composer from one requires the place id, and
+that is only obtainable from the Places API — which 01_Product_Scope lists as explicitly out of V1.
+The undocumented feature-id-to-place-id encoding was tried and produces a well-formed identifier
+that cannot be verified without the same API: Google answers 200 for a nonsense place id and
+renders the failure client-side. Shipping a rewrite on that basis risks sending real customers to
+the wrong business, which is a materially worse outcome than one extra tap. So the link is stored
+as given and the owner is told, on the step, that it lands on the listing and where the direct
+link lives.
+
+The wider point: ONB-02's help text has always explained this distinction, and the product still
+accepted the wrong link silently. Guidance that only exists in a disclosure is guidance most people
+never read.
+
+---
+
 ## Architecture amendments — require product-owner sign-off
 
 ### ADR-AMEND-A — no separate NestJS service

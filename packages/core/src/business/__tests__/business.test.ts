@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeSlug, suggestSlugs, validateSlug } from '../slug';
-import { normalizeGoogleReviewUrl, validateGoogleReviewUrl } from '../review-url';
+import {
+  classifyReviewDestination,
+  normalizeGoogleReviewUrl,
+  upgradeToComposer,
+  validateGoogleReviewUrl,
+} from '../review-url';
 import { buildWhatsAppLink, normalizePhone } from '../phone';
 
 describe('slug', () => {
@@ -86,6 +91,68 @@ describe('google review url', () => {
       'https://G.PAGE/r/AbC/review/?utm_source=qr&utm_campaign=x#frag',
     );
     expect(result).toBe('https://g.page/r/AbC/review');
+  });
+
+  /**
+   * The distinction the whole hand-off turns on.
+   *
+   * A composer link opens Google's write-a-review box with the paste target right there. A
+   * listing link opens the business page, and a customer who has just copied their words has to
+   * find "Write a review" themselves — which is where they give up. Both are valid Google links
+   * and ONB-02-02 accepts both, so this classifies rather than rejects.
+   */
+  describe('destination kind', () => {
+    it.each([
+      ['https://g.page/r/AbC/review', 'composer'],
+      ['https://search.google.com/local/writereview?placeid=ChIJabc', 'composer'],
+      ['https://maps.app.goo.gl/WQanbXLtjRCXYkYC7', 'listing'],
+      ['https://www.google.com/maps/place/Eats+and+Treats/@26.3,73.0,17z', 'listing'],
+      ['https://maps.google.com/?q=Eats+and+Treats', 'listing'],
+    ])('classifies %s as %s', (url, kind) => {
+      expect(classifyReviewDestination(url)).toBe(kind);
+    });
+  });
+
+  describe('upgrading to the review composer', () => {
+    /**
+     * The commonest onboarding mistake: an owner copies the short link from their profile header
+     * rather than from "Ask for reviews". Adding /review is exactly what Google's own button
+     * produces, so this is lossless.
+     */
+    it('adds /review to a bare Business Profile short link', () => {
+      expect(validateGoogleReviewUrl('https://g.page/r/AbC')).toMatchObject({
+        ok: true,
+        url: 'https://g.page/r/AbC/review',
+        kind: 'composer',
+      });
+    });
+
+    it('leaves an already-correct short link alone', () => {
+      expect(upgradeToComposer('https://g.page/r/AbC/review').toString()).toBe(
+        'https://g.page/r/AbC/review',
+      );
+    });
+
+    it('expresses a place id as the writereview endpoint', () => {
+      expect(
+        validateGoogleReviewUrl('https://www.google.com/maps/place/?placeid=ChIJabc'),
+      ).toMatchObject({
+        ok: true,
+        url: 'https://search.google.com/local/writereview?placeid=ChIJabc',
+        kind: 'composer',
+      });
+    });
+
+    /**
+     * Deliberately NOT converted. Reaching the composer from a Maps share link needs the place
+     * id, which only the Places API supplies — out of scope for V1 — and an invented URL shape
+     * would send real customers somewhere that quietly stops working. Accepted and reported.
+     */
+    it('accepts a Maps share link without pretending it reaches the composer', () => {
+      const result = validateGoogleReviewUrl('https://maps.app.goo.gl/WQanbXLtjRCXYkYC7');
+      expect(result).toMatchObject({ ok: true, kind: 'listing' });
+      if (result.ok) expect(result.url).toBe('https://maps.app.goo.gl/WQanbXLtjRCXYkYC7');
+    });
   });
 
   it('preserves meaningful query parameters', () => {
