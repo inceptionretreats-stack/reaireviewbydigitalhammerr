@@ -38,3 +38,8 @@ tmp/
 
 # Local development database cluster
 .pgdata/
+
+# Playwright
+e2e-results/
+playwright-report/
+test-results/

@@ -37,6 +37,20 @@ export const envSchema = z.object({
 
   // Redis
   REDIS_URL: z.string().startsWith('redis'),
+  /**
+   * Multiplies every rate-limit allowance. Defaults to 1, so production behaviour is exactly the
+   * calibrated policy in packages/core/src/rate-limit/policies.ts.
+   *
+   * It exists because an automated end-to-end run is indistinguishable from a bot loop by design:
+   * the suite drives the real generation flow dozens of times from one address, trips the
+   * IP-prefix rule, and every later assertion then fails on a throttle message rather than on its
+   * own subject. Raising the ceiling for a test environment is honest; disabling the limiter
+   * would remove the very thing AC-032 asks us to prove.
+   *
+   * 19_Admin_Panel_Spec.md already lists generation rate limits as platform configuration, so
+   * these becoming settings rather than constants is the intended direction.
+   */
+  RATE_LIMIT_MULTIPLIER: z.coerce.number().positive().max(1000).default(1),
 
   // AI. The model is a bootstrap default only: ADR-006 puts the live model and prompt in
   // ai_prompt_versions so quality can be rolled back without an application deploy.

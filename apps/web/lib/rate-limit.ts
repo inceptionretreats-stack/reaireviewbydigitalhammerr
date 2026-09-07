@@ -1,9 +1,11 @@
 import Redis from 'ioredis';
 import {
+  DEFAULT_RATE_LIMIT_CONFIG,
   MemoryRateLimitStore,
+  type RateLimitConfig,
+  type RateLimitDecision,
   RateLimiter,
   RedisRateLimitStore,
-  type RateLimitDecision,
 } from '@ai-review/core';
 import { env } from './env';
 
@@ -41,11 +43,41 @@ function redisClient(): Redis {
 export function rateLimiter(): RateLimiter {
   cached ??= new RateLimiter(new RedisRateLimitStore(redisClient()), {
     fallbackStore: new MemoryRateLimitStore(),
+    config: scaledConfig(),
     onStoreUnavailable: (error, checkName) => {
       console.warn(`[rate-limit] ${checkName} fell back to in-process limiting`, error);
     },
   });
   return cached;
+}
+
+/**
+ * The calibrated policy, with every allowance scaled by RATE_LIMIT_MULTIPLIER.
+ *
+ * The multiplier is 1 in production, so this returns the defaults untouched. Only counts are
+ * scaled — never a window — because widening a window changes what the rule means, while raising
+ * a count only changes how much headroom a known-good client has.
+ */
+function scaledConfig(): RateLimitConfig {
+  const factor = env().RATE_LIMIT_MULTIPLIER;
+  if (factor === 1) return DEFAULT_RATE_LIMIT_CONFIG;
+
+  const scale = (value: number): number => Math.ceil(value * factor);
+
+  return {
+    ...DEFAULT_RATE_LIMIT_CONFIG,
+    sessionGenerationsPerHour: scale(DEFAULT_RATE_LIMIT_CONFIG.sessionGenerationsPerHour),
+    sessionBurstLimit: scale(DEFAULT_RATE_LIMIT_CONFIG.sessionBurstLimit),
+    ipPrefixBaseLimit: scale(DEFAULT_RATE_LIMIT_CONFIG.ipPrefixBaseLimit),
+    ipPrefixPerSessionLimit: scale(DEFAULT_RATE_LIMIT_CONFIG.ipPrefixPerSessionLimit),
+    ipPrefixCeiling: scale(DEFAULT_RATE_LIMIT_CONFIG.ipPrefixCeiling),
+    fairUseGenerationsPerHour: scale(DEFAULT_RATE_LIMIT_CONFIG.fairUseGenerationsPerHour),
+    loginFailuresPerIdentity: scale(DEFAULT_RATE_LIMIT_CONFIG.loginFailuresPerIdentity),
+    loginFailuresPerIpPrefix: scale(DEFAULT_RATE_LIMIT_CONFIG.loginFailuresPerIpPrefix),
+    loginFailuresPerIdentityPerDay: scale(DEFAULT_RATE_LIMIT_CONFIG.loginFailuresPerIdentityPerDay),
+    feedbackPerSession: scale(DEFAULT_RATE_LIMIT_CONFIG.feedbackPerSession),
+    feedbackPerIpPrefix: scale(DEFAULT_RATE_LIMIT_CONFIG.feedbackPerIpPrefix),
+  };
 }
 
 /**

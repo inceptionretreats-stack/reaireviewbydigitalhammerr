@@ -980,7 +980,17 @@ export async function run(
     report(`  platform admin  ${PLATFORM_ADMIN_EMAIL}${adminPassword ? '' : ' (no password set)'}`);
     report(`  plan            FREE, ${plan.subscription.freeGenerationLimit} generations`);
     report(`  prompt version  ${plan.promptVersion.version} (${plan.promptVersion.model})`);
-    report(`  QR codes        ${plan.qrCodes.map((qr) => `/r/${qr.code}`).join('  ')}`);
+    // Read back rather than reported from the plan.
+    //
+    // The upsert deliberately never overwrites `code` (QR-01-01: a printed standee must stay
+    // valid), so on a re-seed the planned codes are freshly generated values that were discarded.
+    // Printing those sent anyone following the output to a 404 while the real codes still worked.
+    const storedQrCodes = await db
+      .select({ code: qrCodes.code })
+      .from(qrCodes)
+      .where(eq(qrCodes.businessId, plan.business.id!))
+      .orderBy(qrCodes.createdAt);
+    report(`  QR codes        ${storedQrCodes.map((qr) => `/r/${qr.code}`).join('  ')}`);
     report('');
 
     return 0;

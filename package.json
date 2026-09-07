@@ -21,13 +21,16 @@
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "check:migrations": "node scripts/check-migrations.mjs",
     "seed": "tsx scripts/seed.ts",
-    "db:dev": "node scripts/dev-db.mjs start"
+    "db:dev": "node scripts/dev-db.mjs start",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed"
   },
   "devDependencies": {
     "@ai-review/config": "workspace:*",
     "@ai-review/core": "workspace:*",
     "@ai-review/db": "workspace:*",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.4.0",
     "drizzle-orm": "^0.45.2",
     "embedded-postgres": "18.4.0-beta.17",
