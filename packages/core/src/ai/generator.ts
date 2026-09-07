@@ -1,7 +1,12 @@
 import type { QuotaService } from '../quota/service';
 import type { Entitlement } from '../quota/types';
 import { checkVariation, DEFAULT_SIMILARITY_THRESHOLD } from './similarity';
-import { buildPrompt, checkOutputCompliance, type GenerationRequest } from './prompt-builder';
+import {
+  buildPrompt,
+  checkOutputCompliance,
+  MAX_PREVIOUS_DRAFTS,
+  type GenerationRequest,
+} from './prompt-builder';
 import { AiProviderError, type AiProvider, type StructuredReview } from './provider';
 
 /**
@@ -67,6 +72,18 @@ export type GenerationOutcome =
  */
 const MIN_ATTEMPT_BUDGET_MS = 1500;
 
+/**
+ * Three, not two.
+ *
+ * 09_AI_Prompt_and_Generation_Spec.md describes one internal retry, and two attempts is enough
+ * when the retry is blind. Now that a retry is told what failed, a third attempt is worth its
+ * cost: the common rejections — a superlative, a price, an opening too close to the last draft —
+ * are all things a model fixes readily once named, and the alternative is a 503 in front of a
+ * customer who is standing at a counter. The shared deadline still bounds the whole call, so
+ * this buys attempts, not latency: an attempt only starts if MIN_ATTEMPT_BUDGET_MS remains.
+ */
+const MAX_ATTEMPTS = 3;
+
 export class ReviewGenerator {
   constructor(
     private readonly provider: AiProvider,
@@ -122,7 +139,7 @@ export class ReviewGenerator {
     options: GenerateOptions,
   ): Promise<Omit<GeneratedDraft, 'countedTowardQuota'>> {
     const threshold = options.similarityThreshold ?? DEFAULT_SIMILARITY_THRESHOLD;
-    const maxAttempts = 2;
+    const maxAttempts = MAX_ATTEMPTS;
     const deadline = Date.now() + options.timeoutMs;
 
     let lastRejections: string[] = [];
@@ -141,8 +158,12 @@ export class ReviewGenerator {
         break;
       }
 
+      // Each retry carries why the last attempt was thrown away, so the model corrects rather
+      // than resamples. The shared deadline above still caps the whole call.
       const prompt = buildPrompt(
-        attempt === 1 ? options.request : withStrongerVariation(options.request),
+        attempt === 1
+          ? options.request
+          : withStrongerVariation(options.request, attempt, lastRejections),
         options.promptVersion.systemPrompt,
       );
 
@@ -158,7 +179,15 @@ export class ReviewGenerator {
 
       const text = result.output.review_text.trim();
       const compliance = checkOutputCompliance(text);
-      const variation = checkVariation(text, options.request.previousDrafts, threshold);
+      // The same window the prompt disclosed, not the whole history. The two used to diverge:
+      // the prompt showed the last three drafts while the gate compared against every one, so a
+      // long session eventually rejected a draft for resembling something the model had no way
+      // to know about, retried into the same wall, and returned AI_OUTPUT_REJECTED for good.
+      const variation = checkVariation(
+        text,
+        options.request.previousDrafts.slice(-MAX_PREVIOUS_DRAFTS),
+        threshold,
+      );
 
       if (compliance.passed && variation.passed) {
         return {
@@ -192,6 +221,14 @@ class QualityGateExhausted extends Error {
   }
 }
 
-function withStrongerVariation(request: GenerationRequest): GenerationRequest {
-  return { ...request, generationNumber: request.generationNumber + 1 };
+function withStrongerVariation(
+  request: GenerationRequest,
+  attempt: number,
+  rejections: string[],
+): GenerationRequest {
+  return {
+    ...request,
+    generationNumber: request.generationNumber + attempt - 1,
+    rejections,
+  };
 }

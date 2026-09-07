@@ -5,7 +5,7 @@ import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
 import { isDenied, rateLimiter } from '@/lib/rate-limit';
-import { loadGenerationContext, selectProvider } from '@/lib/generation-service';
+import { loadGenerationContext, providerKeys, selectProvider } from '@/lib/generation-service';
 import { previewCheck } from './preview-limit';
 
 /**
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   );
 
   try {
-    const result = await selectProvider(env().OPENAI_API_KEY).generate({
+    const result = await selectProvider(providerKeys()).generate({
       prompt,
       model: context.promptVersion.model,
       maxOutputTokens: context.promptVersion.maxOutputTokens,

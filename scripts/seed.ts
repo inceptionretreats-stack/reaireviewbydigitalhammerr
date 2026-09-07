@@ -529,8 +529,18 @@ export function buildSeedPlan(input: SeedPlanInput): SeedPlanResult {
     id: seedId(`prompt-version:${prompt.version}`),
     version: prompt.version,
     status: 'ACTIVE',
-    model: prompt.default_model,
-    reasoningEffort: prompt.reasoning_effort,
+    // AI_DEFAULT_MODEL wins over the template's default_model.
+    //
+    // 10_AI_Prompt_Templates.json names `gpt-5.6-luna`, which is a model that does not exist —
+    // it is spec fiction, and the DB row is what the generator actually reads (ADR-006), so
+    // seeding it verbatim guarantees a 400 from any real provider. docs/spec/ is a frozen
+    // contract and must not be edited to fix that, so the override lives here instead. It also
+    // makes the model a per-environment choice, which is what ADR-006 wants anyway.
+    model: process.env['AI_DEFAULT_MODEL']?.trim() || prompt.default_model,
+    // Blank when the model takes no reasoning-effort field. The Anthropic adapter ignores this
+    // outright; the OpenAI one sends it only when non-empty, and sending 'none' to a model that
+    // does not accept it is a 400 on every request.
+    reasoningEffort: process.env['AI_REASONING_EFFORT_OVERRIDE'] ?? prompt.reasoning_effort,
     systemPrompt: prompt.system_prompt,
     outputSchema: prompt.output_schema,
     // Carried from the template rather than defaulted. The 220-token cap is a cost control,

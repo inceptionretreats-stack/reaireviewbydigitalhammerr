@@ -5,6 +5,7 @@ import {
   type GenerationResult,
   type StructuredReview,
 } from './provider';
+import { isRecord, parseStructuredReview } from './structured-review';
 
 /**
  * Real OpenAI adapter for the Responses API (E4-04, ADR-006, ADR-007,
@@ -36,8 +37,6 @@ const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 
 /** Names the strict schema in the Responses API request; not customer-visible. */
 const STRUCTURED_OUTPUT_NAME = 'review_draft';
-
-const CLAIM_RISKS = ['low', 'medium', 'high'] as const;
 
 /**
  * Minimal structural shapes instead of the global `Response` / `RequestInit`.
@@ -281,7 +280,7 @@ export class OpenAiProvider implements AiProvider {
       throw this.fail(`openai returned unparseable JSON output (${trace})`, 'INVALID_OUTPUT', true);
     }
 
-    const review = toStructuredReview(draft);
+    const review = parseStructuredReview(draft);
     if (!review) {
       throw this.fail(`openai output did not match the schema (${trace})`, 'INVALID_OUTPUT', true);
     }
@@ -401,26 +400,6 @@ function extractContent(payload: Record<string, unknown>): ExtractedContent {
  * spreading also means a prompt version that adds properties cannot leak them downstream into
  * the customer response.
  */
-function toStructuredReview(value: unknown): StructuredReview | null {
-  if (!isRecord(value)) return null;
-
-  const reviewText = value['review_text'];
-  const usedContextTerms = value['used_context_terms'];
-  const claimRisk = value['claim_risk'];
-  const notes = value['internal_quality_notes'];
-
-  if (typeof reviewText !== 'string' || reviewText.trim().length === 0) return null;
-  if (!isStringArray(usedContextTerms)) return null;
-  if (!isClaimRisk(claimRisk)) return null;
-  if (!isStringArray(notes)) return null;
-
-  return {
-    review_text: reviewText,
-    used_context_terms: usedContextTerms,
-    claim_risk: claimRisk,
-    internal_quality_notes: notes,
-  };
-}
 
 /**
  * Prefers the Responses object id over the x-request-id header: it is the id the OpenAI logs
@@ -483,18 +462,6 @@ function safeToken(value: unknown): string {
   if (typeof value !== 'string') return 'unknown';
   const trimmed = value.trim();
   return /^[A-Za-z0-9_.:-]{1,64}$/.test(trimmed) ? trimmed : 'unknown';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
-}
-
-function isClaimRisk(value: unknown): value is StructuredReview['claim_risk'] {
-  return typeof value === 'string' && CLAIM_RISKS.some((risk) => risk === value);
 }
 
 function trimTrailingSlash(url: string): string {

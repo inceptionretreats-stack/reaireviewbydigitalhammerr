@@ -18,7 +18,7 @@ import { DraftEditor } from './DraftEditor';
  */
 
 export interface PublicBusiness {
-  slug: string;
+  slug: string | null;
   name: string;
   logoUrl: string | null;
   reviewUrl: string | null;
@@ -57,7 +57,7 @@ export function ReviewFlow({ business, qrCode }: ReviewFlowProps) {
           body: JSON.stringify({
             name,
             properties,
-            slug: business.slug,
+            slug: business.slug ?? undefined,
             qr_code: qrCode ?? undefined,
           }),
           keepalive: true,
@@ -80,7 +80,7 @@ export function ReviewFlow({ business, qrCode }: ReviewFlowProps) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            slug: business.slug,
+            slug: business.slug ?? undefined,
             qr_code: qrCode ?? undefined,
             previous_generation_id: isRegeneration ? generationId : undefined,
           }),
@@ -189,9 +189,17 @@ export function ReviewFlow({ business, qrCode }: ReviewFlowProps) {
         double-count every visitor who arrives from this flow, and inflate the denominator that
         private_feedback_submit is measured against.
       */}
-      <a className="btn btn-text" href={`/${business.slug}/feedback`}>
-        Send private feedback instead
-      </a>
+      {/*
+        Omitted rather than linked when there is no slug: the feedback page lives at
+        /{slug}/feedback and there is nowhere to send anyone without one. A dead link that looks
+        alive is worse than an absent one — this is the visitor's only private route, so it must
+        either work or not be offered.
+      */}
+      {business.slug !== null && (
+        <a className="btn btn-text" href={`/${business.slug}/feedback`}>
+          Send private feedback instead
+        </a>
+      )}
 
       {/*
         AC-036: when the assistant is unavailable the direct review link must still work. It

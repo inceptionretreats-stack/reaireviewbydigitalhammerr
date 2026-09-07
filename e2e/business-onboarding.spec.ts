@@ -136,6 +136,20 @@ test('a new business signs up, completes setup and publishes', async ({ page }) 
   expect(first.resolve_url).toContain(`/r/${first.code}`);
   expect(first.resolve_url).not.toContain(BUSINESS.slug);
 
+  // And it resolves against the address this deployment is actually reachable at.
+  //
+  // This is the assertion whose absence let a QR ship encoding http://localhost:3000 — a payload
+  // that is correct on the machine that generated it and blank on every phone that scans it.
+  // Compared against the configured APP_BASE_URL rather than a literal, because a literal would
+  // have passed then too.
+  const configuredBase = process.env.APP_BASE_URL;
+  expect(
+    configuredBase,
+    'APP_BASE_URL must be set for this assertion to mean anything',
+  ).toBeTruthy();
+  const base = configuredBase!.endsWith('/') ? configuredBase!.slice(0, -1) : configuredBase!;
+  expect(first.resolve_url).toBe(`${base}/r/${first.code}`);
+
   // The dashboard names the one remaining task, which happens away from the screen: get the code
   // printed and in front of a customer. Asserted before the scan below, because that scan is
   // exactly the event that retires this guidance.

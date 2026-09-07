@@ -15,6 +15,7 @@
     "@ai-review/analytics": "workspace:*",
     "@ai-review/config": "workspace:*",
     "@ai-review/db": "workspace:*",
+    "@anthropic-ai/sdk": "^0.124.0",
     "@node-rs/argon2": "^2.1.0",
     "drizzle-orm": "^0.45.2",
     "ioredis": "^5.11.1",

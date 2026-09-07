@@ -36,10 +36,22 @@ export async function demoBusinessId(): Promise<string> {
   return id;
 }
 
-/** Returns the tenant to a full free allowance so a generation test has room to run. */
+/**
+ * Returns the tenant to a full free allowance so a generation test has room to run.
+ *
+ * The stored drafts go too. The similarity gate compares a new draft against what is persisted
+ * for the anonymous session, so leaving them behind means a suite that reuses a browser context
+ * eventually proposes something too close to a draft from an earlier run and fails on a quality
+ * rejection that has nothing to do with the test. It passes today only because every Playwright
+ * test gets a fresh context and therefore a fresh anonymous cookie — an accident, not a design.
+ */
 export async function resetFreeQuota(): Promise<void> {
   await db().query(
     `UPDATE subscriptions SET free_generations_used = 0, status = 'FREE'
+     WHERE business_id = (SELECT id FROM businesses WHERE name = 'Demo South Cafe')`,
+  );
+  await db().query(
+    `DELETE FROM ai_generations
      WHERE business_id = (SELECT id FROM businesses WHERE name = 'Demo South Cafe')`,
   );
 }

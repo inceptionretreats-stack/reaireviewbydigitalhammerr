@@ -25,7 +25,7 @@ export default async function SlugReviewPage({ params }: { params: Promise<{ slu
     <main className="shell">
       <ReviewFlow
         business={{
-          slug: config.slug,
+          slug: config.slug ?? slug,
           name: config.name,
           logoUrl: config.logoUrl,
           reviewUrl: config.reviewUrl,

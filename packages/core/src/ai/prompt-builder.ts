@@ -28,12 +28,30 @@ export interface GenerationRequest {
   reviewMode?: ReviewModeInput | null;
   previousDrafts: string[];
   generationNumber: number;
+  /**
+   * Why the previous attempt in *this* request was thrown away, in the vocabulary of
+   * OutputRejection.
+   *
+   * Only set on a retry. Without it a retry is a blind resample: the model is asked the same
+   * question and has no idea the last answer named a price or called the place perfect, so it
+   * is free to do the same thing again and burn the attempt. Naming the failure is the
+   * difference between a second chance and a second coin flip.
+   */
+  rejections?: string[];
 }
 
 /** Cap on context passed to the model, keeping input tokens — and cost — predictable. */
 const MAX_SERVICES = 30;
 const MAX_CONTEXT_TERMS = 30;
-const MAX_PREVIOUS_DRAFTS = 3;
+/**
+ * How many earlier drafts the prompt discloses, per the spec's regeneration algorithm step 1.
+ *
+ * Exported because the similarity gate must use the same window. Judging a draft against texts
+ * the model was never shown is unwinnable: it cannot avoid what it cannot see, and every attempt
+ * burns against a rule it was not told. That mismatch dead-ended the fifth generation of a
+ * session outright.
+ */
+export const MAX_PREVIOUS_DRAFTS = 3;
 
 export interface BuiltPrompt {
   system: string;
@@ -48,6 +66,28 @@ export interface BuiltPrompt {
  * text with a customer's name on it — which is what Google's fake-engagement policy exists to
  * stop. The prompt says "at most two, only where natural", and AC-010 tests it.
  */
+/**
+ * What to tell the model when a specific gate rejected the last attempt.
+ *
+ * Phrased as a correction rather than a prohibition. "Do not mention prices" invites the model
+ * to think about prices; "describe what happened, not what it cost" gives it somewhere else to
+ * go. Keyed on the rejection code's prefix so TOO_SIMILAR:0.812 matches TOO_SIMILAR.
+ */
+const REJECTION_GUIDANCE: Record<string, string> = {
+  STATES_A_RATING:
+    'Do not mention stars, scores or a number out of five. Rating happens on Google.',
+  EXTREME_PRAISE:
+    'Drop superlatives. Describe what happened in plain words rather than calling it the best or perfect.',
+  MENTIONS_INCENTIVE:
+    'Say nothing about discounts, free items, offers or anything received in return.',
+  UNSUPPORTED_SPECIFIC_CLAIM:
+    'Remove specific figures — prices, amounts, percentages and exact durations. Describe the experience, not what it cost or how many minutes it took.',
+  TOO_SHORT: 'Write more: aim for 45 to 85 words.',
+  TOO_LONG: 'Shorter: aim for 45 to 85 words.',
+  TOO_SIMILAR:
+    'Open differently and restructure the sentences. Do not paraphrase the previous draft.',
+};
+
 export function buildPrompt(request: GenerationRequest, systemPrompt: string): BuiltPrompt {
   const business = {
     name: request.business.name,
@@ -80,6 +120,17 @@ export function buildPrompt(request: GenerationRequest, systemPrompt: string): B
   if (previousDrafts.length > 0) {
     lines.push(
       'This is a regeneration. Vary sentence structure and opening substantially; do not restate the previous draft with synonyms.',
+    );
+  }
+
+  const rejections = request.rejections ?? [];
+  if (rejections.length > 0) {
+    lines.push(
+      `The previous attempt was rejected for: ${rejections.join(', ')}. Write a different draft that does not repeat those problems.`,
+      ...rejections.flatMap((code) => {
+        const guidance = REJECTION_GUIDANCE[code.split(':')[0] ?? ''];
+        return guidance ? [`- ${guidance}`] : [];
+      }),
     );
   }
 

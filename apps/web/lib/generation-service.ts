@@ -11,12 +11,14 @@ import {
 import {
   PostgresQuotaStore,
   QuotaService,
+  AnthropicProvider,
   OpenAiProvider,
   ReviewGenerator,
   StubAiProvider,
   type AiProvider,
   type PromptVersionConfig,
 } from '@ai-review/core';
+import { env } from './env';
 
 /**
  * Assembles a generation from stored configuration (Flow C, E4).
@@ -145,19 +147,44 @@ export async function loadPreviousDrafts(
 /**
  * Provider selection.
  *
- * The stub is used whenever no API key is configured, so local development and CI exercise the
- * whole flow — quota, gates, funnel — without reaching a paid provider. Production cannot reach
- * that branch: packages/config requires the key there, so a deployment that forgets it fails at
- * boot rather than quietly serving canned drafts as though a model had written them.
+ * The stub is used only when neither key is configured, so local development and CI exercise
+ * the whole flow — quota, gates, funnel — without reaching a paid provider. Production cannot
+ * reach that branch: packages/config requires one of the two there, so a deployment that forgets
+ * both fails at boot rather than quietly serving canned drafts as though a model had written them.
+ *
+ * Anthropic wins when both are set. That is a deliberate, stated precedence rather than an
+ * accident of ordering: a deployment holding two keys has one it means to use, and silently
+ * picking by declaration order would make the active vendor a property of this file rather than
+ * of configuration. Unsetting the other key is the way to switch.
+ *
+ * Both branches were unreachable until recently — this function returned the stub either way,
+ * which is exactly the sort of thing that survives review and every gate. Hence the test.
  *
  * Note there is no automatic failover to the fallback model. Terra costs 10x Luna, so a
  * full-traffic failover during an incident would take AI spend from roughly 5% of revenue to
  * roughly 45%. 02_System_Architecture.md specifies degrading to a retry state instead, which
  * is both the specified behaviour and the affordable one.
  */
-export function selectProvider(apiKey: string | undefined): AiProvider {
-  if (!apiKey) return new StubAiProvider('ok');
-  return new OpenAiProvider({ apiKey });
+/**
+ * The configured credentials, read from the validated environment.
+ *
+ * A helper rather than two inline reads: the routes should not each decide which keys exist or
+ * in what order they are considered, or the precedence documented above becomes two facts that
+ * can disagree.
+ */
+export function providerKeys(): ProviderKeys {
+  return { anthropic: env().ANTHROPIC_API_KEY, openai: env().OPENAI_API_KEY };
+}
+
+export interface ProviderKeys {
+  anthropic?: string | undefined;
+  openai?: string | undefined;
+}
+
+export function selectProvider(keys: ProviderKeys): AiProvider {
+  if (keys.anthropic) return new AnthropicProvider({ apiKey: keys.anthropic });
+  if (keys.openai) return new OpenAiProvider({ apiKey: keys.openai });
+  return new StubAiProvider('ok');
 }
 
 export function buildGenerator(db: Database, provider: AiProvider): ReviewGenerator {

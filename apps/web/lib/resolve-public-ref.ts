@@ -16,7 +16,8 @@ import { db } from './db';
 
 export interface ResolvedPublicRef {
   businessId: string;
-  slug: string;
+  /** Null when the tenant was reached by QR and somehow holds no primary slug. */
+  slug: string | null;
   qrCodeId: string | null;
   config: PublicBusinessConfig;
 }

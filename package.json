@@ -23,7 +23,9 @@
     "seed": "tsx scripts/seed.ts",
     "db:dev": "node scripts/dev-db.mjs start",
     "e2e": "playwright test",
-    "e2e:headed": "playwright test --headed"
+    "e2e:headed": "playwright test --headed",
+    "tunnel": "node scripts/tunnel.mjs",
+    "ai:model": "node scripts/set-ai-model.mjs"
   },
   "devDependencies": {
     "@ai-review/config": "workspace:*",
@@ -35,6 +37,7 @@
     "drizzle-orm": "^0.45.2",
     "embedded-postgres": "18.4.0-beta.17",
     "eslint": "^10.9.1",
+    "pg": "^8.23.0",
     "prettier": "^3.9.6",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",

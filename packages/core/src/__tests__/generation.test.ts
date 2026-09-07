@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ReviewGenerator, type PromptVersionConfig } from '../ai/generator';
 import { buildPrompt, checkOutputCompliance, countUsedContextTerms } from '../ai/prompt-builder';
-import { StubAiProvider } from '../ai/provider';
+import { STUB_DRAFTS, StubAiProvider } from '../ai/provider';
 import { MemoryQuotaStore } from '../quota/memory-store';
 import { QuotaService } from '../quota/service';
 
@@ -26,8 +26,14 @@ const business = {
   contextTerms: ['South Indian food', 'Udaipur'],
 };
 
-const PRIOR_DRAFT =
-  'Visited recently and found the whole thing straightforward. Staff were helpful when I had a question, and I would happily come back another time.';
+/**
+ * Taken from the stub's own pool rather than copied.
+ *
+ * This was a verbatim duplicate of STUB_DRAFTS[0]. The similarity tests below only mean
+ * anything while the two match exactly, and nothing would have failed if they had drifted —
+ * they would simply have stopped testing the retry path while still passing.
+ */
+const PRIOR_DRAFT = STUB_DRAFTS[0]!;
 
 function makeGenerator(behaviour: 'ok' | 'fail' | 'repetitive' = 'ok', used = 0) {
   const store = new MemoryQuotaStore();
@@ -95,17 +101,55 @@ describe('review generation', () => {
 
 describe('regeneration', () => {
   /**
-   * AC-009 plus free-quota semantics: a repetitive model triggers the one permitted internal
-   * retry, and when that also fails the customer is refunded. Two provider calls, zero quota.
+   * AC-009 plus free-quota semantics: a repetitive model exhausts the internal retries, and the
+   * customer is refunded when it does. Every attempt inside one reservation is still one
+   * customer generation, so the quota counter must read zero however many calls were made.
    */
-  it('retries once on a too-similar candidate, then refunds', async () => {
+  it('retries a too-similar candidate to the attempt limit, then refunds', async () => {
     const { generator, provider, store } = makeGenerator('repetitive');
 
     const outcome = await generator.generate(options([PRIOR_DRAFT], 2));
 
     expect(outcome).toMatchObject({ ok: false, failure: { code: 'AI_OUTPUT_REJECTED' } });
-    expect(provider.calls).toBe(2);
+    expect(provider.calls).toBe(3);
     expect(store.usage(BIZ)).toBe(0);
+  });
+
+  /**
+   * The regression that put "the AI is not working" in front of a user.
+   *
+   * The route builds a fresh provider for every HTTP request, so anything the provider remembers
+   * between calls is a lie in production. The stub used to pick its draft from an instance
+   * counter: it restarted at zero each request while the similarity gate compared against drafts
+   * that had been *persisted*, so the third generation in a session proposed two already-stored
+   * texts, exhausted its attempts and returned AI_OUTPUT_REJECTED — every time, for the thirty
+   * days the anonymous cookie lives.
+   *
+   * A new provider per iteration is the whole point: with one long-lived instance this passes
+   * even against the broken implementation.
+   */
+  it('keeps producing fresh drafts across a session, with a new provider each request', async () => {
+    const store = new MemoryQuotaStore();
+    store.seed(BIZ, { mode: 'PRO', used: 0, limit: 10 });
+
+    const drafts: string[] = [];
+
+    for (let generation = 1; generation <= 5; generation += 1) {
+      const generator = new ReviewGenerator(new StubAiProvider(), new QuotaService(store));
+      const outcome = await generator.generate(options([...drafts], generation));
+
+      expect(outcome.ok, `generation ${generation} should succeed`).toBe(true);
+      if (!outcome.ok) return;
+      drafts.push(outcome.draft.reviewText);
+    }
+
+    // The guarantee is that a draft differs from the recent ones it was actually compared
+    // against — the same window the prompt disclosed. Global uniqueness across an unbounded
+    // session is not promised by the design and asserting it would test the stub's pool size.
+    for (let i = 1; i < drafts.length; i += 1) {
+      const window = drafts.slice(Math.max(0, i - 3), i);
+      expect(window, `draft ${i + 1} repeats one it was compared against`).not.toContain(drafts[i]);
+    }
   });
 
   it('accepts a materially different regeneration as one generation', async () => {
@@ -269,11 +313,14 @@ describe('generation time budget', () => {
     const generator = new ReviewGenerator(recordingProvider, new QuotaService(store));
     await generator.generate(options([PRIOR_DRAFT], 2));
 
-    expect(budgets).toHaveLength(2);
+    expect(budgets).toHaveLength(3);
     expect(budgets[0]).toBeLessThanOrEqual(8000);
-    // The second attempt gets what is left, never a fresh 8s.
-    expect(budgets[1]!).toBeLessThanOrEqual(budgets[0]!);
-    expect(budgets[0]! + budgets[1]!).toBeLessThanOrEqual(16000);
+    // Each later attempt gets what is left, never a fresh 8s. The property that matters is that
+    // the budget never grows — otherwise three attempts could run for 24 seconds in front of a
+    // customer who gave up at eight.
+    for (let i = 1; i < budgets.length; i += 1) {
+      expect(budgets[i]!).toBeLessThanOrEqual(budgets[i - 1]!);
+    }
   });
 
   it('does not start an attempt with too little budget to finish', async () => {

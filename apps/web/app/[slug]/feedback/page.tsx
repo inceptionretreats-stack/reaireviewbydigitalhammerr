@@ -51,7 +51,9 @@ export default async function PrivateFeedbackPage({
           This goes straight to {config.name} and is not posted anywhere publicly.
         </p>
       </div>
-      <FeedbackForm slug={config.slug} businessName={config.name} />
+      {/* The route param, not config.slug: this page was reached BY that slug, so it is the
+          authoritative value and cannot be null the way a QR-resolved tenant's can. */}
+      <FeedbackForm slug={slug} businessName={config.name} />
     </main>
   );
 }

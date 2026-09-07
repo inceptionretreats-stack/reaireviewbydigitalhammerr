@@ -77,6 +77,17 @@ export const envSchema = z
      */
     OPENAI_API_KEY: optionalSecret,
     OPENAI_DEFAULT_MODEL: nonEmpty,
+
+    /**
+     * The Anthropic credential. Optional on the same terms as the OpenAI one, and checked by the
+     * same production rule: what must never happen is a live tenant being served stub drafts, not
+     * that one particular vendor is configured.
+     *
+     * Which of the two is set decides the provider (see selectProvider). The model itself does
+     * not come from here at all — ADR-006 puts it in ai_prompt_versions so it can be rolled back
+     * without a deploy.
+     */
+    ANTHROPIC_API_KEY: optionalSecret,
     OPENAI_FALLBACK_MODEL: nonEmpty.optional(),
     OPENAI_REASONING_EFFORT: nonEmpty.default('none'),
     AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(220),
@@ -116,12 +127,16 @@ export const envSchema = z
     DEFAULT_TIMEZONE: nonEmpty.default('Asia/Kolkata'),
   })
   .superRefine((value, ctx) => {
-    if (value.NODE_ENV === 'production' && !value.OPENAI_API_KEY) {
+    // Production must reach a real model, but it does not care which vendor. Requiring a
+    // specific key would fail a correctly configured Anthropic deployment; requiring neither
+    // would let a real customer be handed a canned stub draft that reads like a genuine review
+    // and was written by nothing.
+    if (value.NODE_ENV === 'production' && !value.ANTHROPIC_API_KEY && !value.OPENAI_API_KEY) {
       ctx.addIssue({
         code: 'custom',
-        path: ['OPENAI_API_KEY'],
+        path: ['ANTHROPIC_API_KEY'],
         message:
-          'required in production — without it the stub provider would serve canned drafts to real customers',
+          'set ANTHROPIC_API_KEY or OPENAI_API_KEY in production — with neither, the stub provider would serve canned drafts to real customers',
       });
     }
   });

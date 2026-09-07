@@ -131,7 +131,9 @@ const loadPage = cache(async (slug: string): Promise<PageState> => {
     kind: 'live',
     content: {
       businessId: config.businessId,
-      slug: config.slug,
+      // The slug this page was reached by. config.slug is nullable for a QR-resolved tenant;
+      // here it cannot be, because the lookup used it.
+      slug,
       name: config.name,
       description: identityRow?.description ?? null,
       logoUrl: assetUrl(identityRow?.logoStorageKey ?? null),

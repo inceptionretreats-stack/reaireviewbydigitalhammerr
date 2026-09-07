@@ -43,6 +43,16 @@ interface DemoTenant {
   code: string;
   qrDataUri: string;
   scanUrl: string;
+  /**
+   * Whether the visitor is on this machine.
+   *
+   * The demo sign-in details are only printed when they are. The block below exists for a
+   * developer looking at their own dev server, but the moment that server is put behind a tunnel
+   * — which is now the supported way to make a QR scannable — the same page hands the demo
+   * owner's dashboard to anyone holding the link. Not production-only, because production is not
+   * the boundary that matters here; reachability is.
+   */
+  isLocalVisitor: boolean;
 }
 
 /**
@@ -77,6 +87,9 @@ async function loadDemoTenant(): Promise<DemoTenant | null> {
 
     const requestHeaders = await headers();
     const host = requestHeaders.get('host') ?? new URL(env().APP_BASE_URL).host;
+    const hostname = host.split(':')[0] ?? '';
+    const isLocalVisitor =
+      hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
     const protocol = requestHeaders.get('x-forwarded-proto') ?? 'http';
     const scanUrl = `${protocol}://${host}/r/${row.code}`;
 
@@ -96,6 +109,7 @@ async function loadDemoTenant(): Promise<DemoTenant | null> {
       code: row.code,
       qrDataUri: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
       scanUrl,
+      isLocalVisitor,
     };
   } catch {
     // A landing page that 500s because the development database is not running is worse than one
@@ -272,7 +286,13 @@ export default async function HomePage() {
             <a href="/login" className="font-medium text-accent">
               The dashboard →
             </a>
-            <span className="text-ink-muted">demo-owner@example.com / demo-owner-Password1!</span>
+            {/* Printed only to a visitor on this machine — see DemoTenant.isLocalVisitor. Behind
+                a tunnel this page is public, and these credentials open the demo dashboard to
+                anyone holding the link. `pnpm seed` prints them to the terminal, which is where
+                whoever is running the server can read them. */}
+            {demo.isLocalVisitor && (
+              <span className="text-ink-muted">demo-owner@example.com / demo-owner-Password1!</span>
+            )}
           </section>
         ) : null}
 

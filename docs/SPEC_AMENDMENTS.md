@@ -231,6 +231,75 @@ that will not scan off paper.
 
 ---
 
+### AMENDMENT-019 — Anthropic is a supported provider, and the seeded model is configurable
+
+ADR-007 names OpenAI and two models, `gpt-5.6-luna` and `gpt-5.6-terra`. Neither exists — they are
+spec fiction, and `ai_prompt_versions.model` is what the generator actually reads (ADR-006), so a
+seeded environment 400s on the first real call whatever key is present.
+
+`AnthropicProvider` now sits beside `OpenAiProvider` behind the same `AiProvider` interface, and
+`selectProvider` maps keys to providers: Anthropic when `ANTHROPIC_API_KEY` is set, OpenAI when
+only `OPENAI_API_KEY` is, the stub when neither. Anthropic wins when both are present — a stated
+precedence, so the active vendor is a property of configuration rather than of declaration order.
+Production requires one of the two rather than a named one; what must never happen is a live
+tenant being served stub drafts, not that a particular vendor is configured.
+
+`docs/spec/10_AI_Prompt_Templates.json` is frozen, so the model cannot be corrected there. The
+seed takes `AI_DEFAULT_MODEL` in preference to the template's `default_model`, and
+`scripts/set-ai-model.mjs` changes the ACTIVE version's model on a running system. That script is
+also the first delivery of the rollback ADR-006 promises: until now the only writer of that table
+was a seed script reading a frozen file, so "roll back without a deploy" was not available to
+anyone.
+
+Reasoning effort is now overridable and may be empty. It was `notNull().default('none')` with a
+`min(1)` seed validator, so an environment could not express "this model takes no effort field" —
+and sending one to a model that does not accept it is a 400 on every request. The Anthropic
+adapter ignores the field outright, since that API has no equivalent.
+
+**Model choice is a commercial decision.** The unit economics assume ~$0.20/$1.20 per MTok. At
+~270 generations per business per month, Claude Haiku 4.5 costs roughly ₹310/year per business
+against ₹999 revenue (~31%); Sonnet 5 is ~62% and Opus 5 exceeds the subscription outright. Haiku
+4.5 is seeded as the default for that reason and is one command to change.
+
+### AMENDMENT-020 — a printed QR is only as good as the address it encodes
+
+Twelve of the thirteen places that mint a QR encode `APP_BASE_URL`. Every automated gate passed
+with that set to `http://localhost:3000`, because the suite drives localhost from the same
+machine — the one context in which the fault is invisible. Scanned from a phone, `localhost` is
+the phone, and the scan resolves to nothing.
+
+Two changes follow. `scripts/tunnel.mjs` puts the dev server behind a public HTTPS URL and writes
+it to `APP_BASE_URL`, which fixes every QR producer and the CSRF origin allowlist in one move;
+`allowedDevOrigins` is derived from the same value so Next's dev endpoints are not blocked at the
+new host. And `e2e/business-onboarding.spec.ts` now asserts the minted `resolve_url` equals
+`${APP_BASE_URL}/r/{code}` — compared against the configured value, never a literal, because a
+literal would have passed while the product was broken.
+
+The demo credentials on the landing page are now shown only to a visitor on loopback. They were
+printed to every visitor, which was harmless on a laptop and hands the demo owner's dashboard to
+anyone with the link the moment the server is public.
+
+### AMENDMENT-021 — the similarity gate judges only what the prompt disclosed
+
+`buildPrompt` shows the model the last three drafts; the gate compared a candidate against every
+draft in the session. A long session therefore rejected a draft for resembling something the model
+had no way to know about, retried into the same wall, and returned `AI_OUTPUT_REJECTED`
+permanently — the anonymous cookie lives thirty days, so "the AI stopped working" was accurate and
+irreversible for that visitor.
+
+Both now use `MAX_PREVIOUS_DRAFTS`. Alongside it: the internal retry limit rises from two to three
+and each retry now carries _why_ the last attempt was rejected, so the model corrects rather than
+resamples blind. That matters more with a real model than with the stub — the compliance gates
+reject the bare word "perfect" and any currency amount, which real review prose produces readily,
+and every rejection was a 503 in front of a customer standing at a counter.
+
+`StubAiProvider` derives its draft from the request rather than an instance counter. The route
+builds a fresh provider per request, so anything a provider remembers between calls is a fiction
+in production; the counter restarted at zero every time while the gate compared against persisted
+drafts. That mismatch is what made the third generation in a session fail every time.
+
+---
+
 ## Architecture amendments — require product-owner sign-off
 
 ### ADR-AMEND-A — no separate NestJS service

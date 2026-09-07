@@ -19,9 +19,28 @@ try {
   // No root .env — a deployment that supplies configuration through the real environment.
 }
 
+/**
+ * The host the app is actually reached on.
+ *
+ * Next's dev server blocks its own internal endpoints (`/_next/*`, `/__nextjs*`) when the
+ * request carries an Origin it does not recognise, and its allowlist is localhost plus whatever
+ * is listed here. Over a tunnel that means a working page but a dead HMR socket and dev overlay.
+ * Derived from APP_BASE_URL rather than hard-coded so it follows `pnpm tunnel` automatically.
+ */
+function devOrigins(): string[] {
+  const base = process.env['APP_BASE_URL'];
+  if (!base) return [];
+  try {
+    return [new URL(base).host];
+  } catch {
+    return [];
+  }
+}
+
 const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  allowedDevOrigins: devOrigins(),
 
   // Domain logic lives in workspace packages and is compiled by Next rather than pre-built,
   // so the web app and the worker share exactly one implementation (ADR-AMEND-A).

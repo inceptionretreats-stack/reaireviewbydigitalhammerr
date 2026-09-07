@@ -14,6 +14,20 @@ import { defineConfig, devices } from '@playwright/test';
  *   pnpm --filter @ai-review/web dev              (terminal 2)
  *   pnpm e2e
  */
+/**
+ * The same .env the dev server booted from.
+ *
+ * A QR encodes APP_BASE_URL, so a test that wants to assert the payload is correct has to know
+ * what that value is. Comparing against a hard-coded 'http://localhost:3000' is how the original
+ * fault survived every gate: the payload matched the literal and was still unreachable from the
+ * one device that matters.
+ */
+try {
+  process.loadEnvFile('.env');
+} catch {
+  // No .env — CI supplies the real environment.
+}
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,

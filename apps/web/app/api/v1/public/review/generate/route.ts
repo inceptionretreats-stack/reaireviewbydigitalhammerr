@@ -10,6 +10,7 @@ import {
   loadGenerationContext,
   loadPlan,
   loadPreviousDrafts,
+  providerKeys,
   selectProvider,
 } from '@/lib/generation-service';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
@@ -91,7 +92,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const previousDrafts = session ? await loadPreviousDrafts(database, session.sessionId) : [];
-  const generator = buildGenerator(database, selectProvider(env().OPENAI_API_KEY));
+  const provider = selectProvider(providerKeys());
+  const generator = buildGenerator(database, provider);
 
   const outcome = await generator.generate({
     businessId,
@@ -111,7 +113,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       sessionId: session?.sessionId ?? null,
       qrCodeId,
       name: 'ai_generate_failure',
-      properties: { error_class: outcome.failure.code, provider: 'openai' },
+      // The provider that actually ran, not a literal. This said 'openai' unconditionally,
+      // so every stub failure was recorded as an OpenAI failure and any cost or reliability
+      // dashboard built on this event was reporting a vendor that had never been called.
+      properties: { error_class: outcome.failure.code, provider: provider.name },
     });
     return failureResponse(outcome.failure.code);
   }

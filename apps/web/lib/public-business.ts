@@ -18,7 +18,14 @@ import {
 
 export interface PublicBusinessConfig {
   businessId: string;
-  slug: string;
+  /**
+   * The primary slug, or null when the tenant somehow has none.
+   *
+   * Nullable rather than defaulted to '': an empty string silently produces links like
+   * "//feedback", which browsers read as protocol-relative and follow to a host called
+   * "feedback". Null forces each caller to say what it does without one.
+   */
+  slug: string | null;
   name: string;
   logoUrl: string | null;
   /** Resolved live from review_destinations — the single source of truth (AMENDMENT-003). */
@@ -143,7 +150,11 @@ async function loadPublicConfig(
 
   return {
     businessId: business.id,
-    slug: primarySlug?.slug ?? '',
+    // An ACTIVE business always has a primary slug — publish reserves one — but the query can
+    // return nothing, and an empty string is worse than a null here: it renders links like
+    // href="//feedback", which a browser reads as a protocol-relative URL to a host called
+    // "feedback" and follows off-site. Null makes the caller decide.
+    slug: primarySlug?.slug ?? null,
     name: business.name,
     logoUrl: buildAssetUrl(business.logoStorageKey),
     reviewUrl: destination?.url ?? null,
