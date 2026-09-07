@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DraftEditor } from './DraftEditor';
 
 /**
@@ -12,7 +12,7 @@ import { DraftEditor } from './DraftEditor';
  *  - No star rating anywhere before Google (D-009, AC-006). There is no sentiment branch
  *    either — with nothing to branch on there can be no rating gate, which is what keeps this
  *    on the right side of Google's fake-engagement policy.
- *  - No questionnaire (D-008). One tap starts generation.
+ *  - No questionnaire (D-008). Generation starts on arrival — a scan is the tap.
  *  - Nothing claims the review was submitted (D-028, AC-025). The furthest this goes is
  *    opening Google, because that is the last thing the platform can actually observe.
  */
@@ -29,6 +29,14 @@ export interface ReviewFlowProps {
   business: PublicBusiness;
   /** The printed QR code string, not the internal qr_codes.id. */
   qrCode?: string | null;
+  /**
+   * A draft this anonymous session already has, read server-side.
+   *
+   * Present on a refresh or a return visit, and the reason arriving does not spend a generation
+   * every time. A free tenant has ten for the lifetime of the account, so without this a handful
+   * of curious reloads would empty the allowance before anyone posted anything.
+   */
+  initialDraft?: { text: string; generationId: string } | null;
 }
 
 type Phase = 'ready' | 'generating' | 'draft' | 'copied';
@@ -38,10 +46,12 @@ interface FlowError {
   message: string;
 }
 
-export function ReviewFlow({ business, qrCode }: ReviewFlowProps) {
-  const [phase, setPhase] = useState<Phase>('ready');
-  const [draft, setDraft] = useState('');
-  const [generationId, setGenerationId] = useState<string | null>(null);
+export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) {
+  const [phase, setPhase] = useState<Phase>(initialDraft ? 'draft' : 'generating');
+  const [draft, setDraft] = useState(initialDraft?.text ?? '');
+  const [generationId, setGenerationId] = useState<string | null>(
+    initialDraft?.generationId ?? null,
+  );
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<FlowError | null>(null);
   const [edited, setEdited] = useState(false);
@@ -124,6 +134,23 @@ export function ReviewFlow({ business, qrCode }: ReviewFlowProps) {
     setPhase('copied');
   }, [draft, edited, generationId, track]);
 
+  /**
+   * Generate on arrival.
+   *
+   * A scan is already an intent to write a review, so making the customer tap "Generate" first
+   * is a step that asks nothing and decides nothing. Skipped when the session already has a
+   * draft — see initialDraft.
+   *
+   * The ref guards React 18's double-invoke in development, which would otherwise spend two
+   * generations for one visit and make the free allowance half what it says.
+   */
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (initialDraft || autoStarted.current) return;
+    autoStarted.current = true;
+    void generate(false);
+  }, [initialDraft, generate]);
+
   const openGoogle = useCallback(() => {
     // REV-03-01: recorded immediately before navigation, never after — the page is leaving.
     track('google_open', { generation_id: generationId });
@@ -142,21 +169,21 @@ export function ReviewFlow({ business, qrCode }: ReviewFlowProps) {
         </p>
       )}
 
-      {phase === 'ready' && (
-        <>
-          <p className="muted">
-            AI can help you write your review. You can edit it before you post.
-          </p>
-          <button type="button" className="btn btn-primary" onClick={() => void generate(false)}>
-            Generate My Review
-          </button>
-        </>
+      {phase === 'generating' && (
+        <p className="muted" aria-live="polite" aria-busy="true">
+          Writing your review…
+        </p>
       )}
 
-      {phase === 'generating' && (
-        <button type="button" className="btn btn-primary" disabled aria-busy="true">
-          Writing your draft…
-        </button>
+      {/*
+        'ready' is now only reachable by failing before a first draft exists. AC-036 requires the
+        direct route to stay open when the assistant is down, so this offers writing it by hand
+        rather than a Generate button that has just been shown not to work.
+      */}
+      {phase === 'ready' && (
+        <p className="muted">
+          You can still write your own review — the link below opens {business.reviewPlatformLabel}.
+        </p>
       )}
 
       {(phase === 'draft' || phase === 'copied') && (
@@ -205,6 +232,8 @@ export function ReviewFlow({ business, qrCode }: ReviewFlowProps) {
         AC-036: when the assistant is unavailable the direct review link must still work. It
         renders from the same configured destination, so it cannot drift from the flow above.
       */}
+      {/* Only when there is no draft to copy: once there is, the Copy button opens
+          {business.reviewPlatformLabel} itself and a second link to the same place is noise. */}
       {phase === 'ready' && business.reviewUrl && (
         <a
           className="btn btn-secondary"

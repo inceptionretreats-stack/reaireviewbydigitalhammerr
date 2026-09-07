@@ -3,13 +3,23 @@
 /**
  * REV-02 and REV-03: edit, regenerate, confirm, copy, continue.
  *
- * The confirmation checkbox is the compliance gate the whole product rests on (ADR-008,
- * AC-008). V1 asks the customer nothing, so the model has no knowledge of their actual
- * experience — the draft is a suggestion until a real person affirms it is true. Copy stays
- * disabled until they do.
+ * Two controls, in the order the customer needs them: another draft, or take this one. Copying
+ * and opening the review platform used to be two separate taps — the second appeared only after
+ * the first — which left people holding copied text on a page that looked finished. They are one
+ * action now.
  *
- * Note what the final button says and does not say. It opens Google. It never reports that a
- * review was submitted, because the platform cannot observe that (D-028, AC-025).
+ * That action is an anchor, not a button with `window.open`. A popup opened after an awaited
+ * clipboard write has lost its user activation and browsers block it; a real link navigating in
+ * a new tab is never blocked. So the link is the control, and the clipboard write happens on the
+ * way out.
+ *
+ * The confirmation checkbox stays, and still gates the whole thing. V1 asks the customer nothing,
+ * so the model knows nothing about their actual experience — the draft is a suggestion until a
+ * real person affirms it is true (ADR-008, AC-008). It is a tick rather than a tap, which is why
+ * simplifying to two buttons does not touch it.
+ *
+ * Note what the final control says and does not say. It opens the review page. It never reports
+ * that a review was submitted, because the platform cannot observe that (D-028, AC-025).
  */
 
 const MAX_REVIEW_CHARS = 1200;
@@ -48,10 +58,6 @@ export function DraftEditor(props: DraftEditorProps) {
         {tooLong && ' — please shorten before copying'}
       </p>
 
-      <button type="button" className="btn btn-secondary" onClick={props.onRegenerate}>
-        Try a different draft
-      </button>
-
       <div className="confirm">
         <input
           id="genuine-experience"
@@ -64,25 +70,55 @@ export function DraftEditor(props: DraftEditorProps) {
         </label>
       </div>
 
-      <button type="button" className="btn btn-primary" disabled={!canCopy} onClick={props.onCopy}>
-        {copied ? 'Copied' : 'Copy Review'}
+      <button type="button" className="btn btn-secondary" onClick={props.onRegenerate}>
+        New review
       </button>
 
-      {copied && reviewUrl && (
-        <>
+      {reviewUrl ? (
+        canCopy ? (
           <a
             className="btn btn-primary"
             href={reviewUrl}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={props.onOpenGoogle}
+            onClick={() => {
+              // Both recorded immediately before navigation, never after — the tab is leaving.
+              props.onCopy();
+              props.onOpenGoogle();
+            }}
           >
-            Continue to {platformLabel}
+            Copy &amp; open {platformLabel}
           </a>
-          <p className="muted">
-            Paste your review on {platformLabel} to post it. You choose your own star rating there.
-          </p>
-        </>
+        ) : (
+          /*
+           * A disabled anchor is not a thing — `aria-disabled` still leaves it clickable, and
+           * removing href turns it into something a keyboard cannot reach predictably. Rendering
+           * a real disabled button instead keeps the gate honest and the control announced
+           * correctly (AC-037).
+           */
+          <button type="button" className="btn btn-primary" disabled>
+            Copy &amp; open {platformLabel}
+          </button>
+        )
+      ) : (
+        /* No destination configured, so there is nothing to open. Copying is still worth
+           offering — the customer can paste it wherever they were going to write. */
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={!canCopy}
+          onClick={props.onCopy}
+        >
+          {copied ? 'Copied' : 'Copy review'}
+        </button>
+      )}
+
+      {!confirmed && <p className="muted">Tick the box above to copy your review and continue.</p>}
+
+      {copied && (
+        <p className="muted" aria-live="polite">
+          Copied. Paste it on {platformLabel} to post it — you choose your own star rating there.
+        </p>
       )}
     </div>
   );

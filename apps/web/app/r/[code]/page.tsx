@@ -5,6 +5,7 @@ import { normalizeQrCode } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { resolveByQrCode } from '@/lib/public-business';
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
+import { loadLatestDraft } from '@/lib/generation-service';
 import { ReviewFlow } from '@/components/ReviewFlow';
 
 /**
@@ -45,6 +46,11 @@ export default async function QrLandingPage({ params }: { params: Promise<{ code
     await recordScan(database, config, session.sessionId);
   }
 
+  // Handed to the client so an arriving visitor sees a draft rather than a button, without the
+  // page spending a generation it does not need to. Null for a first visit — the client asks for
+  // one on mount.
+  const existingDraft = session ? await loadLatestDraft(database, session.sessionId) : null;
+
   return (
     <main className="shell">
       <ReviewFlow
@@ -56,6 +62,7 @@ export default async function QrLandingPage({ params }: { params: Promise<{ code
           reviewPlatformLabel: config.reviewPlatformLabel,
         }}
         qrCode={normalizeQrCode(code)}
+        initialDraft={existingDraft}
       />
     </main>
   );

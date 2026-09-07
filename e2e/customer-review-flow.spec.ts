@@ -39,10 +39,14 @@ test.describe('customer review flow', () => {
     await page.goto(`/r/${QR_CODE}`);
 
     await expect(page.getByRole('heading', { name: /demo south cafe/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /generate my review/i })).toBeVisible();
 
-    // D-008: no questionnaire. One tap starts generation.
+    // D-008: no questionnaire, and now no tap either — the scan was the intent, so the draft is
+    // written on arrival. Nothing is asked of the customer before they have something to react to.
+    await expect(page.getByRole('textbox', { name: /your review/i })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(page.locator('form input[type="text"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /generate my review/i })).toHaveCount(0);
   });
 
   /**
@@ -64,10 +68,9 @@ test.describe('customer review flow', () => {
 
   test('generates an editable draft', async ({ page }) => {
     await page.goto(`/r/${QR_CODE}`);
-    await page.getByRole('button', { name: /generate my review/i }).click();
 
     const draft = page.getByRole('textbox', { name: /your review/i });
-    await expect(draft).toBeVisible();
+    await expect(draft).toBeVisible({ timeout: 30_000 });
 
     const text = await draft.inputValue();
     expect(text.length).toBeGreaterThan(60);
@@ -85,35 +88,40 @@ test.describe('customer review flow', () => {
    */
   test('keeps Copy disabled until genuine experience is confirmed', async ({ page }) => {
     await page.goto(`/r/${QR_CODE}`);
-    await page.getByRole('button', { name: /generate my review/i }).click();
-    await expect(page.getByRole('textbox', { name: /your review/i })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: /your review/i })).toBeVisible({
+      timeout: 30_000,
+    });
 
-    const copy = page.getByRole('button', { name: /^copy review$/i });
-    await expect(copy).toBeDisabled();
+    // Before confirmation the control is a genuinely disabled button — not a link with a
+    // disabled *look*, which would still navigate on a click or an Enter key.
+    await expect(page.getByRole('button', { name: /copy .* open/i })).toBeDisabled();
+    await expect(page.getByRole('link', { name: /copy .* open/i })).toHaveCount(0);
 
     const confirm = page.getByRole('checkbox', { name: /genuine experience/i });
     await expect(confirm).toBeVisible();
     await confirm.check();
 
-    await expect(copy).toBeEnabled();
+    // Only now does it become something that can be followed.
+    await expect(page.getByRole('link', { name: /copy .* open/i })).toBeVisible();
   });
 
   test('regenerating produces a different draft and re-arms the confirmation', async ({ page }) => {
     await page.goto(`/r/${QR_CODE}`);
-    await page.getByRole('button', { name: /generate my review/i }).click();
 
     const draft = page.getByRole('textbox', { name: /your review/i });
+    await expect(draft).toBeVisible({ timeout: 30_000 });
     const first = await draft.inputValue();
 
     await page.getByRole('checkbox', { name: /genuine experience/i }).check();
-    await page.getByRole('button', { name: /different draft/i }).click();
+    await page.getByRole('button', { name: /new review/i }).click();
 
     await expect(draft).not.toHaveValue(first);
 
     // A regenerated draft is text the customer has not read yet, so an earlier confirmation
-    // cannot carry over to it.
+    // cannot carry over to it — and the control drops back to a disabled button, not a live link.
     await expect(page.getByRole('checkbox', { name: /genuine experience/i })).not.toBeChecked();
-    await expect(page.getByRole('button', { name: /^copy review$/i })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /copy .* open/i })).toBeDisabled();
+    await expect(page.getByRole('link', { name: /copy .* open/i })).toHaveCount(0);
   });
 
   /**
@@ -122,14 +130,22 @@ test.describe('customer review flow', () => {
    */
   test('never claims the review was submitted', async ({ page }) => {
     await page.goto(`/r/${QR_CODE}`);
-    await page.getByRole('button', { name: /generate my review/i }).click();
-    await expect(page.getByRole('textbox', { name: /your review/i })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: /your review/i })).toBeVisible({
+      timeout: 30_000,
+    });
     await page.getByRole('checkbox', { name: /genuine experience/i }).check();
-    await page.getByRole('button', { name: /^copy review$/i }).click();
 
     const body = (await page.locator('body').innerText()).toLowerCase();
     expect(body).not.toMatch(/review submitted|submitted your review|posted your review/);
-    await expect(page.getByRole('link', { name: /continue to/i })).toBeVisible();
+
+    // The furthest the product goes is opening the destination. Asserted by reading the link
+    // rather than following it: clicking leaves for an external site, and a test that navigates
+    // off the product is asserting Google's page, not ours.
+    const copy = page.getByRole('link', { name: /copy .* open/i });
+    await expect(copy).toHaveAttribute('href', /^https?:\/\//);
+    await expect(copy).toHaveAttribute('target', '_blank');
+    // noopener, so the destination cannot reach back into this tab via window.opener.
+    await expect(copy).toHaveAttribute('rel', /noopener/);
   });
 
   /** D-010, AC-024: private feedback is offered to every visitor, not only unhappy ones. */

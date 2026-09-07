@@ -300,6 +300,45 @@ drafts. That mismatch is what made the third generation in a session fail every 
 
 ---
 
+### AMENDMENT-022 — the draft is written on arrival, and copy-and-continue is one action
+
+REV-01 specifies a "Generate My Review" action on the review landing page, and REV-03 a separate
+continue-to-Google step that appears after copying. Watching the flow, both are steps that ask
+nothing and decide nothing:
+
+- A scan is already an intent to write a review. Making the customer tap _Generate_ is asking them
+  to confirm something they have just done with their phone camera.
+- Copying and then having to find a second button left people holding copied text on a page that
+  looked finished. The most common way to lose someone is to make them do one more thing after
+  they have decided.
+
+So the page generates on arrival, and the review controls are two: **New review** and **Copy &
+open {platform}**. The second copies to the clipboard and navigates in the same action.
+
+**The confirmation gate is unchanged.** It is a tick, not a tap, so simplifying to two buttons
+does not touch it, and it is the control that separates a writing assistant from a review
+generator (ADR-008, AC-008). Copy is a genuinely disabled `<button>` until the box is ticked and
+only then becomes an `<a>` — not a link styled to look disabled, which would still follow on a
+click or an Enter key. Regenerating still clears it, because a new draft is text the customer has
+not read.
+
+The copy control is an anchor rather than a button calling `window.open`. A popup opened after an
+awaited clipboard write has lost its user activation and browsers block it; a real link in a new
+tab never is. `rel="noopener"` so the destination cannot reach back through `window.opener`.
+
+**Generating on arrival makes a page load billable**, which on the free plan matters: ten
+generations is the lifetime allowance, so ten curious refreshes would spend it before anyone
+posted anything. The server therefore hands the client the session's most recent draft when one
+exists (`loadLatestDraft`), and generation only runs when there is nothing to show. That is also
+what a customer expects — returning to the page should show the review they were part-way through
+editing, not silently replace it.
+
+AC-036 still holds: when generation fails before any draft exists, the direct link to the review
+platform is rendered instead, so the assistant being down never blocks a customer who wants to
+write their own.
+
+---
+
 ## Architecture amendments — require product-owner sign-off
 
 ### ADR-AMEND-A — no separate NestJS service
