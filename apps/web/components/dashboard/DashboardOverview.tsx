@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
-import { TenantGuard } from '@ai-review/core';
+import { TenantGuard, buildQrUrl } from '@ai-review/core';
 import { Card, StatusBadge } from '@ai-review/ui';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { getSession } from '@/lib/session';
+import { qrDataUri } from '@/lib/qr-image';
+import { FirstStepsCard } from './FirstStepsCard';
 import { LiveFigures } from './LiveFigures';
 import { PublicPageCard } from './PublicPageCard';
 import { ReportingCard } from './ReportingCard';
@@ -39,6 +41,14 @@ export async function DashboardOverview() {
   if (!summary) return <NoBusinessFound />;
 
   const status = describeBusinessStatus(summary.business.status);
+
+  // Only encoded when it is about to be shown. A tenant that has been scanned — every established
+  // one — pays nothing for guidance it has outgrown.
+  const showFirstSteps = status.isPubliclyLive && !summary.hasBeenScanned;
+  const firstStepsQr =
+    showFirstSteps && summary.primaryQr
+      ? await qrDataUri(buildQrUrl(env().APP_BASE_URL, summary.primaryQr.code))
+      : null;
   const publicUrl = summary.slug
     ? new URL(`/${summary.slug}`, env().APP_BASE_URL).toString()
     : null;
@@ -57,6 +67,17 @@ export async function DashboardOverview() {
           that its page "starts working the moment you publish" would be both wrong and useless.
           Those states are explained by the status badge above. */}
       {summary.progress.status === 'DRAFT' && <SetupProgressCard progress={summary.progress} />}
+
+      {/* The counterpart to SetupProgressCard, on the other side of publish. That card gets an
+          owner to a live page; this one gets the live page to a customer, which is the step no
+          amount of configuration can complete. Both are transient by design. */}
+      {showFirstSteps && (
+        <FirstStepsCard
+          qrPreviewSrc={firstStepsQr}
+          qrCode={summary.primaryQr?.code ?? null}
+          qrDownloadId={summary.primaryQr?.id ?? null}
+        />
+      )}
 
       {/* The lifecycle state goes in because a count of enabled sources says nothing about whether
           any of them resolves: only an ACTIVE business does (lib/public-business.ts, Flow J). */}

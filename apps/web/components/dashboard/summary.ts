@@ -1,5 +1,6 @@
-import { and, count, eq } from 'drizzle-orm';
+import { and, asc, count, eq } from 'drizzle-orm';
 import {
+  analyticsEvents,
   businessSlugs,
   businesses,
   qrCodes,
@@ -64,6 +65,21 @@ export interface DashboardSummary {
   } | null;
   qrSources: DashboardQrSources;
   progress: OnboardingProgress;
+  /**
+   * The default source publish creates, so a newly live owner can be shown the code itself rather
+   * than told where to find it. Null before publish, and for the theoretical tenant whose sources
+   * have all been deleted — which nothing in V1 offers, since QR-01 disables rather than deletes.
+   */
+  primaryQr: { id: string; code: string } | null;
+  /**
+   * Whether anyone has ever scanned a code for this business.
+   *
+   * The signal that the QR has reached the physical world, which is the one thing the dashboard
+   * cannot infer from configuration: a business can be perfectly set up and still have its
+   * standees in a drawer. It gates the first-steps guidance, so that guidance retires itself the
+   * moment it stops being true rather than sitting there forever.
+   */
+  hasBeenScanned: boolean;
 }
 
 export async function loadDashboardSummary(
@@ -72,50 +88,71 @@ export async function loadDashboardSummary(
 ): Promise<DashboardSummary | null> {
   // Issued together: they are independent reads and the screen cannot render until it has all of
   // them, so serialising would only add latency.
-  const [businessRows, slugRows, subscriptionRows, qrRows, progress] = await Promise.all([
-    db
-      .select({
-        name: businesses.name,
-        status: businesses.status,
-        timezone: businesses.timezone,
-        publishedAt: businesses.publishedAt,
-      })
-      .from(businesses)
-      .where(eq(businesses.id, businessId))
-      .limit(1),
+  const [businessRows, slugRows, subscriptionRows, qrRows, progress, primaryQrRows, scanRows] =
+    await Promise.all([
+      db
+        .select({
+          name: businesses.name,
+          status: businesses.status,
+          timezone: businesses.timezone,
+          publishedAt: businesses.publishedAt,
+        })
+        .from(businesses)
+        .where(eq(businesses.id, businessId))
+        .limit(1),
 
-    // Only the primary slug. Retired aliases still resolve for their 180-day window
-    // (AMENDMENT-005, Flow I), but showing one as *the* address would have an owner print it.
-    db
-      .select({ slug: businessSlugs.slug })
-      .from(businessSlugs)
-      .where(and(eq(businessSlugs.businessId, businessId), eq(businessSlugs.isPrimary, true)))
-      .limit(1),
+      // Only the primary slug. Retired aliases still resolve for their 180-day window
+      // (AMENDMENT-005, Flow I), but showing one as *the* address would have an owner print it.
+      db
+        .select({ slug: businessSlugs.slug })
+        .from(businessSlugs)
+        .where(and(eq(businessSlugs.businessId, businessId), eq(businessSlugs.isPrimary, true)))
+        .limit(1),
 
-    db
-      .select({
-        status: subscriptions.status,
-        amountPaise: subscriptions.amountPaise,
-        currency: subscriptions.currency,
-        freeGenerationLimit: subscriptions.freeGenerationLimit,
-        freeGenerationsUsed: subscriptions.freeGenerationsUsed,
-        fairUseMonthlySoftLimit: subscriptions.fairUseMonthlySoftLimit,
-        expiresAt: subscriptions.expiresAt,
-      })
-      .from(subscriptions)
-      .where(eq(subscriptions.businessId, businessId))
-      .limit(1),
+      db
+        .select({
+          status: subscriptions.status,
+          amountPaise: subscriptions.amountPaise,
+          currency: subscriptions.currency,
+          freeGenerationLimit: subscriptions.freeGenerationLimit,
+          freeGenerationsUsed: subscriptions.freeGenerationsUsed,
+          fairUseMonthlySoftLimit: subscriptions.fairUseMonthlySoftLimit,
+          expiresAt: subscriptions.expiresAt,
+        })
+        .from(subscriptions)
+        .where(eq(subscriptions.businessId, businessId))
+        .limit(1),
 
-    // Grouped in the database rather than counted in TypeScript: a tenant with a hundred standees
-    // should not ship a hundred rows to render one number.
-    db
-      .select({ status: qrCodes.status, rows: count() })
-      .from(qrCodes)
-      .where(eq(qrCodes.businessId, businessId))
-      .groupBy(qrCodes.status),
+      // Grouped in the database rather than counted in TypeScript: a tenant with a hundred standees
+      // should not ship a hundred rows to render one number.
+      db
+        .select({ status: qrCodes.status, rows: count() })
+        .from(qrCodes)
+        .where(eq(qrCodes.businessId, businessId))
+        .groupBy(qrCodes.status),
 
-    loadOnboardingProgress(db, businessId),
-  ]);
+      loadOnboardingProgress(db, businessId),
+
+      // The default source publish creates is the oldest row (ONB-05-01); id breaks the tie because
+      // rows written in one transaction share created_at to the microsecond.
+      db
+        .select({ id: qrCodes.id, code: qrCodes.code })
+        .from(qrCodes)
+        .where(eq(qrCodes.businessId, businessId))
+        .orderBy(asc(qrCodes.createdAt), asc(qrCodes.id))
+        .limit(1),
+
+      // EXISTS, not COUNT: the question is "has this ever happened", and a tenant with a year of
+      // scans should not have them tallied to answer it. idx_events_business_name_time covers the
+      // lookup, so this stops at the first matching row.
+      db
+        .select({ id: analyticsEvents.id })
+        .from(analyticsEvents)
+        .where(
+          and(eq(analyticsEvents.businessId, businessId), eq(analyticsEvents.eventName, 'qr_scan')),
+        )
+        .limit(1),
+    ]);
 
   const business = businessRows[0];
   if (!business) return null;
@@ -128,5 +165,7 @@ export async function loadDashboardSummary(
     // the dashboard's wording turns on — are exercised by a test that needs no database.
     qrSources: foldQrSources(qrRows),
     progress,
+    primaryQr: primaryQrRows[0] ?? null,
+    hasBeenScanned: scanRows.length > 0,
   };
 }

@@ -27,6 +27,7 @@ function source(overrides: Partial<QrSource> = {}): QrSource {
     status: 'ACTIVE',
     createdAt: '2026-02-01T04:30:00.000Z',
     resolveUrl: 'https://example.test/r/ABCDEFGHJK',
+    previewSrc: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
     ...overrides,
   };
 }
@@ -97,6 +98,7 @@ describe('parseQrSource', () => {
     status: 'DISABLED',
     created_at: '2026-02-01T04:30:00.000Z',
     resolve_url: 'https://example.test/r/ABCDEFGHJK',
+    preview_src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
   };
 
   it('reads the envelope both write endpoints answer with', () => {
@@ -108,6 +110,7 @@ describe('parseQrSource', () => {
       status: 'DISABLED',
       createdAt: '2026-02-01T04:30:00.000Z',
       resolveUrl: 'https://example.test/r/ABCDEFGHJK',
+      previewSrc: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
     });
   });
 
@@ -121,7 +124,16 @@ describe('parseQrSource', () => {
   });
 
   it('rejects a payload missing a field the table renders', () => {
-    for (const key of ['id', 'code', 'source_label', 'created_at', 'resolve_url'] as const) {
+    for (const key of [
+      'id',
+      'code',
+      'source_label',
+      'created_at',
+      'resolve_url',
+      // The table renders the symbol itself, so a row without one would draw a broken image where
+      // the owner expects to see which code they are looking at.
+      'preview_src',
+    ] as const) {
       const broken: Record<string, unknown> = { ...wire };
       delete broken[key];
       expect(parseQrSource(broken), `missing ${key} must be rejected`).toBeNull();

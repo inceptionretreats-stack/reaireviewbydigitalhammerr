@@ -15,6 +15,7 @@ import { env } from '@/lib/env';
 import { getSession } from '@/lib/session';
 import { loadOnboardingProgress } from '@/lib/onboarding-progress';
 import { FinishStep } from '@/components/onboarding/FinishStep';
+import { qrDataUri } from '@/lib/qr-image';
 import {
   asStringArray,
   buildPreviewSections,
@@ -138,6 +139,12 @@ export default async function OnboardingFinishPage() {
   const slug = slugRows[0]?.slug ?? null;
   const qr = qrRows[0];
 
+  // Rendered here rather than in the client component: the encoder is server-side, and generating
+  // it alongside the row means the preview and the downloadable file are the same symbol by
+  // construction. Only one code exists at this point, so this is one encode, not a loop.
+  const qrScanUrl = qr ? buildQrUrl(env().APP_BASE_URL, qr.code) : null;
+  const qrPreviewSrc = qrScanUrl ? await qrDataUri(qrScanUrl) : null;
+
   // The publish endpoint's own three tests, run against the rows this page has already read, so
   // the list rendered now and a 409 arriving later cannot disagree about what is missing.
   const publishBlockers = derivePublishBlockers({
@@ -157,12 +164,13 @@ export default async function OnboardingFinishPage() {
       sections={buildPreviewSections(linkRows, progress.hasReviewLink)}
       canonicalUrl={slug ? new URL(`/${slug}`, env().APP_BASE_URL).toString() : null}
       qrCode={
-        qr
+        qr && qrScanUrl && qrPreviewSrc
           ? {
               id: qr.id,
               code: qr.code,
               label: qr.label,
-              scanUrl: buildQrUrl(env().APP_BASE_URL, qr.code),
+              scanUrl: qrScanUrl,
+              previewSrc: qrPreviewSrc,
             }
           : null
       }

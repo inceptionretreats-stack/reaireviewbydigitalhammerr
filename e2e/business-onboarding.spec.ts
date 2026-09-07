@@ -111,6 +111,12 @@ test('a new business signs up, completes setup and publishes', async ({ page }) 
   );
   await expect(page.getByText(/live/i).first()).toBeVisible();
 
+  // The owner should be able to SEE the code they just created, not only download it. This is the
+  // artefact the whole product turns on, and it used to be visible nowhere in the owner's UI.
+  const finishQr = page.getByRole('img', { name: /qr code/i });
+  await expect(finishQr).toBeVisible({ timeout: 30_000 });
+  await expect(finishQr).toHaveAttribute('src', /^data:image\/svg\+xml;base64,/);
+
   // ONB-05-02: the canonical route works immediately, not after a cache expires.
   const publicPage = await page.request.get(`/${BUSINESS.slug}`);
   expect(publicPage.status()).toBe(200);
@@ -130,7 +136,24 @@ test('a new business signs up, completes setup and publishes', async ({ page }) 
   expect(first.resolve_url).toContain(`/r/${first.code}`);
   expect(first.resolve_url).not.toContain(BUSINESS.slug);
 
+  // The dashboard names the one remaining task, which happens away from the screen: get the code
+  // printed and in front of a customer. Asserted before the scan below, because that scan is
+  // exactly the event that retires this guidance.
+  await page.goto('/app');
+  await expect(page.getByText(/one thing left/i)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('img', { name: /qr code/i })).toBeVisible();
+
+  // The QR screen shows each source as the symbol itself, so an owner with several standees can
+  // tell which row is which without downloading every one of them.
+  await page.goto('/app/qr');
+  await expect(page.getByRole('img', { name: new RegExp(`QR code ${first.code}`) })).toBeVisible();
+
   // And the printed code actually resolves for a customer.
   const scan = await page.request.get(`/r/${first.code}`);
   expect(scan.status()).toBe(200);
+
+  // Guidance, not furniture: the first scan is proof the code has reached the world, so the card
+  // retires itself rather than sitting on the dashboard of an established business forever.
+  await page.goto('/app');
+  await expect(page.getByText(/one thing left/i)).toHaveCount(0);
 });

@@ -30,6 +30,8 @@ export interface QrSource {
   createdAt: string;
   /** The opaque `/r/{code}` URL the standee encodes (ADR-002, D-026). */
   resolveUrl: string;
+  /** The rendered symbol as a data URI, so an owner sees the code and not just its name. */
+  previewSrc: string;
 }
 
 /**
@@ -188,8 +190,9 @@ export function parseQrSource(raw: unknown): QrSource | null {
   const label = readNonEmptyString(row.source_label);
   const createdAt = readNonEmptyString(row.created_at);
   const resolveUrl = readNonEmptyString(row.resolve_url);
+  const previewSrc = readNonEmptyString(row.preview_src);
 
-  if (!id || !code || !label || !createdAt || !resolveUrl) return null;
+  if (!id || !code || !label || !createdAt || !resolveUrl || !previewSrc) return null;
   if (!isQrStatus(row.status)) return null;
 
   return {
@@ -200,6 +203,7 @@ export function parseQrSource(raw: unknown): QrSource | null {
     status: row.status,
     createdAt,
     resolveUrl,
+    previewSrc,
   };
 }
 

@@ -287,7 +287,13 @@ describe('toQrSourceWire', () => {
   };
 
   it('answers in the field names GET /api/v1/qr uses, so one list shape serves all three', () => {
-    expect(toQrSourceWire(row, 'https://example.test/r/ABCDEFGHJK')).toEqual({
+    expect(
+      toQrSourceWire(
+        row,
+        'https://example.test/r/ABCDEFGHJK',
+        'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
+      ),
+    ).toEqual({
       id: row.id,
       code: 'ABCDEFGHJK',
       source_label: 'Reception',
@@ -295,6 +301,7 @@ describe('toQrSourceWire', () => {
       status: 'ACTIVE',
       created_at: '2026-02-01T04:30:00.000Z',
       resolve_url: 'https://example.test/r/ABCDEFGHJK',
+      preview_src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
     });
   });
 });

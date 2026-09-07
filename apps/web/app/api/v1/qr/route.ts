@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
+import { qrDataUri } from '@/lib/qr-image';
 import {
   MAX_SOURCES_PER_BUSINESS,
   parseQrSourceCreate,
@@ -64,8 +65,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const baseUrl = env().APP_BASE_URL;
 
-  return NextResponse.json({
-    sources: rows.map((row) => ({
+  // Encoded per row rather than fetched per row: the screen shows every code as a thumbnail, and
+  // an <img> per source pointing at the download endpoint would be one authenticated request
+  // each. A QR encode is a few hundred microseconds and the list is capped at
+  // MAX_SOURCES_PER_BUSINESS, so this stays a bounded cost.
+  const sources = await Promise.all(
+    rows.map(async (row) => ({
       id: row.id,
       code: row.code,
       // Wire names mirror qrSourceRequest in @ai-review/contracts, so what QR-01 sends when it
@@ -80,12 +85,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       // Google URL and never the slug. Surfaced so the owner can check a printed code by hand and
       // so support can be given a link that resolves the same way a scan does.
       resolve_url: buildQrUrl(baseUrl, row.code),
+      preview_src: await qrDataUri(buildQrUrl(baseUrl, row.code)),
       // QR-01 also lists "Destination behavior fixed to AI review V1" as screen content. It is not
       // returned here because nothing backs it: there is one destination behaviour in V1 and no
       // column that could ever hold a second value, so it is a fixed label the screen renders. An
       // API field would imply a choice the product does not have.
     })),
-  });
+  );
+
+  return NextResponse.json({ sources });
 }
 
 /**
@@ -155,7 +163,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   await recordCreated(database, businessId, created);
 
   return NextResponse.json(
-    { source: toQrSourceWire(created, buildQrUrl(env().APP_BASE_URL, created.code)) },
+    {
+      source: toQrSourceWire(
+        created,
+        buildQrUrl(env().APP_BASE_URL, created.code),
+        await qrDataUri(buildQrUrl(env().APP_BASE_URL, created.code)),
+      ),
+    },
     { status: 201 },
   );
 }

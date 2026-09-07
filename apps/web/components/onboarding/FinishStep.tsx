@@ -54,6 +54,12 @@ export interface FinishQrCode {
   code: string;
   label: string;
   scanUrl: string;
+  /**
+   * The symbol itself, as a data URI, rendered by the server from lib/qr-image — the same encoder
+   * the download endpoint uses. An owner who has just published should be able to see the thing
+   * they came here for without opening a file first.
+   */
+  previewSrc: string;
 }
 
 export interface FinishStepProps {
@@ -560,43 +566,61 @@ function QrPanel({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="m-0 text-sm text-ink-muted">
-        {qrCode.label} · code <span className="font-semibold text-ink">{qrCode.code}</span>
-      </p>
-
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
       {/*
+        A white plate under the symbol in every theme. The code is pure black on opaque white for
+        the scanner's sake (see PRINT_COLORS), so letting a dark background show through the quiet
+        zone would break exactly what that margin is for.
+      */}
+      <img
+        src={qrCode.previewSrc}
+        alt={`QR code ${qrCode.code}, which opens your review page`}
+        width={176}
+        height={176}
+        className="mx-auto block size-44 shrink-0 rounded-card bg-white p-2 sm:mx-0"
+      />
+
+      <div className="flex min-w-0 flex-col gap-3">
+        <p className="m-0 text-sm text-ink-muted">
+          {qrCode.label} · code <span className="font-semibold text-ink">{qrCode.code}</span>
+        </p>
+        <p className="m-0 text-sm text-ink-muted">
+          Scan it with your own phone before you print it. You should land on your review page.
+        </p>
+
+        {/*
         Anchors, not `Button`s. A download is a link — it has to survive a middle-click, a
         right-click and being announced as a link — and the kit `Button` renders a `<button>` with
         no polymorphic escape hatch. The button treatment is composed from the kit shared class
         tokens so the focus ring and touch target stay identical to a real one (AC-037).
       */}
-      {/*
+        {/*
         The filename is set here rather than left to Content-Disposition: it carries the printed
         code, which is what matches a file to a standee on a print order, and it means the file
         does not land in Downloads called "download" if the endpoint sends no header.
       */}
-      <div className="flex flex-wrap gap-2">
-        <a
-          href={`/api/v1/qr/${qrCode.id}/download?format=svg`}
-          download={`qr-${qrCode.code}.svg`}
-          className={cx(ACTION_BASE, ACTION_PRIMARY, TOUCH_TARGET, FOCUS_RING)}
-        >
-          Download SVG
-        </a>
-        <a
-          href={`/api/v1/qr/${qrCode.id}/download?format=png`}
-          download={`qr-${qrCode.code}.png`}
-          className={cx(ACTION_BASE, ACTION_SECONDARY, TOUCH_TARGET, FOCUS_RING)}
-        >
-          Download PNG
-        </a>
-      </div>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={`/api/v1/qr/${qrCode.id}/download?format=svg`}
+            download={`qr-${qrCode.code}.svg`}
+            className={cx(ACTION_BASE, ACTION_PRIMARY, TOUCH_TARGET, FOCUS_RING)}
+          >
+            Download SVG
+          </a>
+          <a
+            href={`/api/v1/qr/${qrCode.id}/download?format=png`}
+            download={`qr-${qrCode.code}.png`}
+            className={cx(ACTION_BASE, ACTION_SECONDARY, TOUCH_TARGET, FOCUS_RING)}
+          >
+            Download PNG
+          </a>
+        </div>
 
-      <p className="m-0 text-sm text-ink-muted">
-        Take the SVG to your printer: it stays sharp at any size, which is what a standee needs. The
-        PNG is for a quick share or an on-screen check.
-      </p>
+        <p className="m-0 text-sm text-ink-muted">
+          Take the SVG to your printer: it stays sharp at any size, which is what a standee needs.
+          The PNG is for a quick share or an on-screen check.
+        </p>
+      </div>
     </div>
   );
 }

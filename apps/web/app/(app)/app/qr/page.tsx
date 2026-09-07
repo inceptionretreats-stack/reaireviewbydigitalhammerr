@@ -9,6 +9,7 @@ import { env } from '@/lib/env';
 import { getSession } from '@/lib/session';
 import { MAX_SOURCES_PER_BUSINESS } from '@/app/api/v1/qr/qr-source';
 import { describeBusinessStatus } from '@/components/dashboard/presentation';
+import { qrDataUri } from '@/lib/qr-image';
 import { QrHowItWorks } from '@/components/dashboard/qr/QrHowItWorks';
 import { QrSourcesScreen } from '@/components/dashboard/qr/QrSourcesScreen';
 import type { QrSource } from '@/components/dashboard/qr/qr-sources';
@@ -76,17 +77,23 @@ export default async function Page() {
   if (!business) return <NoBusinessFound />;
 
   const baseUrl = env().APP_BASE_URL;
-  const sources: QrSource[] = rows.map((row) => ({
-    id: row.id,
-    code: row.code,
-    label: row.sourceLabel,
-    note: row.internalNote,
-    status: row.status,
-    createdAt: row.createdAt.toISOString(),
-    // ADR-002, D-026: the opaque dynamic URL is what the standee encodes, resolved fresh on every
-    // scan, which is what lets the destination change without a reprint (AC-017).
-    resolveUrl: buildQrUrl(baseUrl, row.code),
-  }));
+  const sources: QrSource[] = await Promise.all(
+    rows.map(async (row) => ({
+      id: row.id,
+      code: row.code,
+      label: row.sourceLabel,
+      note: row.internalNote,
+      status: row.status,
+      createdAt: row.createdAt.toISOString(),
+      // ADR-002, D-026: the opaque dynamic URL is what the standee encodes, resolved fresh on every
+      // scan, which is what lets the destination change without a reprint (AC-017).
+      resolveUrl: buildQrUrl(baseUrl, row.code),
+      // Rendered here rather than in the browser: the owner should be able to see which code is
+      // which without downloading each one, and the encoder is the same module the printable file
+      // uses, so the thumbnail and the print are the same symbol.
+      previewSrc: await qrDataUri(buildQrUrl(baseUrl, row.code)),
+    })),
+  );
 
   const status = describeBusinessStatus(business.status);
 

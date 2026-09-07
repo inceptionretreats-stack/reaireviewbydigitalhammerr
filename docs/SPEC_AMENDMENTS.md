@@ -194,6 +194,43 @@ flows, which is development scaffolding rather than a product decision: the bloc
 
 ---
 
+### AMENDMENT-018 — the owner's screens show the QR, and the dashboard names the step after publish
+
+Two gaps found by walking a new tenant through signup, setup, publish and the dashboard.
+
+**The QR was invisible to the owner.** ONB-05 and QR-01 both specify download actions and neither
+specifies an image, so the product shipped with the artefact it exists to produce visible nowhere
+in the owner's interface: the finish screen offered SVG and PNG buttons, and QR-01 listed sources as
+a table of labels, codes and URLs. An owner could not see what they were about to print, and an
+owner with several standees could not tell which row was which without downloading each one.
+
+Both screens now render the symbol. `apps/web/lib/qr-image.ts` holds the one encoder configuration
+and the download endpoint uses it too, so a preview and a printed file cannot drift into being
+different codes — a failure that would otherwise surface after a print run rather than on screen.
+The row carries the image as a data URI (`preview_src`, added to `QrSource` in the OpenAPI) rather
+than a link to `GET /qr/{id}/download`, because that endpoint answers with an attachment
+disposition on purpose: an SVG served inline from our own origin is a script execution context.
+
+**Publish is where a self-service setup stops helping.** Everything turns green, and the owner is
+left holding a working product no customer has met, because the one remaining task — print the code
+and put it where people pay — happens away from the screen. DASH-01 specifies KPI cards and a
+funnel, all of which read zero at that moment.
+
+The dashboard now shows a first-steps card between publishing and the first scan: print it, scan it
+yourself off the print, then leave it alone. It is the counterpart to the existing setup-progress
+card on the other side of publish, and like that card it is transient — the first `qr_scan` retires
+it, so it is guidance rather than furniture and nobody has to dismiss anything. `qr_scan` is the
+signal because it is the one thing configuration cannot imply: a business can be perfectly set up
+with its standees still in a drawer.
+
+The card deliberately offers no link to the review page. Following one from the dashboard would
+record a scan against a source the owner is only inspecting, inflating the attribution QR-01-03
+exists to make readable — the same reason QR-01 prints the resolve URL as text. Testing is done with
+a phone on the printed artwork, which is also the only way to catch the failure that matters: a code
+that will not scan off paper.
+
+---
+
 ## Architecture amendments — require product-owner sign-off
 
 ### ADR-AMEND-A — no separate NestJS service

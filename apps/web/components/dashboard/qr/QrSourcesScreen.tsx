@@ -229,15 +229,31 @@ function QrSources({
       cell: (row) => {
         const created = formatCreatedAt(row.createdAt, timezone);
         return (
-          <span className="flex flex-col gap-0.5">
-            <span className="font-semibold text-ink">{row.label}</span>
-            {row.note !== null && (
-              <span className="text-sm font-normal text-ink-muted">{row.note}</span>
-            )}
-            {/* text-ink-muted, not a fainter token: `styles.css` defines only ink and ink-muted,
-                and a class Tailwind cannot resolve renders as inherited full-weight ink. */}
-            <span className="text-sm font-normal text-ink-muted">
-              {created === null ? '—' : `Added ${created}`}
+          <span className="flex items-start gap-3">
+            {/*
+              The symbol, not just its name. An owner with three standees on three counters needs
+              to tell them apart, and the artwork is the only thing that distinguishes them in the
+              real world. A white plate in every theme: the code is black on opaque white for the
+              scanner's sake, so a dark background showing through the quiet zone would defeat the
+              very margin it depends on.
+            */}
+            <img
+              src={row.previewSrc}
+              alt={`QR code ${row.code}`}
+              width={72}
+              height={72}
+              className="size-[72px] shrink-0 rounded-control bg-white p-1"
+            />
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="font-semibold text-ink">{row.label}</span>
+              {row.note !== null && (
+                <span className="text-sm font-normal text-ink-muted">{row.note}</span>
+              )}
+              {/* text-ink-muted, not a fainter token: `styles.css` defines only ink and ink-muted,
+                  and a class Tailwind cannot resolve renders as inherited full-weight ink. */}
+              <span className="text-sm font-normal text-ink-muted">
+                {created === null ? '—' : `Added ${created}`}
+              </span>
             </span>
           </span>
         );

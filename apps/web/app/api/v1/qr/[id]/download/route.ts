@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq } from 'drizzle-orm';
-import * as QRCode from 'qrcode';
 import { qrCodes } from '@ai-review/db';
 import { buildQrUrl } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
+import { renderQrPng, renderQrSvg } from '@/lib/qr-image';
 import { contentDisposition, parseFormat, type QrFormat } from './filename';
 
 /**
@@ -25,41 +25,6 @@ import { contentDisposition, parseFormat, type QrFormat } from './filename';
  * today; stating it means a future global edge default cannot silently break PNG at runtime.
  */
 export const runtime = 'nodejs';
-
-/**
- * Error-correction level H recovers ~30% of a damaged symbol, against ~25% for Q.
- *
- * A QR on a shop counter gets scuffed, wiped and taped over, and the correction level is what
- * decides whether it still scans after that. H costs four extra modules per side for this payload
- * (41x41 rather than 37x37) — roughly 10% smaller modules at a fixed print size, which is not a
- * material change to scan distance at standee size. Trading a little optical margin for a lot of
- * damage tolerance is the right way round for a printed asset that cannot be reprinted cheaply.
- */
-const ERROR_CORRECTION = 'H';
-
-/**
- * The four-module quiet zone required by ISO/IEC 18004. It is not decoration: without it a scanner
- * has nothing to lock the symbol's edges against, and a QR bled to the edge of printed artwork is
- * one of the commonest reasons a code that looks fine does not scan.
- */
-const QUIET_ZONE_MODULES = 4;
-
-/**
- * A server-fixed size — the client cannot ask for a larger one, so no single request can be turned
- * into an expensive raster (pngjs cost grows with the pixel count). At 300 DPI this prints ~87mm
- * square, a correct counter-standee QR. Anything larger should use the SVG, which is
- * resolution-independent and is the reason the vector format is offered at all.
- */
-const IMAGE_WIDTH_PX = 1024;
-
-/**
- * Pure black on pure white, never the tenant's brand accent. Maximum luminance contrast is what a
- * scanner thresholds against, and a printed QR has no second channel to fall back on — the same
- * "never rely on colour alone" principle as AC-038, applied to a machine reader. The explicit
- * opaque white matters too: a transparent quiet zone would let a coloured standee background show
- * through and destroy the very margin QUIET_ZONE_MODULES reserves.
- */
-const PRINT_COLORS = { dark: '#000000', light: '#ffffff' } as const;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -132,28 +97,12 @@ export async function GET(
 }
 
 async function renderSvg(payload: string): Promise<RenderedImage> {
-  // `width` is honoured alongside the viewBox, so the file still scales losslessly but opens at a
-  // sensible size instead of 41 pixels across when the owner double-clicks it.
-  const svg = await QRCode.toString(payload, {
-    type: 'svg',
-    errorCorrectionLevel: ERROR_CORRECTION,
-    margin: QUIET_ZONE_MODULES,
-    width: IMAGE_WIDTH_PX,
-    color: PRINT_COLORS,
-  });
-
+  const svg = await renderQrSvg(payload);
   return { body: svg, contentType: 'image/svg+xml; charset=utf-8', format: 'svg' };
 }
 
 async function renderPng(payload: string): Promise<RenderedImage> {
-  const png = await QRCode.toBuffer(payload, {
-    type: 'png',
-    errorCorrectionLevel: ERROR_CORRECTION,
-    margin: QUIET_ZONE_MODULES,
-    width: IMAGE_WIDTH_PX,
-    color: PRINT_COLORS,
-  });
-
+  const png = await renderQrPng(payload);
   return { body: toResponseBody(png), contentType: 'image/png', format: 'png' };
 }
 

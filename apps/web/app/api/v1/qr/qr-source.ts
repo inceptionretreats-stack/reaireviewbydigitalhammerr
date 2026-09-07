@@ -195,6 +195,16 @@ export interface QrSourceWire {
   status: QrStatus;
   created_at: string;
   resolve_url: string;
+  /**
+   * The symbol itself, as a data URI. Sent with the row so the screen can show an owner what
+   * they are about to print without a second authenticated round trip per source, and so a code
+   * created a moment ago looks the same as one that arrived with the page.
+   *
+   * A data URI rather than a link to the download endpoint: that endpoint answers with an
+   * attachment disposition on purpose, because an SVG served inline from our own origin is a
+   * script execution context. Nothing here needs that relaxed.
+   */
+  preview_src: string;
 }
 
 export interface QrSourceRow {
@@ -206,7 +216,11 @@ export interface QrSourceRow {
   createdAt: Date;
 }
 
-export function toQrSourceWire(row: QrSourceRow, resolveUrl: string): QrSourceWire {
+export function toQrSourceWire(
+  row: QrSourceRow,
+  resolveUrl: string,
+  previewSrc: string,
+): QrSourceWire {
   return {
     id: row.id,
     code: row.code,
@@ -218,6 +232,7 @@ export function toQrSourceWire(row: QrSourceRow, resolveUrl: string): QrSourceWi
     // ADR-002, D-026: the opaque dynamic URL is what the standee encodes — never the Google URL
     // and never the slug, which is the whole reason a printed code survives a change of either.
     resolve_url: resolveUrl,
+    preview_src: previewSrc,
   };
 }
 

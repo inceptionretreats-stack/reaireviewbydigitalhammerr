@@ -7,6 +7,7 @@ import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
 import { parseQrSourcePatch, isQrSourceId, toQrSourceWire } from '../qr-source';
+import { qrDataUri } from '@/lib/qr-image';
 
 /**
  * PATCH /api/v1/qr/{id} — the Rename, Disable and Enable actions of QR-01.
@@ -101,7 +102,11 @@ export async function PATCH(
    */
 
   return NextResponse.json({
-    source: toQrSourceWire(updated, buildQrUrl(env().APP_BASE_URL, updated.code)),
+    source: toQrSourceWire(
+      updated,
+      buildQrUrl(env().APP_BASE_URL, updated.code),
+      await qrDataUri(buildQrUrl(env().APP_BASE_URL, updated.code)),
+    ),
   });
 }
 

@@ -2009,6 +2009,7 @@ components:
         - status
         - created_at
         - resolve_url
+        - preview_src
       properties:
         id: { type: string, format: uuid }
         code:
@@ -2038,6 +2039,17 @@ components:
             What the standee encodes: the opaque dynamic URL (ADR-002, D-026). Surfaced so an owner
             can check a printed code by hand and support can be given a link that resolves the way
             a scan does.
+        preview_src:
+          type: string
+          description: |
+            The rendered symbol as an `image/svg+xml` data URI, encoded by `apps/web/lib/qr-image.ts`
+            — the same module the download endpoint uses, so a thumbnail and a printed file are
+            always the same symbol.
+
+            Carried on the row rather than linked, because `GET /qr/{id}/download` answers with an
+            attachment disposition on purpose: an SVG served inline from our own origin is a script
+            execution context. It also means a source created a moment ago renders identically to
+            one that arrived with the page, without a second authenticated request per row.
 
     QrSourceListResponse:
       type: object
