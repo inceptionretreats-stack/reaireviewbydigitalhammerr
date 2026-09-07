@@ -14,6 +14,7 @@
  *   --border         ->  --color-line
  *   --text           ->  --color-ink
  *   --text-muted     ->  --color-ink-muted
+ *   (new)           ->  --color-surface-sunk, --color-ink-faint
  *   --accent         ->  --color-accent
  *   --accent-text    ->  --color-on-accent
  *   --danger         ->  --color-danger
@@ -44,10 +45,12 @@
 
   --color-bg: #ffffff;
   --color-surface: #f6f7f9;
+  --color-surface-sunk: #e9ecf1;
   --color-line: #d8dce3;
   --color-line-strong: #767f8c;
   --color-ink: #14181f;
   --color-ink-muted: #4d5765;
+  --color-ink-faint: #6b7480;
 
   --color-accent: #1a56db;
   --color-accent-hover: #1748b8;
@@ -87,10 +90,12 @@
 
     --color-bg: #10131a;
     --color-surface: #1a1f29;
+    --color-surface-sunk: #121722;
     --color-line: #333b49;
     --color-line-strong: #8b95a5;
     --color-ink: #f2f4f8;
     --color-ink-muted: #a9b2c0;
+    --color-ink-faint: #939cab;
 
     --color-accent: #7aa2f7;
     --color-accent-hover: #9ab8f9;

@@ -143,6 +143,34 @@ rather than silently loosening how strict regeneration is.
 
 ---
 
+## Behaviour corrections
+
+### AMENDMENT-015 — changing the account email clears `users.email_verified_at`
+
+`PATCH /api/v1/account` (SET-01) sets `email_verified_at` to NULL whenever the address actually
+changes. The column is a claim that _that_ address was proved to belong to the account holder, and
+the new one has been proved by nobody; carrying the timestamp across would mark an unproven address
+verified, and anything later gated on verification — Flow B invites, notifications, a recovery
+check — would then trust it.
+
+Nothing in `apps/` or `packages/` reads the column today, so the downgrade changes no behaviour in
+V1. It is recorded because it is one-way: V1 has no re-verification flow, so for the accounts that
+have it set — seeded and admin-created users — the timestamp cannot come back. The endpoint reports
+`email_verification_cleared` and the settings screen turns it into a sentence, so the loss is
+stated rather than silent. See OPEN-07.
+
+### AMENDMENT-016 — POST /account/password answers 200 when its post-commit session work fails
+
+The password UPDATE commits before the endpoint sweeps other sessions and rotates the caller's own
+identifier. If that post-commit work throws, the credential has already been replaced, so a 500
+would tell the owner the change failed while their new password is the one that works — and they
+would then try the old one at `/login` and be refused. The endpoint returns 200 with
+`sessions_swept: false` and `other_sessions_signed_out: 0` instead, and the screen says the other
+sessions may still be signed in and points at "Log out other sessions". SET-01-02 is unaffected: the
+sweep is still attempted on every change, and the failure is reported rather than assumed.
+
+---
+
 ## Architecture amendments — require product-owner sign-off
 
 ### ADR-AMEND-A — no separate NestJS service
@@ -178,14 +206,15 @@ functional gain.
 
 ## Open — identified, not yet addressed
 
-| ID          | Item                                                                                                                                                                                                                                                                                                                                        | Epic    |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| OPEN-01     | Quota concurrency: consume via an atomic conditional UPDATE with a `free_generations_used < free_generation_limit` guard and RETURNING, never read-modify-write. AC-013 fails otherwise. Compensate on provider failure for AC-014.                                                                                                         | Phase 4 |
-| OPEN-02     | No endpoint resolves `review_requests.tracking_token_hash`. The column and the `review_request_link_click` event both exist, but nothing consumes the token, so Flow F step 9 attribution cannot work.                                                                                                                                      | E7      |
-| OPEN-03     | Missing endpoints: PATCH/DELETE `/business/review-destinations/{id}` (the Google URL can be created but not edited, yet AC-017 requires changing it); POST `/auth/reset-password`; GET `/admin/audit-logs`; checkout signature verification, which AC-015/016 require server-side where only the webhook exists.                            | various |
-| OPEN-04     | `08_OpenAPI_v1.yaml` is a skeleton: most endpoints declare a bare 200 with no schema, and `/auth/login` has no request body at all. Only SignupRequest, ReviewGeneration and Error are defined. The pack's own required "Contract: OpenAPI response validation" suite is not achievable against it. Complete per endpoint as each is built. | ongoing |
-| ~~OPEN-05~~ | **Resolved.** Both models exist and pricing is verified. Luna lands at ~4.6% of revenue at scale, so the 999 rupee price point holds comfortably. See AI unit economics below.                                                                                                                                                              | Phase 0 |
-| OPEN-06     | `17_Backlog_Epics_User_Stories.md` is 88 stories of identical placeholder text — an epic index, not a backlog. Treat `12_QA_Acceptance_Criteria.md` as the acceptance source of truth and use file 17 only for epic and story IDs.                                                                                                          | product |
+| ID          | Item                                                                                                                                                                                                                                                                                                                                                                                                                                        | Epic    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| OPEN-01     | Quota concurrency: consume via an atomic conditional UPDATE with a `free_generations_used < free_generation_limit` guard and RETURNING, never read-modify-write. AC-013 fails otherwise. Compensate on provider failure for AC-014.                                                                                                                                                                                                         | Phase 4 |
+| OPEN-02     | No endpoint resolves `review_requests.tracking_token_hash`. The column and the `review_request_link_click` event both exist, but nothing consumes the token, so Flow F step 9 attribution cannot work.                                                                                                                                                                                                                                      | E7      |
+| OPEN-03     | Missing endpoints: PATCH/DELETE `/business/review-destinations/{id}` (the Google URL can be created but not edited, yet AC-017 requires changing it); POST `/auth/reset-password`; GET `/admin/audit-logs`; checkout signature verification, which AC-015/016 require server-side where only the webhook exists.                                                                                                                            | various |
+| OPEN-04     | `08_OpenAPI_v1.yaml` is a skeleton: most endpoints declare a bare 200 with no schema, and `/auth/login` has no request body at all. Only SignupRequest, ReviewGeneration and Error are defined. The pack's own required "Contract: OpenAPI response validation" suite is not achievable against it. Complete per endpoint as each is built.                                                                                                 | ongoing |
+| ~~OPEN-05~~ | **Resolved.** Both models exist and pricing is verified. Luna lands at ~4.6% of revenue at scale, so the 999 rupee price point holds comfortably. See AI unit economics below.                                                                                                                                                                                                                                                              | Phase 0 |
+| OPEN-06     | `17_Backlog_Epics_User_Stories.md` is 88 stories of identical placeholder text — an epic index, not a backlog. Treat `12_QA_Acceptance_Criteria.md` as the acceptance source of truth and use file 17 only for epic and story IDs.                                                                                                                                                                                                          | product |
+| OPEN-07     | No email verification, and the address is the sign-in identity. `PATCH /api/v1/account` accepts a new address with no confirmation mail, so a typo silently becomes the login identity and AUTH-03 forgot-password then mails an inbox nobody holds — recovery is a support call. An address change also does not sweep other sessions (a password change does). AMENDMENT-015 records the `email_verified_at` downgrade that goes with it. | E13     |
 
 ---
 

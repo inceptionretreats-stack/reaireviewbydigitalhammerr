@@ -11,6 +11,16 @@ import { ALIAS_RETENTION_DAYS, SlugService } from '../../business/slug-service';
  * slugs and aliases, at most one primary per business (a partial unique index), and an alias that
  * must carry an expiry (a check constraint). None of that can be demonstrated against a double.
  */
+/**
+ * Namespaces a slug to this run.
+ *
+ * business_slugs.slug is a global primary key, so a fixed literal collides with the seeded demo
+ * tenant and with rows left by any earlier run. Suffixing keeps each test's claims its own while
+ * staying inside the 48-character limit and the a-z0-9- character rule.
+ */
+const RUN = randomUUID().slice(0, 8);
+const slug = (base: string): string => `${base}-${RUN}`;
+
 describe('slug reservation', () => {
   let pool: Pool;
   let db: Database;
@@ -28,14 +38,12 @@ describe('slug reservation', () => {
   });
 
   afterAll(async () => {
-    if (userId)
-      await pool.query('DELETE FROM users WHERE id = $1', [userId]).catch(() => undefined);
+    if (userId) await pool.query('DELETE FROM users WHERE id = $1', [userId]);
     await pool.end();
   });
 
   beforeEach(async () => {
-    if (userId)
-      await pool.query('DELETE FROM users WHERE id = $1', [userId]).catch(() => undefined);
+    if (userId) await pool.query('DELETE FROM users WHERE id = $1', [userId]);
 
     userId = randomUUID();
     businessA = randomUUID();
@@ -55,25 +63,29 @@ describe('slug reservation', () => {
   });
 
   it('claims a free slug as the primary', async () => {
-    const result = await service.claim(businessA, 'demo-south-cafe');
+    const result = await service.claim(businessA, slug('demo-south-cafe'));
 
-    expect(result).toMatchObject({ ok: true, slug: 'demo-south-cafe', previousSlug: null });
-    expect(await service.primarySlugFor(businessA)).toBe('demo-south-cafe');
+    expect(result).toMatchObject({ ok: true, slug: slug('demo-south-cafe'), previousSlug: null });
+    expect(await service.primarySlugFor(businessA)).toBe(slug('demo-south-cafe'));
   });
 
   it('refuses a slug held by another business', async () => {
-    await service.claim(businessA, 'shared-name');
-    const result = await service.claim(businessB, 'shared-name');
+    await service.claim(businessA, slug('shared-name'));
+    const result = await service.claim(businessB, slug('shared-name'));
 
     expect(result).toMatchObject({ ok: false, failure: { reason: 'TAKEN' } });
   });
 
   /** Flow I: the old address must keep working, so it becomes an alias with a retention date. */
   it('demotes the previous slug to a dated alias', async () => {
-    await service.claim(businessA, 'first-name');
-    const result = await service.claim(businessA, 'second-name');
+    await service.claim(businessA, slug('first-name'));
+    const result = await service.claim(businessA, slug('second-name'));
 
-    expect(result).toMatchObject({ ok: true, slug: 'second-name', previousSlug: 'first-name' });
+    expect(result).toMatchObject({
+      ok: true,
+      slug: slug('second-name'),
+      previousSlug: slug('first-name'),
+    });
 
     const { rows } = await pool.query(
       'SELECT slug, is_primary, redirect_until FROM business_slugs WHERE business_id = $1 ORDER BY slug',
@@ -81,7 +93,7 @@ describe('slug reservation', () => {
     );
 
     expect(rows).toHaveLength(2);
-    const alias = rows.find((r) => r.slug === 'first-name');
+    const alias = rows.find((r) => r.slug === slug('first-name'));
     expect(alias.is_primary).toBe(false);
     expect(alias.redirect_until).toBeInstanceOf(Date);
 
@@ -94,31 +106,31 @@ describe('slug reservation', () => {
    * business could take a slug that is still redirecting for someone else.
    */
   it('keeps a retired alias out of reach of another business', async () => {
-    await service.claim(businessA, 'original-name');
-    await service.claim(businessA, 'new-name');
+    await service.claim(businessA, slug('original-name'));
+    await service.claim(businessA, slug('new-name'));
 
-    const result = await service.claim(businessB, 'original-name');
+    const result = await service.claim(businessB, slug('original-name'));
     expect(result).toMatchObject({ ok: false, failure: { reason: 'TAKEN' } });
   });
 
   it('lets a business reclaim its own retired alias', async () => {
-    await service.claim(businessA, 'original-name');
-    await service.claim(businessA, 'new-name');
+    await service.claim(businessA, slug('original-name'));
+    await service.claim(businessA, slug('new-name'));
 
-    const result = await service.claim(businessA, 'original-name');
-    expect(result).toMatchObject({ ok: true, slug: 'original-name' });
-    expect(await service.primarySlugFor(businessA)).toBe('original-name');
+    const result = await service.claim(businessA, slug('original-name'));
+    expect(result).toMatchObject({ ok: true, slug: slug('original-name') });
+    expect(await service.primarySlugFor(businessA)).toBe(slug('original-name'));
 
     // Promoted, so the expiry must be cleared — ck_alias_has_expiry only applies to an alias.
     const { rows } = await pool.query('SELECT redirect_until FROM business_slugs WHERE slug = $1', [
-      'original-name',
+      slug('original-name'),
     ]);
     expect(rows[0].redirect_until).toBeNull();
   });
 
   it('is idempotent when re-claiming the current primary', async () => {
-    await service.claim(businessA, 'steady-name');
-    const result = await service.claim(businessA, 'steady-name');
+    await service.claim(businessA, slug('steady-name'));
+    const result = await service.claim(businessA, slug('steady-name'));
 
     expect(result).toMatchObject({ ok: true, previousSlug: null });
 
@@ -130,9 +142,9 @@ describe('slug reservation', () => {
   });
 
   it('never leaves a business with two primary slugs', async () => {
-    await service.claim(businessA, 'name-one');
-    await service.claim(businessA, 'name-two');
-    await service.claim(businessA, 'name-three');
+    await service.claim(businessA, slug('name-one'));
+    await service.claim(businessA, slug('name-two'));
+    await service.claim(businessA, slug('name-three'));
 
     const { rows } = await pool.query(
       'SELECT count(*)::int AS n FROM business_slugs WHERE business_id = $1 AND is_primary',
@@ -149,8 +161,8 @@ describe('slug reservation', () => {
   /** Only one of two concurrent claims for the same free slug may win. */
   it('admits exactly one of two concurrent claims', async () => {
     const [first, second] = await Promise.all([
-      service.claim(businessA, 'contested-name'),
-      service.claim(businessB, 'contested-name'),
+      service.claim(businessA, slug('contested-name')),
+      service.claim(businessB, slug('contested-name')),
     ]);
 
     const wins = [first, second].filter((r) => r.ok);

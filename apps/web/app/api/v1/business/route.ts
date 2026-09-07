@@ -5,7 +5,7 @@ import { SlugService } from '@ai-review/core';
 import { businessIdentityRequest } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
+import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
 
 /**
  * GET/PATCH /api/v1/business — ONB-01 and the identity half of PROFILE-01.
@@ -43,6 +43,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
+
+  // Flow J, before anything is parsed or claimed. PROFILE-01 disables its Save for a suspended or
+  // closed tenant, but a disabled button is not a rule: without this a suspended owner could still
+  // rename the business and reclaim a slug with one request, which is exactly the cosmetic
+  // suspension `requireActiveTenant` warns about.
+  const frozen = refuseFrozenTenant(auth.context);
+  if (frozen) return frozen;
 
   let raw: unknown;
   try {
@@ -102,6 +109,22 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     // rather than discovering it.
     previous_slug_redirects: claim.previousSlug !== null,
   });
+}
+
+/**
+ * Flow J: a suspended or closed business must not edit its own identity, or a suspension is
+ * cosmetic.
+ *
+ * `requireActiveTenant` is deliberately not used, and the two statuses are named instead: this same
+ * handler is ONB-01's, which legitimately runs against a DRAFT tenant that has not published yet.
+ * The wording and the code match `business/links/{id}` and `business/links/reorder` so the three
+ * endpoints PROFILE-01 writes to answer a frozen tenant identically.
+ */
+function refuseFrozenTenant(context: AuthenticatedContext): NextResponse | null {
+  if (context.status === 'SUSPENDED' || context.status === 'CLOSED') {
+    return apiError('BUSINESS_NOT_ACTIVE', 'This business is not active.');
+  }
+  return null;
 }
 
 /**

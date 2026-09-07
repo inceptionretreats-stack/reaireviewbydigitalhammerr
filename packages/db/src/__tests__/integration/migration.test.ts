@@ -41,8 +41,10 @@ describe('migration 0000', () => {
       `SELECT partstrat, a.attname
        FROM pg_partitioned_table p
        JOIN pg_class c ON c.oid = p.partrelid
-       JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = p.partattrs[1]
+       JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = p.partattrs[0]
        WHERE c.relname = 'analytics_events'`,
+      // partattrs is an int2vector, which Postgres indexes from ZERO — [1] asks for a second
+      // partition column that does not exist and silently returns no rows.
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].partstrat).toBe('r');

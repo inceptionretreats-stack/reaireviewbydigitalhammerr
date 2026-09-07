@@ -48,6 +48,11 @@ security:
 tags:
   - name: Auth
     description: Account creation, session lifecycle and password reset (AUTH-01 … AUTH-03).
+  - name: Account
+    description: |
+      The signed-in owner's own name, email, password and sessions (SET-01). Separate from
+      Business: a suspended tenant may still correct its owner's contact details and secure the
+      account.
   - name: Business
     description: Tenant identity, profile sections, review destination and publish (ONB-01 … ONB-05).
   - name: AI
@@ -55,8 +60,8 @@ tags:
   - name: QR
     description: |
       Dynamic QR sources and their printable artwork (QR-01). Landed after the rest of this
-      document was written, so treat the QR entries in `x-skeleton-delta` as the least settled part
-      of it.
+      document was written; all four operations the frozen skeleton lists now exist, so QR no
+      longer appears in `x-skeleton-delta`.
   - name: Public
     description: |
       Unauthenticated customer-flow endpoints. No session, no CSRF check (they carry no authority),
@@ -315,6 +320,216 @@ paths:
                       code: VALIDATION_FAILED
                       message: That reset link is no longer valid. Please request a new one.
                       request_id: 0c9a7d3f-5b18-4e6a-9f22-77b1c0a4e9d2
+
+  /account:
+    patch:
+      operationId: updateAccount
+      tags: [Account]
+      summary: Update the signed-in owner's name, email and mobile
+      description: |
+        SET-01. The identity comes from the session and nothing else — there is no user id or
+        business id in the URL or body, so the IDOR shape AC-003 tests for cannot be expressed here
+        (RBAC rule 2). `requireActiveTenant` is deliberately not applied: Flow J restricts a
+        suspended tenant from changing its *business* configuration, and the owner's own contact
+        details are not that.
+
+        Every field is required. This replaces the account's details rather than patching one at a
+        time, so a screen that forgot a field cannot blank it by omission.
+
+        `current_password` is required **only** when the address actually changes (SET-01-01) —
+        knowledge of it is the one thing a session thief does not have, and the address is where a
+        future password-reset link goes. "Changed" is compared case-insensitively and trimmed,
+        because `users.email` is citext, so retyping your own address in capitals demands nothing.
+        The comparison is made against the STORED address, so a client that decided no password was
+        needed can still be answered `422` naming `current_password`.
+
+        The re-auth shares the `POST /auth/login` limiter windows for the same identity, on purpose
+        — an unmetered password check one route away would be an oracle. The consequence is real
+        and is recorded: repeated wrong passwords here also lock that identity out of the login
+        form.
+
+        A changed address clears `users.email_verified_at`, and `email_verification_cleared` reports
+        it rather than letting it happen quietly (AMENDMENT-015). There is no confirmation mail in
+        V1 and no re-verification path — OPEN-07.
+      x-implemented-by: apps/web/app/api/v1/account/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountDetailsRequest' }
+      responses:
+        '200':
+          description: |
+            Details saved. Echoes what was stored — `mobile` normalised to E.164 — so the screen
+            never has to guess what the server kept.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountDetailsResponse' }
+        '401':
+          description: |
+            No session (`AUTH_REQUIRED`, also returned when a session outlived a deleted user), or
+            the supplied `current_password` was wrong (`AUTH_INVALID_CREDENTIALS`, with
+            `details.fields: [current_password]`). The caller's session is untouched by the latter:
+            a wrong password here does not sign anybody out. May carry `Retry-After` once repeated
+            failures trip the per-identity limiter, as at `POST /auth/login`.
+          x-error-codes: [AUTH_REQUIRED, AUTH_INVALID_CREDENTIALS]
+          headers:
+            Retry-After: { $ref: '#/components/headers/RetryAfterOptional' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '422':
+          description: |
+            Malformed body (`details.fields: [body]`), a field outside its bounds, a mobile that
+            does not normalise, a missing `current_password` on an address change, or an address
+            already held by another account. The last one names the field rather than answering
+            neutrally: the neutral-response rule belongs to forgot-password (AUTH-03-01), not to a
+            form its account holder is already signed into.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                passwordNeeded:
+                  value:
+                    error:
+                      code: VALIDATION_FAILED
+                      message: Enter your current password to change your email.
+                      request_id: 6c1f9d20-8a3e-4f16-9b7d-0c4e2a1d5b83
+                      details: { fields: [current_password] }
+        '429':
+          description: The shared login attempt limiter tripped before the password was checked.
+          x-error-codes: [AUTH_RATE_LIMITED]
+          headers:
+            Retry-After: { $ref: '#/components/headers/RetryAfter' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /account/password:
+    post:
+      operationId: changeAccountPassword
+      tags: [Account]
+      summary: Change the password, sweep other sessions and rotate this one
+      description: |
+        SET-01-01 and SET-01-02. The current password is required: without it a stolen session is a
+        permanent takeover, because the attacker could set a password the owner does not know.
+
+        The order of operations is all deliberate. The limiter is inspected before any Argon2id
+        work; strength is validated before the current password is verified, so a request that
+        cannot succeed consumes nothing; the UPDATE carries the previously read hash in its WHERE,
+        so a concurrent change is detected rather than overwritten; then every OTHER session is
+        revoked (SET-01-02) and the caller's own identifier is rotated, which is what
+        13_Security_Privacy_Compliance.md requires on a password change and what AMENDMENT-001's
+        durable session rows exist for.
+
+        The sweep and the rotation run AFTER the password is committed, so they are wrapped: on
+        failure this still answers `200` with `sessions_swept: false`, never a `500`. Reporting a
+        failure once the credential has been replaced would send the owner to `/login` with the old
+        password (AMENDMENT-016).
+
+        `other_sessions_signed_out` counts sessions that were LIVE before the sweep, not the rows
+        revoked — unrevoked-but-expired rows are swept too and were never usable devices.
+        Understating is the safe direction for a number an owner reads as "someone else was signed
+        in".
+      x-implemented-by: apps/web/app/api/v1/account/password/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordChangeRequest' }
+      responses:
+        '200':
+          description: |
+            Password changed. A fresh session cookie is set for this browser unless the rotation
+            itself failed, in which case `sessions_swept` is false and the previous cookie is still
+            the live one.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SessionCookieSet' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PasswordChangeResponse' }
+        '401':
+          description: |
+            No session (`AUTH_REQUIRED`), or `current_password` was wrong
+            (`AUTH_INVALID_CREDENTIALS`, `details.fields: [current_password]`). The session is
+            untouched by the latter. May carry `Retry-After` once the failure limiter trips.
+          x-error-codes: [AUTH_REQUIRED, AUTH_INVALID_CREDENTIALS]
+          headers:
+            Retry-After: { $ref: '#/components/headers/RetryAfterOptional' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '422':
+          description: |
+            Malformed body, a missing current password, a new password failing
+            `validatePasswordStrength` (too short, too long, too common, too few distinct
+            characters), a new password identical to the current one, or — with no `details.fields`
+            — the password having been changed by another request in between.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: The shared login attempt limiter tripped before the password was checked.
+          x-error-codes: [AUTH_RATE_LIMITED]
+          headers:
+            Retry-After: { $ref: '#/components/headers/RetryAfter' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          description: |
+            The password UPDATE itself failed; nothing was changed. Never a driver error — the
+            statement's parameters include the new hash, so only name and message are logged
+            (AC-030).
+          x-error-codes: [INTERNAL_ERROR]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /account/sessions/revoke-others:
+    post:
+      operationId: revokeOtherSessions
+      tags: [Account]
+      summary: Sign out every other session and keep this one
+      description: |
+        SET-01-02. Revocation is real because sessions are durable rows (AMENDMENT-001); against a
+        stateless token this button would be a lie. The sweep excepts the caller's own session, so
+        the owner stays signed in where they are.
+
+        Deliberately not re-authenticated and not rate limited. The action grants nothing — its
+        worst outcome is signing yourself out of another browser — and it is what somebody does in
+        a hurry after realising they left a session open on a shared machine; a password prompt in
+        front of that makes the account less safe. It is idempotent, so a second call revokes
+        nothing and says so.
+
+        No request body is read. Scoping comes from the session alone (RBAC rule 2, AC-003).
+      x-implemented-by: apps/web/app/api/v1/account/sessions/revoke-others/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      responses:
+        '200':
+          description: |
+            The sweep ran. `0` is a normal answer and is reported as one rather than dressed up as
+            a success — an owner who reads "signed out" when there was nothing to sign out learns
+            not to believe the next message.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RevokeOtherSessionsResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
 
   /business:
     get:
@@ -777,6 +992,149 @@ paths:
               schema: { $ref: '#/components/schemas/QrSourceListResponse' }
         '401': { $ref: '#/components/responses/AuthRequired' }
         '404': { $ref: '#/components/responses/TenantNotFound' }
+    post:
+      operationId: createQrSource
+      tags: [QR]
+      summary: Create an additional QR source
+      description: |
+        The create state of QR-01: one source per place a code is printed, because `source_label`
+        is what makes scan attribution readable later (QR-01-03). A label that is only whitespace is
+        refused rather than stored — it would be an unattributable row in analytics, and the
+        download handler already has to substitute `qr` for it when naming a file.
+
+        Both text fields are trimmed *before* their length is measured, so the value validated is
+        the value stored: a 120-character label pasted with a trailing space is accepted, not
+        refused at 121. QR-01's own dialog measures the same way.
+
+        `code` cannot be supplied. The opaque code is minted server-side and is immutable for the
+        life of the row (QR-01-01, ADR-002); reservation retries a UNIQUE collision five times
+        before answering `500`.
+
+        Gated on `requireActiveTenant`, which refuses a DRAFT tenant as well as a suspended one
+        (Flow J). Publish is what mints the first source (ONB-05-01), and a code created before
+        publish would resolve to the unavailable page — a standee printed from it would be waste.
+
+        The response is exactly one element of what `GET /qr` returns in `sources`, so QR-01
+        appends it to its list without a second fetch.
+      x-implemented-by: apps/web/app/api/v1/qr/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QrSourceRequest' }
+      responses:
+        '201':
+          description: The created source, enabled because the owner is about to print it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QrSourceResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '409':
+          description: The tenant is not ACTIVE — DRAFT, SUSPENDED or CLOSED.
+          x-error-codes: [BUSINESS_NOT_ACTIVE]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: |
+            Malformed body, a blank or over-long label, an over-long note, or the per-tenant ceiling
+            of 500 sources already reached. `details.fields` names the fields in the first three
+            cases and `details.limit` carries the cap in the last.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          description: |
+            Five code reservations all collided, which against a code space of ~8.2e14 means
+            something other than chance. Answered through the envelope rather than thrown, so the
+            body is still `Error`.
+          x-error-codes: [INTERNAL_ERROR]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /qr/{id}:
+    patch:
+      operationId: updateQrSource
+      tags: [QR]
+      summary: Rename, disable or enable a QR source
+      description: |
+        The Rename, Disable and Enable actions of QR-01 — three actions against one endpoint, and a
+        rename and a status change may be sent together.
+
+        A partial update: an absent key leaves its column alone, while `internal_note: ""` clears
+        the note. Absent and blank therefore cannot be collapsed, or a note could never be removed
+        once set.
+
+        There is no `DELETE`, here or anywhere. QR-01-02 wants a retired standee to resolve to a
+        controlled, business-safe page rather than a `404`, because the standee is still on a
+        counter and a customer may be standing in front of it; disabling is the retirement path and
+        `resolveByQrCode` is what turns it into that page. A disabled source still yields its
+        artwork from `GET /qr/{id}/download`.
+
+        `code` is refused outright rather than stripped by Zod (QR-01-01): a client that sent one
+        and got `200` back would reasonably believe the printed code had changed. `id` likewise.
+
+        Ownership is part of the `WHERE` clause rather than a check on a row read first, so the
+        statement cannot touch another tenant's row at all (AC-003, RBAC rule 3).
+
+        `businesses.config_version` is deliberately *not* bumped, unlike every other configuration
+        write: `resolveByQrCode` reads the status and label fresh on every scan, which is what
+        makes a disable take effect immediately with no cache to invalidate.
+
+        No analytics event is written for a rename or a status change:
+        `11_Analytics_Event_Taxonomy.csv` defines only `qr_created` and `qr_scan`, and the taxonomy
+        is the contract (AN-01-01).
+      x-implemented-by: apps/web/app/api/v1/qr/[id]/route.ts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The QR source's id. Must belong to the caller's tenant.
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QrSourcePatchRequest' }
+      responses:
+        '200':
+          description: The updated source, in the same shape `GET /qr` lists.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QrSourceResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404':
+          description: |
+            No such source, another tenant's source, a malformed id, or no resolvable business for
+            the session. Reported identically in every case, which is what stops this endpoint
+            being an existence oracle for another tenant's ids (AC-003).
+          x-error-codes: [RESOURCE_NOT_FOUND]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: The tenant is not ACTIVE — DRAFT, SUSPENDED or CLOSED (Flow J).
+          x-error-codes: [BUSINESS_NOT_ACTIVE]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: |
+            Malformed body, a `code` or `id` in it, a blank or over-long label, an over-long note,
+            a `status` outside the enum, or nothing to change at all. `details.fields` names the
+            offending field where there is one.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /qr/{id}/download:
     get:
@@ -1637,6 +1995,50 @@ components:
             What the QR image encodes. Dynamic: it resolves through the platform on every scan, so
             changing the review destination changes where it lands (AC-017).
 
+    QrSource:
+      type: object
+      description: |
+        One QR source, produced by `toQrSourceWire` in `apps/web/app/api/v1/qr/qr-source.ts`. The
+        list and both write endpoints answer with this same object, which is what lets QR-01 fold a
+        created or renamed row straight into its list without learning a second shape.
+      required:
+        - id
+        - code
+        - source_label
+        - internal_note
+        - status
+        - created_at
+        - resolve_url
+      properties:
+        id: { type: string, format: uuid }
+        code:
+          type: string
+          description: |
+            The opaque printed code. Immutable for the life of the row (QR-01-01) — a new code
+            would invalidate printed material.
+        source_label:
+          type: string
+          maxLength: 120
+          description: |
+            Wire names mirror `qrSourceRequest` in `packages/contracts`, so what QR-01 sends when
+            it creates or renames a source is exactly what it reads back. Stored trimmed.
+        internal_note: { type: [string, 'null'], maxLength: 500 }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+        created_at:
+          type: string
+          format: date-time
+          description: |
+            A UTC instant. Rendering it in `businesses.timezone` (AMENDMENT-004) is the client's
+            job — AC-026 governs date *filters* on analytics, not the transport format of a
+            timestamp.
+        resolve_url:
+          type: string
+          format: uri
+          description: |
+            What the standee encodes: the opaque dynamic URL (ADR-002, D-026). Surfaced so an owner
+            can check a printed code by hand and support can be given a link that resolves the way
+            a scan does.
+
     QrSourceListResponse:
       type: object
       required: [sources]
@@ -1647,46 +2049,52 @@ components:
           description: |
             Oldest first, ties broken by id — rows created in one transaction can share `created_at`
             to the microsecond, and an unstable order in a list with Rename and Disable buttons is
-            how the wrong row gets clicked.
-          items:
-            type: object
-            required:
-              - id
-              - code
-              - source_label
-              - internal_note
-              - status
-              - created_at
-              - resolve_url
-            properties:
-              id: { type: string, format: uuid }
-              code:
-                type: string
-                description: |
-                  The opaque printed code. Immutable for the life of the row (QR-01-01) — a new code
-                  would invalidate printed material.
-              source_label:
-                type: string
-                maxLength: 120
-                description: |
-                  Wire names mirror `qrSourceRequest` in `packages/contracts`, so what QR-01 sends
-                  when it creates or renames a source is exactly what it reads back.
-              internal_note: { type: [string, 'null'], maxLength: 500 }
-              status: { type: string, enum: [ACTIVE, DISABLED] }
-              created_at:
-                type: string
-                format: date-time
-                description: |
-                  A UTC instant. Rendering it in `businesses.timezone` (AMENDMENT-004) is the
-                  client's job — AC-026 governs date *filters* on analytics, not the transport
-                  format of a timestamp.
-              resolve_url:
-                type: string
-                format: uri
-                description: |
-                  What the standee encodes: the opaque dynamic URL (ADR-002, D-026). Surfaced so an
-                  owner can check a printed code by hand and support can be given a link that
-                  resolves the way a scan does.
+            how the wrong row gets clicked. Capped at `MAX_SOURCES_PER_BUSINESS`, the same constant
+            `POST /qr` enforces on create, so the list can never hide a source that exists.
+          items: { $ref: '#/components/schemas/QrSource' }
+
+    QrSourceResponse:
+      type: object
+      description: The envelope both write endpoints answer with.
+      required: [source]
+      properties:
+        source: { $ref: '#/components/schemas/QrSource' }
+
+    QrSourceRequest:
+      type: object
+      description: |
+        `qrSourceRequest` in `packages/contracts/src/business.ts`, which is authoritative. Both
+        fields are trimmed before their length is checked, and a label that trims to nothing is
+        rejected with a message naming the field — `z.string().min(1)` alone would accept a space.
+      required: [source_label]
+      properties:
+        source_label:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Where this code is printed — Reception, Billing Counter (QR-01-03).
+        internal_note: { type: string, maxLength: 500 }
+
+    QrSourcePatchRequest:
+      type: object
+      description: |
+        Every field is optional, because PATCH is a partial update — but a body with none of them is
+        a `422` rather than a no-op `200`. `code` and `id` are refused if present (QR-01-01).
+      minProperties: 1
+      properties:
+        source_label: { type: string, minLength: 1, maxLength: 120 }
+        internal_note:
+          type: string
+          maxLength: 500
+          description: |
+            An empty string clears the note; the key being absent leaves it unchanged. An explicit
+            `null` is rejected, so there is exactly one way to clear it.
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+          description: |
+            `qr_status`. Derived from the database enum in the handler, so a third state could not
+            be silently rejected as an unrecognised word.
 
     AiContextResponse:
       type: object
@@ -1879,6 +2287,108 @@ components:
             needs.
         message: { type: string, minLength: 5, maxLength: 2000 }
 
+    AccountDetailsRequest:
+      type: object
+      description: |
+        `parseAccountDetails` in `apps/web/app/api/v1/account/schema.ts`, which is the single
+        definition of this shape — the handler and the settings screen both read it. Hand-written
+        rather than Zod because `packages/contracts` carries no account DTO; an
+        `accountDetailsRequest` belongs beside `signupRequest` there.
+
+        The limits are mirrored, not invented: `full_name` and `mobile` copy `signupRequest`, which
+        is authoritative for the same two fields on the same columns.
+      required: [full_name, email, mobile]
+      properties:
+        full_name: { type: string, minLength: 2, maxLength: 80 }
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: |
+            The sign-in identity. Compared against the stored address case-insensitively
+            (`users.email` is citext), and a real change requires `current_password`.
+        mobile:
+          type: string
+          minLength: 8
+          maxLength: 20
+          description: |
+            Validated by `normalizePhone` and stored as E.164. Required even though the column is
+            nullable: a Flow B invite can create a user before an admin knows the number, and this
+            form is where that is corrected.
+        current_password:
+          type: string
+          format: password
+          description: |
+            SET-01-01. Send it only when the address is changing; omitted or empty reads as absent.
+            Never trimmed — trimming a password silently changes it.
+
+    AccountDetailsResponse:
+      type: object
+      required: [full_name, email, mobile, email_verification_cleared]
+      properties:
+        full_name: { type: string }
+        email: { type: string, format: email }
+        mobile: { type: string, description: 'E.164, as stored.' }
+        email_verification_cleared:
+          type: boolean
+          description: |
+            True only when a `users.email_verified_at` timestamp was actually discarded by this
+            request (AMENDMENT-015), so the screen tells the accounts that lost something and stays
+            quiet for the ones — every self-service signup — that never had it.
+
+    PasswordChangeRequest:
+      type: object
+      description: '`parsePasswordChange` in `apps/web/app/api/v1/account/schema.ts`.'
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          minLength: 1
+          format: password
+          description: |
+            Checked for presence only. Its bounds are deliberately not enforced: rejecting a
+            too-short *current* password would answer a question about the stored credential before
+            the limiter or the hash comparison ever ran.
+        new_password:
+          type: string
+          minLength: 12
+          maxLength: 256
+          format: password
+          description: |
+            Bounds mirror `PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH`; `validatePasswordStrength`
+            in `@ai-review/core` stays authoritative for the rest and rejects with
+            `details.fields: [new_password]`.
+
+    PasswordChangeResponse:
+      type: object
+      required: [message, other_sessions_signed_out, sessions_swept]
+      properties:
+        message: { type: string, description: Ready to display as-is. }
+        other_sessions_signed_out:
+          type: integer
+          minimum: 0
+          description: |
+            Sessions that were live before the sweep and are not now. Not the raw revoked-row
+            count: expired-but-unrevoked rows are swept too and were never usable devices. `0` when
+            `sessions_swept` is false.
+        sessions_swept:
+          type: boolean
+          description: |
+            Whether the post-commit sweep and rotation completed (AMENDMENT-016). False means the
+            password IS changed but other sessions may still be signed in and this browser's cookie
+            was not rotated — the screen says so and points at "Log out other sessions".
+
+    RevokeOtherSessionsResponse:
+      type: object
+      required: [other_sessions_signed_out]
+      properties:
+        other_sessions_signed_out:
+          type: integer
+          minimum: 0
+          description: |
+            SET-01-02's visible effect. `0` is a normal answer — the endpoint is idempotent, so a
+            second call reports none.
+
 # ---------------------------------------------------------------------------------------------
 # The delta from the delivered skeleton. This is the part worth reading.
 #
@@ -1896,6 +2406,21 @@ x-skeleton-delta:
       note: |
         The skeleton defines `/auth/forgot-password` with no counterpart to consume the token it
         issues, so AUTH-03-02's single-use expiring token was unimplementable. OPEN-03.
+    - path: /account
+      methods: [patch]
+      note: |
+        SET-01 has no endpoints in the skeleton at all, which lists only `POST /auth/signup` for
+        anything account-shaped. AMENDMENT-015 records that a changed address clears
+        `email_verified_at`; OPEN-07 records that V1 has no email verification.
+    - path: /account/password
+      methods: [post]
+      note: |
+        SET-01-01's "sensitive changes require re-auth" and the session rotation
+        13_Security_Privacy_Compliance.md requires on a password change. AMENDMENT-016 records why
+        a failed post-commit sweep answers 200 rather than 500.
+    - path: /account/sessions/revoke-others
+      methods: [post]
+      note: SET-01-02, "Log out other sessions". Durable session rows make it real (AMENDMENT-001).
     - path: /business/review-destination
       methods: [get, put]
       note: |
@@ -1959,16 +2484,6 @@ x-skeleton-delta:
         The work exists but not as JSON endpoints: `/[slug]` and `/r/[code]` resolve the tenant in
         Server Components via `resolveBySlug` / `resolveByQrCode`. `publicBusinessResponse` in
         `packages/contracts` is already the response shape if a client ever needs these.
-    - group: QR management
-      operations:
-        - POST /qr
-        - PATCH /qr/{id}
-      note: |
-        `GET /qr` and `GET /qr/{id}/download` landed while this document was being written and are
-        documented above. Creating an additional source and renaming or disabling one are still
-        unbuilt, so QR-01 is readable but not editable: publish mints the one default source and
-        nothing can add a second. This group is the entry most likely to be out of date — re-derive
-        it from `apps/web/app/api/v1/qr/**/route.ts` before relying on it.
     - group: CRM
       operations:
         - GET /customers

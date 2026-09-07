@@ -22,9 +22,14 @@ export const businesses = pgTable(
   'businesses',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // AMENDMENT-015 — cascades, like every other foreign key in the schema.
+    // This was the one FK with no ON DELETE action, so deleting a user raised a constraint
+    // violation instead of removing their business. Flow J's "irreversible purge" needs the
+    // cascade, and without it test fixtures could not tear down either — which is how the gap
+    // was found: cleanup failed silently and rows leaked between tests.
     ownerUserId: uuid('owner_user_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 160 }).notNull(),
     category: varchar('category', { length: 100 }).notNull(),
 

@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
+import { contentDisposition, parseFormat, type QrFormat } from './filename';
 
 /**
  * GET /api/v1/qr/{id}/download?format=svg|png — the Download SVG / Download PNG actions of QR-01.
@@ -24,9 +25,6 @@ import { requireTenant } from '@/lib/require-tenant';
  * today; stating it means a future global edge default cannot silently break PNG at runtime.
  */
 export const runtime = 'nodejs';
-
-const FORMATS = ['svg', 'png'] as const;
-type QrFormat = (typeof FORMATS)[number];
 
 /**
  * Error-correction level H recovers ~30% of a damaged symbol, against ~25% for Q.
@@ -64,9 +62,6 @@ const IMAGE_WIDTH_PX = 1024;
 const PRINT_COLORS = { dark: '#000000', light: '#ffffff' } as const;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Illegal in a filename on Windows, and `/` and `\` are path separators everywhere. */
-const RESERVED_FILENAME_CHARS = new Set(['/', '\\', ':', '*', '?', '"', '<', '>', '|']);
 
 interface RenderedImage {
   body: string | Uint8Array<ArrayBuffer>;
@@ -194,103 +189,6 @@ function imageResponse(rendered: RenderedImage, sourceLabel: string, code: strin
   });
 }
 
-/**
- * 08_OpenAPI_v1.yaml declares format as svg|png with svg as the default, so an absent parameter is
- * valid and means svg rather than being an error.
- */
-function parseFormat(raw: string | null): QrFormat | null {
-  if (raw === null || raw.trim() === '') return 'svg';
-
-  const normalized = raw.trim().toLowerCase();
-  for (const format of FORMATS) {
-    if (format === normalized) return format;
-  }
-  return null;
-}
-
 function notFound(): NextResponse {
   return apiError('RESOURCE_NOT_FOUND', 'We could not find that QR code.');
-}
-
-/**
- * RFC 6266 Content-Disposition carrying both filename forms.
- *
- * The ASCII `filename` is built by allowlist — everything outside [A-Za-z0-9] collapses to a
- * hyphen — rather than by stripping characters known to be dangerous. That is what makes
- * quoted-string escape and header injection impossible by construction instead of by enumeration:
- * a source label containing a quote, a backslash or a CRLF cannot produce one in the header.
- *
- * `filename*` carries the real label so a Devanagari or Tamil source label arrives intact rather
- * than as a row of hyphens, which matters for an India-first product. The opaque code is appended
- * to both forms: two standees both labelled "Counter" stay distinguishable on disk, a printed file
- * can be matched back to the source label that appears in analytics (QR-01 acceptance note), and
- * the suffix incidentally means the stem can never equal a Windows reserved device name — a label
- * of "NUL" yields "NUL-ABCDEFGHJK", which is an ordinary filename.
- */
-function contentDisposition(sourceLabel: string, code: string, format: QrFormat): string {
-  const label = filenameLabel(sourceLabel);
-  const ascii = `${asciiStem(label, code)}.${format}`;
-  const encoded = encodeRfc5987(`${label}-${code}.${format}`);
-
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
-}
-
-function asciiStem(label: string, code: string): string {
-  const stem = label
-    // NFKD followed by dropping combining marks turns "Café" into "Cafe" rather than "Caf-".
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/gu, '')
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    // Truncate before the final trim, so a hyphen landing on the cut is not left dangling.
-    .slice(0, 40)
-    .replace(/^-+|-+$/g, '');
-
-  // A label with nothing ASCII-representable in it at all — a wholly Devanagari or Tamil one — is
-  // a normal case here, not an error. The real name still travels in filename*.
-  return stem.length > 0 ? `${stem}-${code}` : `qr-${code}`;
-}
-
-/**
- * Reduces the label to something that is a legal filename on Windows, macOS and Linux alike.
- *
- * Control characters, path separators and the characters Windows reserves (: * ? " < > |) all
- * become spaces, and leading or trailing dots are dropped. Two of those go beyond tidiness:
- * removing path separators and any leading ".." means a label can never contribute a traversal
- * segment to `filename*`, even though RFC 6266 makes stripping path information the recipient's
- * job — and Windows is the realistic download target for a merchant sending artwork to a printer.
- *
- * Iterating by code point rather than by code unit also guarantees a surrogate pair is never
- * split, which is what would otherwise make encodeURIComponent throw on a lone surrogate.
- */
-function filenameLabel(value: string): string {
-  let out = '';
-  for (const char of value) {
-    const point = char.codePointAt(0) ?? 0;
-    const isControl = point < 0x20 || (point >= 0x7f && point <= 0x9f);
-    out += isControl || RESERVED_FILENAME_CHARS.has(char) ? ' ' : char;
-  }
-
-  // Leading and trailing dots and spaces go in one pass each, as a single run. Stripping dots and
-  // whitespace in separate passes is not equivalent: "../../etc/passwd" becomes ".. .. etc passwd"
-  // once the separators are spaced out, and one leading-dot strip then leaves ".. etc passwd".
-  const cleaned = out
-    .replace(/\s+/gu, ' ')
-    .replace(/^[.\s]+/u, '')
-    .replace(/[.\s]+$/u, '');
-
-  // Empty is reachable rather than exceptional: source_label need only be one character long, and
-  // that character may be a space or a dot.
-  return cleaned.length > 0 ? cleaned : 'qr';
-}
-
-/**
- * RFC 5987 attr-char is a narrower set than encodeURIComponent leaves unescaped, so the four
- * characters it permits and the RFC does not — apostrophe, parentheses and asterisk — are escaped
- * by hand.
- */
-function encodeRfc5987(value: string): string {
-  return encodeURIComponent(value).replace(
-    /['()*]/g,
-    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
 }

@@ -23,13 +23,7 @@ export function passwordHasher(): PasswordHasher {
  * is DRAFT and every public surface gates on status = 'ACTIVE'. The publish transaction is
  * where these must be real, and it refuses to publish while they are not.
  */
-export const SHELL_CATEGORY = 'PENDING';
-
-export function shellBusinessName(fullName: string): string {
-  return fullName.trim().slice(0, 160) || 'My business';
-}
-
-/** True while the tenant still carries its signup placeholders, i.e. onboarding is unfinished. */
-export function isShell(name: string, category: string): boolean {
-  return category === SHELL_CATEGORY || name.trim().length === 0;
-}
+// Re-exported from lib/tenant-shell so server call sites need no change. The definitions moved
+// because this module value-imports PasswordHasher, and a client component importing isShell from
+// here would drag a native crypto module toward the browser bundle.
+export { SHELL_CATEGORY, isShell, shellBusinessName } from './tenant-shell';

@@ -46,6 +46,8 @@ function stripSqlComments(sql) {
     .join('\n');
 }
 
+const TOUCHES_GUARDED = /(ALTER|CREATE|DROP)\s+(TABLE|INDEX)[^;]{0,160}?"?analytics_events"?/i;
+
 let failures = 0;
 const fail = (msg) => {
   console.error(`  FAIL  ${msg}`);
@@ -63,6 +65,21 @@ console.log(`Checking ${files.length} migration(s)...`);
 for (const file of files) {
   const raw = readFileSync(join(DRIZZLE_DIR, file), 'utf8');
   const sql = stripSqlComments(raw);
+
+  // Any statement at all against the guarded table in a LATER migration is suspect, not just a
+  // destructive one. Observed in practice: generating a migration for an unrelated foreign key
+  // also emitted "ALTER TABLE analytics_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY",
+  // because the snapshot does not know the column is already an identity. That statement is not
+  // destructive, and it fails outright.
+  if (!file.startsWith('0000')) {
+    if (TOUCHES_GUARDED.test(sql)) {
+      fail(
+        `${file} contains a statement touching ${GUARDED_TABLE}. The snapshot models it as an ` +
+          `ordinary unpartitioned table, so drizzle-kit's diff against it is unreliable. Review ` +
+          `the statement by hand, and delete it if it is re-asserting hand-written DDL from 0000.`,
+      );
+    }
+  }
 
   for (const { pattern, label } of DESTRUCTIVE) {
     if (pattern.test(sql)) {

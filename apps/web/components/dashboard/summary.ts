@@ -9,6 +9,7 @@ import {
   type Subscription,
 } from '@ai-review/db';
 import { loadOnboardingProgress } from '@/lib/onboarding-progress';
+import { foldQrSources } from './presentation';
 import type { OnboardingProgress } from '@/components/onboarding/steps';
 
 /**
@@ -119,18 +120,13 @@ export async function loadDashboardSummary(
   const business = businessRows[0];
   if (!business) return null;
 
-  const qrSources: DashboardQrSources = { active: 0, disabled: 0, total: 0 };
-  for (const row of qrRows) {
-    if (row.status === 'ACTIVE') qrSources.active += row.rows;
-    else qrSources.disabled += row.rows;
-    qrSources.total += row.rows;
-  }
-
   return {
     business,
     slug: slugRows[0]?.slug ?? null,
     subscription: subscriptionRows[0] ?? null,
-    qrSources,
+    // Folded in `presentation.ts` rather than here, so the all-disabled and no-rows cases — the two
+    // the dashboard's wording turns on — are exercised by a test that needs no database.
+    qrSources: foldQrSources(qrRows),
     progress,
   };
 }

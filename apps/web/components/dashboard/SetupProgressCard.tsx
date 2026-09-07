@@ -32,12 +32,27 @@ const COMPLETED_BY: Record<OnboardingStepId, keyof OnboardingProgress> = {
   'review-link': 'hasReviewLink',
   links: 'hasContactLinks',
   ai: 'hasAiContext',
-  finish: 'isPublished',
+  // The final step is finished by having published, which for a DRAFT tenant is never true —
+  // this card only renders for DRAFT, so it is always the outstanding one.
+  finish: 'status',
 };
+
+/**
+ * Steps publish actually requires. ONB-03 and ONB-04 are skippable by design, so listing them as
+ * outstanding work overstates what is left and makes the card never reach completion.
+ */
+const REQUIRED_STEPS: ReadonlySet<OnboardingStepId> = new Set([
+  'business',
+  'review-link',
+  'finish',
+]);
 
 export function SetupProgressCard({ progress }: { progress: OnboardingProgress }) {
   const next = resumeStep(progress);
-  const doneCount = ONBOARDING_STEPS.filter((step) => progress[COMPLETED_BY[step.id]]).length;
+  const isDone = (step: OnboardingStepId) =>
+    step === 'finish' ? progress.status !== 'DRAFT' : Boolean(progress[COMPLETED_BY[step]]);
+  const requiredSteps = ONBOARDING_STEPS.filter((step) => REQUIRED_STEPS.has(step.id));
+  const doneCount = requiredSteps.filter((step) => isDone(step.id)).length;
 
   // The last step publishes rather than collecting anything, so "Continue setup" would undersell
   // what the button does when it is the only thing left.

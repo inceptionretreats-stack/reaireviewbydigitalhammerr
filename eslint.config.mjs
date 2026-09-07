@@ -54,7 +54,16 @@ export default tseslint.config(
     // reporting to stdout is their entire purpose.
     files: ['scripts/**/*.mjs', 'scripts/**/*.js'],
     languageOptions: {
-      globals: { console: 'readonly', process: 'readonly' },
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        URL: 'readonly',
+        fetch: 'readonly',
+      },
     },
     rules: { 'no-console': 'off' },
   },

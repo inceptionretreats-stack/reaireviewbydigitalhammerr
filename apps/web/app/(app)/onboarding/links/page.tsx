@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { TenantGuard } from '@ai-review/core';
-import { businessLinks } from '@ai-review/db';
+import { businessLinks, reviewDestinations } from '@ai-review/db';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 import { LinksStep, type SavedContactLinks } from '@/components/onboarding/LinksStep';
@@ -24,6 +24,9 @@ import { LinksStep, type SavedContactLinks } from '@/components/onboarding/Links
  * derived progress here would bounce them straight back out of the step they had just skipped,
  * and would break the shell's Back link from ONB-04. `/onboarding` already resumes at the
  * earliest incomplete step.
+ *
+ * No WEBSITE row is read because the step no longer offers that input: nothing in V1 writes one
+ * (see the note in LinksStep.tsx), so reading it could only ever return an empty string.
  */
 
 export const metadata: Metadata = {
@@ -63,13 +66,33 @@ export default async function Page() {
     .from(businessLinks)
     .where(eq(businessLinks.businessId, tenant.businessId));
 
+  // The step's summary card tells the owner whether each button will appear, and the Review Us
+  // button appears only when review_destinations holds the destination (AMENDMENT-003): the
+  // GOOGLE_REVIEW row in business_links carries no url, so it cannot answer this. Because this
+  // route has no step-order guard, an owner can be here with ONB-02 still undone — reading the
+  // row is what keeps the card from asserting a button that would not render.
+  //
+  // Existence is enough in V1, matching `hasReviewLink` in lib/onboarding-progress.ts: is_enabled
+  // defaults to true and nothing can turn it off (OPEN-03 — there is no PATCH/DELETE for a
+  // destination yet). When one arrives, add the same is_enabled filter lib/public-business.ts
+  // applies, or this card will promise a button the public page suppresses.
+  const [destination] = await database
+    .select({ id: reviewDestinations.id })
+    .from(reviewDestinations)
+    .where(
+      and(
+        eq(reviewDestinations.businessId, tenant.businessId),
+        eq(reviewDestinations.isPrimary, true),
+      ),
+    )
+    .limit(1);
+
   const saved: SavedContactLinks = {
     whatsapp: targetFor(rows, 'WHATSAPP'),
     call: targetFor(rows, 'CALL'),
     instagram: targetFor(rows, 'INSTAGRAM'),
     facebook: targetFor(rows, 'FACEBOOK'),
-    website: targetFor(rows, 'WEBSITE'),
   };
 
-  return <LinksStep saved={saved} />;
+  return <LinksStep saved={saved} hasReviewDestination={destination !== undefined} />;
 }

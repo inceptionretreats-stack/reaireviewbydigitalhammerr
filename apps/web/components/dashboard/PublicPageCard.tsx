@@ -29,12 +29,18 @@ export function PublicPageCard({ publicUrl, isLive, statusNote, liveSince }: Pub
   if (!publicUrl) {
     return (
       <Card title="Your public page" titleAs="h2">
+        {/* Deliberately does not say a QR code points at this address, because none does. A QR
+            encodes /r/{code} — a permanent code that resolves through us (ADR-002, D-026) — which
+            is exactly why AC-017 can promise that changing the address, the Google URL or the
+            domain never invalidates a printed standee. An owner told otherwise would reasonably
+            refuse to rename their address for fear of the print run. */}
         <EmptyState
           title="No web address yet"
           description={
             <>
-              You choose your address in the first setup step. It becomes your public page and the
-              destination every QR code points at.
+              You choose your address in the first setup step. It becomes the public page you can
+              share on a bill or in a message. Your QR codes are separate: each one carries a
+              permanent code, so printed standees keep working whatever your address later becomes.
             </>
           }
         />

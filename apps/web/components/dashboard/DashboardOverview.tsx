@@ -52,10 +52,19 @@ export async function DashboardOverview() {
       </div>
 
       {/* Setup comes first while it is unfinished: nothing else on the screen matters until the
-          page is live, and an owner who lands here mid-onboarding needs the way back in. */}
-      {!summary.progress.isPublished && <SetupProgressCard progress={summary.progress} />}
+          page is live, and an owner who lands here mid-onboarding needs the way back in.
+          Gated on DRAFT specifically — a SUSPENDED or CLOSED tenant HAS published, and telling it
+          that its page "starts working the moment you publish" would be both wrong and useless.
+          Those states are explained by the status badge above. */}
+      {summary.progress.status === 'DRAFT' && <SetupProgressCard progress={summary.progress} />}
 
-      <LiveFigures qrSources={summary.qrSources} subscription={summary.subscription} />
+      {/* The lifecycle state goes in because a count of enabled sources says nothing about whether
+          any of them resolves: only an ACTIVE business does (lib/public-business.ts, Flow J). */}
+      <LiveFigures
+        qrSources={summary.qrSources}
+        subscription={summary.subscription}
+        businessStatus={summary.business.status}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <PublicPageCard

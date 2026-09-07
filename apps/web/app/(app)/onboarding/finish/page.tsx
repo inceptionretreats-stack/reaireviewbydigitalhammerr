@@ -14,7 +14,12 @@ import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { getSession } from '@/lib/session';
 import { loadOnboardingProgress } from '@/lib/onboarding-progress';
-import { FinishStep, type PreviewSection } from '@/components/onboarding/FinishStep';
+import { FinishStep } from '@/components/onboarding/FinishStep';
+import {
+  asStringArray,
+  buildPreviewSections,
+  derivePublishBlockers,
+} from '@/components/onboarding/finish-preview';
 
 /**
  * GET /onboarding/finish — ONB-05, the last wizard step (Flow A steps 8-12).
@@ -28,7 +33,13 @@ import { FinishStep, type PreviewSection } from '@/components/onboarding/FinishS
  * bouncing them to an earlier screen tells them nothing about why they were moved.
  */
 
-export const metadata: Metadata = { title: 'Publish your page' };
+export const metadata: Metadata = {
+  // The root layout sets a static title with no `title.template`, so a child title replaces it
+  // outright — hence the product name here, matching the four sibling onboarding pages.
+  title: 'Publish your page | AI Review',
+  description:
+    'Publish your business page, get your own web address, and download your first QR code.',
+};
 
 /**
  * force-dynamic, not the default cache.
@@ -58,6 +69,9 @@ export default async function OnboardingFinishPage() {
       database
         .select({
           name: businesses.name,
+          // Selected for derivePublishBlockers rather than for display: the shell test publish
+          // runs is (name, category), so readiness cannot be judged without both.
+          category: businesses.category,
           description: businesses.description,
           logoAssetId: businesses.logoAssetId,
         })
@@ -115,13 +129,28 @@ export default async function OnboardingFinishPage() {
 
   // TenantGuard already resolved this business, so the row exists. The fallback is here to
   // satisfy the indexed-access check, not because an owner can reach this page without one.
-  const identity = identityRows[0] ?? { name: '', description: null, logoAssetId: null };
+  const identity = identityRows[0] ?? {
+    name: '',
+    category: '',
+    description: null,
+    logoAssetId: null,
+  };
   const slug = slugRows[0]?.slug ?? null;
   const qr = qrRows[0];
 
+  // The publish endpoint's own three tests, run against the rows this page has already read, so
+  // the list rendered now and a 409 arriving later cannot disagree about what is missing.
+  const publishBlockers = derivePublishBlockers({
+    name: identity.name,
+    category: identity.category,
+    hasPrimarySlug: slug !== null,
+    hasReviewDestination: progress.hasReviewLink,
+  });
+
   return (
     <FinishStep
-      published={progress.isPublished}
+      published={progress.status !== 'DRAFT'}
+      lifecycle={progress.status}
       businessName={identity.name}
       description={identity.description}
       hasLogo={identity.logoAssetId !== null}
@@ -139,83 +168,7 @@ export default async function OnboardingFinishPage() {
       }
       reviewModeName={modeRows[0]?.name ?? null}
       contextTerms={asStringArray(contextRows[0]?.terms)}
-      missing={derivePublishBlockers(progress)}
+      missing={publishBlockers}
     />
   );
-}
-
-/**
- * What POST /business/publish would refuse this tenant for, derived before the button is pressed.
- *
- * The keys are the endpoint own vocabulary (`details.missing`), so the screen carries one
- * key-to-step mapping rather than two, and a 409 arriving later renders through the same list.
- *
- * One interpretation worth stating: the endpoint separates `business_details` from
- * `web_address`, while `loadOnboardingProgress` folds the web address into `hasBusinessDetails`.
- * Both are captured on ONB-01, so both resolve to the same screen and the distinction changes
- * nothing the owner can act on. A refusal that names `web_address` is still labelled precisely,
- * because the client keeps a row for that key.
- *
- * `hasContactLinks` and `hasAiContext` are deliberately absent: publish requires neither (ONB-03
- * is skippable and publish seeds the D-014 defaults itself), so listing them here would invent a
- * requirement the API does not have. They appear as optional prompts inside the previews.
- */
-function derivePublishBlockers(progress: {
-  hasBusinessDetails: boolean;
-  hasReviewLink: boolean;
-}): string[] {
-  const missing: string[] = [];
-  if (!progress.hasBusinessDetails) missing.push('business_details');
-  if (!progress.hasReviewLink) missing.push('google_review_link');
-  return missing;
-}
-
-interface LinkRow {
-  id: string;
-  linkType: string;
-  label: string;
-  url: string | null;
-  phone: string | null;
-}
-
-/**
- * The sections the public page will actually render.
- *
- * Mirrors the rule in `app/[slug]/page.tsx` — a section without a resolvable target is absent,
- * not disabled (AC-020) — at the grain a preview needs: presence of a target, rather than the
- * scheme check that renderer performs before emitting an href. That renderer stays
- * authoritative. The rule is repeated here only because previewing a button the public page
- * would drop makes the preview a lie.
- */
-function buildPreviewSections(links: LinkRow[], hasReviewDestination: boolean): PreviewSection[] {
-  const sections = links
-    .filter((link) => hasTarget(link, hasReviewDestination))
-    .map((link) => ({
-      id: link.id,
-      label: link.label,
-      isPrimary: link.linkType === 'GOOGLE_REVIEW',
-    }));
-
-  // A tenant that skipped ONB-03 has no link rows yet, but publish creates the D-014 defaults
-  // with GOOGLE_REVIEW enabled. Without this the preview would show a page with no Review Us
-  // button seconds before publish adds one.
-  if (hasReviewDestination && !sections.some((section) => section.isPrimary)) {
-    sections.unshift({ id: 'default-google-review', label: 'Review Us', isPrimary: true });
-  }
-
-  return sections;
-}
-
-function hasTarget(link: LinkRow, hasReviewDestination: boolean): boolean {
-  // AMENDMENT-003: the GOOGLE_REVIEW row is presentation only and carries no url of its own, so
-  // whether it can render depends on review_destinations.
-  if (link.linkType === 'GOOGLE_REVIEW') return hasReviewDestination;
-  return (link.url?.trim().length ?? 0) > 0 || (link.phone?.trim().length ?? 0) > 0;
-}
-
-/** context_terms is jsonb, so its stored shape is a promise rather than a guarantee. */
-function asStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === 'string')
-    : [];
 }

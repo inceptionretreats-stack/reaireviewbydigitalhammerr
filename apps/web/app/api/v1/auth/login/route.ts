@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '@ai-review/db';
 import { loginRequest } from '@ai-review/contracts';
+import { privacyHash } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
@@ -109,7 +110,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await sessionService().create({
     userId: account.id,
     userAgent: request.headers.get('user-agent'),
-    ipHash: ip || null,
+    /*
+     * The hash, never the address. `sessions.ip_hash` is char(64) — sized for a SHA-256 digest —
+     * and 13_Security_Privacy_Compliance.md requires privacy-preserving hashes rather than a raw
+     * IP kept for the 30-day life of a session row. Same function the rate limiter uses, so one
+     * address produces one value across the system.
+     */
+    ipHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
     rememberMe: rememberMe ?? false,
   });
 

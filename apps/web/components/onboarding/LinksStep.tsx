@@ -1,9 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Badge, Card, Field, InlineError, Input, type BadgeTone } from '@ai-review/ui';
+import Link from 'next/link';
+import { Badge, Card, Field, FOCUS_RING, InlineError, Input, type BadgeTone } from '@ai-review/ui';
 import type { SubmitFailure } from '@/components/auth/use-form-submit';
 import { WizardShell } from './WizardShell';
+import {
+  canonicalValue,
+  isHttpsUrl,
+  normalizeMobile,
+  sectionState,
+  withHttps,
+  type FieldId,
+  type FieldKind,
+  type SavedContactLinks,
+  type SectionState,
+} from './link-fields';
 
 /**
  * ONB-03 — default contact and social links.
@@ -16,31 +28,46 @@ import { WizardShell } from './WizardShell';
  * destination, and the owner already set it on ONB-02. The summary still lists the Review Us
  * button, so "where did my Google button go?" never needs asking.
  *
- * Website is the fifth input because 03_Screen_Field_Button_Spec.md lists it under ONB-03, even
- * though it is not one of the D-014 defaults. See the note on the payload below: the PUT handler
- * validates a WEBSITE section but currently writes only the five defaults, so that handler needs
- * widening before this field round-trips.
- *
  * ONB-03-02 — "blank optional URLs are not rendered publicly" — is a consequence the owner has
  * to be able to see, or a blank field reads as an unfinished form rather than a choice. Hence
  * the summary card: every default section, with whether it currently produces a button. The API
  * enforces the same rule from the other side, enabling a section only once it has a target, so
  * the screen and the public page cannot disagree.
+ *
+ * Every row of that summary is a claim about the owner's public page, so each row is derived from
+ * something this screen actually knows. The Review Us row reads `hasReviewDestination`, resolved
+ * on the server, because this route has no step-order guard: an owner can arrive with
+ * review_destinations still empty, and `resolveTarget` in app/[slug]/page.tsx then renders no
+ * Review Us button at all (a GOOGLE_REVIEW row with no destination behind it resolves to null).
+ * Asserting "Always shows" in that state would invent a fact about their page.
  */
 
-type FieldId = 'whatsapp' | 'call' | 'instagram' | 'facebook' | 'website';
+/** Re-exported so the route file keeps one import for the step and its props. */
+export type { SavedContactLinks } from './link-fields';
 
-/** Whatever is already stored, keyed exactly as the inputs are. */
-export type SavedContactLinks = Record<FieldId, string>;
-
+/**
+ * "Website URL (optional)" is listed under ONB-03 in 03_Screen_Field_Button_Spec.md and is
+ * deliberately not collected here, because nothing in V1 can store it.
+ *
+ * PUT /business/links validates a WEBSITE section (WEBSITE is in URL_TYPES) and then writes only
+ * DEFAULT_SECTIONS — the D-014 five, which WEBSITE is not one of — and still answers 200. There is
+ * no create endpoint either: business_links/[id] records that WEBSITE, DIRECTIONS and CUSTOM rows
+ * can only arrive from the seed or an import. An input whose value is validated, silently dropped,
+ * and then reported back as "Shows on your page" is worse than a missing optional field: the owner
+ * is told something untrue, and finds the value gone on the next visit.
+ *
+ * Restoring the input is a small change once DEFAULT_SECTIONS writes every section the request
+ * supplies; that handler is outside this screen and has been flagged for it. Until then the screen
+ * offers no field it cannot honour.
+ */
 interface ContactField {
   id: FieldId;
   /**
    * The business_links.link_type this input writes. Lowercased it is also the field name the API
    * returns in `details.fields`, which is why the two sets are kept identical here.
    */
-  linkType: 'WHATSAPP' | 'CALL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBSITE';
-  kind: 'phone' | 'url';
+  linkType: 'WHATSAPP' | 'CALL' | 'INSTAGRAM' | 'FACEBOOK';
+  kind: FieldKind;
   /** Wording from 03_Screen_Field_Button_Spec.md ONB-03, kept verbatim for traceability. */
   label: string;
   /** How the section is labelled on the public page, so the summary names the real button. */
@@ -100,17 +127,6 @@ const FIELD: Record<FieldId, ContactField> = {
     inputMode: 'url',
     autoComplete: 'off',
   },
-  website: {
-    id: 'website',
-    linkType: 'WEBSITE',
-    kind: 'url',
-    label: 'Website URL',
-    button: 'Website',
-    hint: 'Your own site, starting with https://',
-    inputType: 'url',
-    inputMode: 'url',
-    autoComplete: 'url',
-  },
 };
 
 /** Screen order, and the order the summary lists the buttons in. */
@@ -119,7 +135,6 @@ const FIELDS: readonly ContactField[] = [
   FIELD.call,
   FIELD.instagram,
   FIELD.facebook,
-  FIELD.website,
 ];
 
 /**
@@ -133,8 +148,6 @@ const URL_MESSAGE = 'Enter a full web address starting with https://';
  * What a section is currently doing, said in words rather than carried by badge colour alone
  * (AC-038, and the design brief rule on never conveying state by colour).
  */
-type SectionState = 'saved' | 'pending' | 'removing' | 'invalid' | 'empty';
-
 const SECTION_STATE: Record<SectionState, { tone: BadgeTone; label: string }> = {
   saved: { tone: 'success', label: 'Shows on your page' },
   pending: { tone: 'accent', label: 'Shows once you continue' },
@@ -146,9 +159,14 @@ const SECTION_STATE: Record<SectionState, { tone: BadgeTone; label: string }> = 
 export interface LinksStepProps {
   /** Already-stored values, so leaving via Save & exit and resuming shows the real state. */
   saved: SavedContactLinks;
+  /**
+   * Whether review_destinations holds a primary row for this tenant (ONB-02, AMENDMENT-003).
+   * Without one the public page shows no Review Us button, and the summary has to say so.
+   */
+  hasReviewDestination: boolean;
 }
 
-export function LinksStep({ saved }: LinksStepProps) {
+export function LinksStep({ saved, hasReviewDestination }: LinksStepProps) {
   const [values, setValues] = useState<SavedContactLinks>(saved);
   const [storedValues, setStoredValues] = useState<SavedContactLinks>(saved);
   const [errors, setErrors] = useState<Partial<Record<FieldId, string>>>({});
@@ -184,7 +202,7 @@ export function LinksStep({ saved }: LinksStepProps) {
   }, [focusTarget, saving]);
 
   /**
-   * Saves the four defaults plus Website, and reports whether the wizard may move on.
+   * Saves the four default contact sections, and reports whether the wizard may move on.
    *
    * Serves both Continue and Save & exit: those differ only in where the shell goes afterwards,
    * which is the shell's business and not this screen's.
@@ -195,11 +213,10 @@ export function LinksStep({ saved }: LinksStepProps) {
     // Canonical form up front: a phone becomes the E.164 the server will store, so the summary
     // can tell that "98765 43210" and "+919876543210" are the same already-saved number.
     const canonical: SavedContactLinks = {
-      whatsapp: canonicalValue(FIELD.whatsapp, values.whatsapp),
-      call: canonicalValue(FIELD.call, values.call),
-      instagram: canonicalValue(FIELD.instagram, values.instagram),
-      facebook: canonicalValue(FIELD.facebook, values.facebook),
-      website: canonicalValue(FIELD.website, values.website),
+      whatsapp: canonicalValue(FIELD.whatsapp.kind, values.whatsapp),
+      call: canonicalValue(FIELD.call.kind, values.call),
+      instagram: canonicalValue(FIELD.instagram.kind, values.instagram),
+      facebook: canonicalValue(FIELD.facebook.kind, values.facebook),
     };
 
     const problems: Partial<Record<FieldId, string>> = {};
@@ -221,9 +238,9 @@ export function LinksStep({ saved }: LinksStepProps) {
     // "Skip optional", genuinely: nothing entered and nothing stored means no request at all,
     // rather than a write whose only purpose is to look busy. Nothing is lost by skipping — the
     // publish handler creates the GOOGLE_REVIEW default for a tenant that skipped this screen,
-    // and PROFILE-01 can add any section later. ONB-03-01 reads as though the five sections must
-    // be created *here*; that publish safety net is where the pack resolves it, and this screen
-    // follows it rather than writing five empty rows on the owner's behalf.
+    // and PROFILE-01 can enable any default section later. ONB-03-01 reads as though the five
+    // sections must be created *here*; that publish safety net is where the pack resolves it, and
+    // this screen follows it rather than writing five empty rows on the owner's behalf.
     const hasSomethingToWrite = FIELDS.some(
       (field) => canonical[field.id].length > 0 || storedValues[field.id].length > 0,
     );
@@ -235,6 +252,9 @@ export function LinksStep({ saved }: LinksStepProps) {
         // GOOGLE_REVIEW is deliberately absent: the handler creates and keeps that row itself,
         // and it has no url for this screen to send (AMENDMENT-003). An empty string is how a
         // section is cleared — the handler reads it as "no target" and disables the button.
+        //
+        // Every type sent here is one of the handler's DEFAULT_SECTIONS, so a 200 really does mean
+        // stored — which is what lets `canonical` be treated as the new stored state below.
         sections: FIELDS.map((field) =>
           field.kind === 'phone'
             ? { type: field.linkType, phone: canonical[field.id] }
@@ -272,8 +292,8 @@ export function LinksStep({ saved }: LinksStepProps) {
   const sections = FIELDS.map((field) => ({
     field,
     state: sectionState({
-      current: canonicalValue(field, values[field.id]),
-      stored: canonicalValue(field, storedValues[field.id]),
+      current: canonicalValue(field.kind, values[field.id]),
+      stored: canonicalValue(field.kind, storedValues[field.id]),
       invalid: errors[field.id] !== undefined,
     }),
   }));
@@ -352,11 +372,26 @@ export function LinksStep({ saved }: LinksStepProps) {
             <li className="flex items-center justify-between gap-3 py-2.5">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-ink">Review Us</p>
-                <p className="text-xs text-ink-muted">
-                  Opens the Google link you added on the previous step.
-                </p>
+                {hasReviewDestination ? (
+                  <p className="text-xs text-ink-muted">
+                    Opens the Google link you added on the previous step.
+                  </p>
+                ) : (
+                  <p className="text-xs text-ink-muted">
+                    No Google link yet, so this button will not appear.{' '}
+                    <Link
+                      href="/onboarding/review-link"
+                      className={`rounded font-semibold text-accent ${FOCUS_RING}`}
+                    >
+                      Add it on the previous step
+                    </Link>
+                    .
+                  </p>
+                )}
               </div>
-              <Badge tone="success">Always shows</Badge>
+              <Badge tone={hasReviewDestination ? 'success' : 'warning'}>
+                {hasReviewDestination ? 'Always shows' : 'Needs your Google link'}
+              </Badge>
             </li>
 
             {sections.map(({ field, state }) => {
@@ -378,80 +413,6 @@ export function LinksStep({ saved }: LinksStepProps) {
 /** The topmost field carrying a message, which is where focus belongs. */
 function firstProblemField(problems: Partial<Record<FieldId, string>>): FieldId | null {
   return FIELDS.find((field) => problems[field.id] !== undefined)?.id ?? null;
-}
-
-function sectionState({
-  current,
-  stored,
-  invalid,
-}: {
-  current: string;
-  stored: string;
-  invalid: boolean;
-}): SectionState {
-  if (invalid) return 'invalid';
-  if (current.length === 0) return stored.length > 0 ? 'removing' : 'empty';
-  return current === stored ? 'saved' : 'pending';
-}
-
-function canonicalValue(field: ContactField, raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return '';
-  if (field.kind !== 'phone') return trimmed;
-
-  // An un-normalisable number is passed through unchanged so validation can report it, rather
-  // than being quietly rewritten into something the owner did not type.
-  return normalizeMobile(trimmed) ?? trimmed;
-}
-
-/**
- * Client-side mirror of `normalizePhone` (packages/core) for immediate feedback.
- *
- * Not an import, which is the awkward part and worth stating plainly: `@ai-review/core` publishes
- * only its barrel, and that barrel reaches @node-rs/argon2 and ioredis, so it cannot go into a
- * client bundle. The server value stays authoritative — this exists to catch a typo before a
- * round trip and to canonicalise for the summary. Same India-first rules (D-002): a bare
- * 10-digit number is +91, and only Indian numbers get a shape check.
- */
-function normalizeMobile(input: string): string | null {
-  const cleaned = input.replace(/[^\d+]/g, '');
-  if (cleaned.length === 0) return null;
-
-  if (cleaned.startsWith('+') && !cleaned.startsWith('+91')) {
-    const digits = cleaned.slice(1);
-    if (!/^\d+$/.test(digits)) return null;
-    return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : null;
-  }
-
-  // Strip a trunk prefix first, then an embedded country code: '091-9876543210' carries both,
-  // and testing for the country code before dropping the zero leaves 12 digits that fail.
-  const digits = cleaned.replace(/\D/g, '').replace(/^0+/, '');
-  const national = digits.length > 10 && digits.startsWith('91') ? digits.slice(2) : digits;
-
-  // Indian mobile numbers begin 6-9.
-  return /^[6-9]\d{9}$/.test(national) ? `+91${national}` : null;
-}
-
-/** Mirrors the handler's own check: only https is stored, so only https is accepted here. */
-function isHttpsUrl(value: string): boolean {
-  try {
-    return new URL(value).protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Adds the scheme an owner pasting "instagram.com/mycafe" left off.
- *
- * A value that already carries a scheme is never touched — silently promoting http:// to https://
- * would change where the button points, which is not a formatting fix.
- */
-function withHttps(value: string): string {
-  const trimmed = value.trim().replace(/^\/+/, '');
-  if (trimmed.length === 0) return '';
-  if (/^[a-z][a-z\d+.-]*:/i.test(trimmed)) return trimmed;
-  return trimmed.includes('.') ? `https://${trimmed}` : trimmed;
 }
 
 type JsonResult =

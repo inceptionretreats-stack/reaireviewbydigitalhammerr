@@ -4,7 +4,9 @@ import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
+import { isDenied, rateLimiter } from '@/lib/rate-limit';
 import { loadGenerationContext, selectProvider } from '@/lib/generation-service';
+import { previewCheck } from './preview-limit';
 
 /**
  * POST /api/v1/ai/test-preview — ONB-04 "Generate preview" and AI-01 "Test preview".
@@ -15,8 +17,9 @@ import { loadGenerationContext, selectProvider } from '@/lib/generation-service'
  * something a public caller could set, and the free tier would be bypassable.
  *
  * The corollary the owner does not see: a preview still costs a real provider call. It is
- * therefore rate limited, and no generation row is written, so it never appears in analytics or in
- * the funnel as a customer draft.
+ * therefore rate limited — `previewCheck` in ./preview-limit argues the dimensions, the tenant key
+ * and the fail-closed policy — and no generation row is written, so a preview never appears in
+ * analytics or in the funnel as a customer draft.
  *
  * Compliance is still checked. The draft shown to an owner is the one their customers will get,
  * so a preview that quietly skipped the AC-011/AC-012 gates would misrepresent the product to the
@@ -25,6 +28,18 @@ import { loadGenerationContext, selectProvider } from '@/lib/generation-service'
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
+
+  // Before the context read and before the provider call: a denied preview must cost neither a
+  // query nor a paid token, which is the whole point of the dimension.
+  const decision = await rateLimiter().consume(previewCheck(auth.context.businessId));
+
+  if (isDenied(decision)) {
+    return apiError(
+      decision.code,
+      'You have generated several previews just now. Please wait a moment and try again.',
+      { retryAfterSeconds: decision.retryAfterSeconds },
+    );
+  }
 
   const database = db();
   const context = await loadGenerationContext(database, auth.context.businessId);

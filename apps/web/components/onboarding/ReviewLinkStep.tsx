@@ -2,13 +2,29 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { Badge, Button, Field, FOCUS_RING, Input } from '@ai-review/ui';
-// Type-only, and it has to stay that way. The `@ai-review/core` barrel re-exports the password
-// hasher (@node-rs/argon2, a native binary), the Redis rate limiter and the Drizzle tenant guard,
-// none of which can exist in a browser bundle. `import type` is erased at compile time under
-// verbatimModuleSyntax, so nothing here reaches the client; dropping the `type` keyword would
-// fail the build rather than fail quietly.
-import type { ReviewUrlRejection } from '@ai-review/core';
-import type { SubmitFailure } from '@/components/auth/use-form-submit';
+// The screen's decisions — what Continue writes, which blur asks the server, and which of two
+// concurrent answers owns the screen — live in `./review-link` so they can be unit-tested without a
+// DOM (apps/web has no DOM test environment). It carries the type-only import of `@ai-review/core`
+// with the reason it has to stay type-only.
+import {
+  CHECK_FAILED_MESSAGE,
+  REASONS_WORTH_INSTRUCTIONS,
+  REQUIRED_MESSAGE,
+  claimCheck,
+  claimSave,
+  createRequestSlot,
+  decideReviewLinkAction,
+  invalidate,
+  ownsSlot,
+  ownsVerdict,
+  readFailure,
+  readUrl,
+  settle,
+  shouldCheckOnBlur,
+  type JsonResult,
+  type ReviewLinkCheck,
+  type ReviewLinkIntent,
+} from './review-link';
 import { WizardShell } from './WizardShell';
 
 /**
@@ -23,7 +39,7 @@ import { WizardShell } from './WizardShell';
  * an explicit check, the normalized URL shown before it is committed, and an invitation to open the
  * link once and confirm it lands on the right business.
  *
- * Four decisions worth stating.
+ * Five decisions worth stating.
  *
  * 1. Validation is server-side and the browser carries no copy of the rules. ONB-02-02 restricts
  *    the accepted hosts and `validateGoogleReviewUrl` in `@ai-review/core` is authoritative; the
@@ -44,6 +60,14 @@ import { WizardShell } from './WizardShell';
  *    genuinely non-negotiable prerequisite, so letting an empty field through only defers the same
  *    failure to the last screen, where it arrives with no clue which step caused it.
  *
+ * 5. The two busy states are not one. Only the *save* is handed to `WizardShell`, because the shell
+ *    turns `busy` into a loading Continue button whose clicks `Button` swallows (it deliberately
+ *    does not set `disabled`, so focus is not dropped mid-task). Handing it the *checking* state
+ *    ate the first Continue press outright: pressing the button blurs the input, the blur starts a
+ *    check, and the click then arrives at an already-loading button — nothing saved, no advance,
+ *    and an sr-only "Saving" announced for a validation that persists nothing. Checking belongs
+ *    to the Validate button and to nothing else.
+ *
  * `useFormSubmit` is not reused: it is POST-only and models one operation per screen, while this
  * screen has two (a check that does not persist, and an idempotent PUT). Its `SubmitFailure` shape
  * and envelope unpacking are reused so the error contract stays in one shape (23_API_Error_Codes).
@@ -51,21 +75,9 @@ import { WizardShell } from './WizardShell';
 
 const ENDPOINT = '/api/v1/business/review-destination';
 
-const REQUIRED_MESSAGE =
-  'Add your Google review link to continue — your business cannot be published without it.';
-
-/**
- * A failed *check* is not a failed step: the save re-validates server-side anyway, so the copy says
- * so rather than implying the merchant's link is the problem.
- */
-const CHECK_FAILED_MESSAGE =
-  'We could not check your link just now. You can still press Continue — the link is checked ' +
-  'again when it is saved.';
-
-/** The verdict from the server-side validator, returned by the Server Action the page supplies. */
-export type ReviewLinkCheck =
-  | { ok: true; url: string; host: string }
-  | { ok: false; reason: ReviewUrlRejection; message: string };
+// Re-exported so the page keeps importing the Server Action's return type from the component it
+// hands the action to.
+export type { ReviewLinkCheck };
 
 export interface ReviewLinkStepProps {
   /** The URL already stored for this business, or null on a first visit. */
@@ -76,12 +88,6 @@ export interface ReviewLinkStepProps {
    */
   checkUrl: (url: string) => Promise<ReviewLinkCheck>;
 }
-
-/** The rejections that mean "you have the wrong link" — the ones the instructions actually fix. */
-const REASONS_WORTH_INSTRUCTIONS: readonly ReviewUrlRejection[] = [
-  'UNSUPPORTED_HOST',
-  'MISSING_PLACE_REFERENCE',
-];
 
 export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
   const [value, setValue] = useState(savedUrl ?? '');
@@ -95,14 +101,11 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
   const [helpOpen, setHelpOpen] = useState(savedUrl === null);
 
   /**
-   * The value the newest in-flight check or save was issued for.
-   *
-   * Two jobs. A verdict arriving for a value no longer on screen is discarded, so a slow response
-   * can never label text the merchant has since replaced. And because clicking "Validate link"
-   * blurs the input first, it collapses the resulting blur-then-click pair into one request.
-   * Cleared once a result is applied, so pressing Validate again always re-runs.
+   * The one in-flight server round trip this screen allows itself. A ref rather than state because
+   * every read of it is a decision made inside an already-running request, not a render.
+   * `./review-link` documents what the two fields each answer.
    */
-  const pending = useRef<string | null>(null);
+  const slot = useRef(createRequestSlot());
 
   const trimmed = value.trim();
   const isSaved = storedUrl !== null && trimmed === storedUrl;
@@ -116,7 +119,7 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
 
   const clearVerdict = useCallback(() => {
     // Any edit invalidates what is displayed and any answer still in flight.
-    pending.current = null;
+    invalidate(slot.current);
     setValid(null);
     setError(null);
   }, []);
@@ -128,14 +131,15 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
         setError(REQUIRED_MESSAGE);
         return;
       }
-      if (pending.current === candidate) return;
 
-      pending.current = candidate;
+      // Refused for a duplicate blur-then-click pair, and while a save is in flight.
+      const ticket = claimCheck(slot.current, candidate);
+      if (ticket === null) return;
       setBusy('checking');
 
       try {
         const result = await checkUrl(candidate);
-        if (pending.current !== candidate) return;
+        if (!ownsVerdict(slot.current, ticket, candidate)) return;
 
         if (result.ok) {
           setValid({ url: result.url, host: result.host });
@@ -148,19 +152,21 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
           if (REASONS_WORTH_INSTRUCTIONS.includes(result.reason)) setHelpOpen(true);
         }
       } catch {
-        if (pending.current !== candidate) return;
+        if (!ownsVerdict(slot.current, ticket, candidate)) return;
         setValid(null);
         setError(CHECK_FAILED_MESSAGE);
       } finally {
-        if (pending.current === candidate) pending.current = null;
-        setBusy(null);
+        settle(slot.current, ticket);
+        // Only the newest request may stop the spinner: a discarded stale answer clearing it would
+        // re-enable the buttons while a newer request is still running.
+        if (ownsSlot(slot.current, ticket)) setBusy(null);
       }
     },
     [checkUrl],
   );
 
   const save = useCallback(async (candidate: string): Promise<boolean> => {
-    pending.current = candidate;
+    const ticket = claimSave(slot.current, candidate);
     setBusy('saving');
 
     try {
@@ -185,34 +191,33 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
       // what is on screen is what customers will actually be sent to — but only if the box still
       // holds what we just saved. Typing during a save is rare and overwriting it would look like
       // the field fighting back; the save itself stands either way.
-      if (pending.current === candidate) setValue(saved);
+      if (ownsVerdict(slot.current, ticket, candidate)) setValue(saved);
       return true;
     } finally {
-      pending.current = null;
-      setBusy(null);
+      settle(slot.current, ticket);
+      if (ownsSlot(slot.current, ticket)) setBusy(null);
     }
   }, []);
 
-  const handleContinue = useCallback(async (): Promise<boolean> => {
-    if (trimmed.length === 0) {
-      setValid(null);
-      setError(REQUIRED_MESSAGE);
-      return false;
-    }
-    // Unchanged since it was stored: advance without a write, so passing back through this step
-    // does not needlessly invalidate the cached public configuration.
-    if (trimmed === storedUrl) return true;
-    return save(trimmed);
-  }, [trimmed, storedUrl, save]);
+  const runStep = useCallback(
+    async (intent: ReviewLinkIntent): Promise<boolean> => {
+      const action = decideReviewLinkAction(intent, trimmed, storedUrl);
+      switch (action) {
+        case 'require-value':
+          setValid(null);
+          setError(REQUIRED_MESSAGE);
+          return false;
+        case 'advance':
+          return true;
+        case 'save':
+          return save(trimmed);
+      }
+    },
+    [trimmed, storedUrl, save],
+  );
 
-  const handleSaveAndExit = useCallback(async (): Promise<boolean> => {
-    // Empty is allowed to leave, unlike Continue. This is not a skip — /onboarding resumes here
-    // and publish still refuses — and someone using Save & exit on this step is usually leaving in
-    // order to go and find the link. Blocking the exit would strand them on it.
-    if (trimmed.length === 0) return true;
-    if (trimmed === storedUrl) return true;
-    return save(trimmed);
-  }, [trimmed, storedUrl, save]);
+  const handleContinue = useCallback(() => runStep('continue'), [runStep]);
+  const handleSaveAndExit = useCallback(() => runStep('save-and-exit'), [runStep]);
 
   const normalizedDiffers = valid !== null && valid.url !== trimmed;
 
@@ -223,7 +228,8 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
       description="Everyone who copies a review is sent to this link, so it is worth checking carefully. You can change it later without reprinting your QR code."
       onContinue={handleContinue}
       onSaveAndExit={handleSaveAndExit}
-      busy={busy !== null}
+      // The save only, never the check — decision 5 above.
+      busy={busy === 'saving'}
     >
       <div className="flex flex-col gap-4">
         <Field
@@ -250,9 +256,13 @@ export function ReviewLinkStep({ savedUrl, checkUrl }: ReviewLinkStepProps) {
               onBlur={() => {
                 // Feedback the moment they leave the field, without a request per keystroke.
                 // Skipped when there is nothing new to say about the current value.
-                if (trimmed.length > 0 && !isSaved && valid === null && error === null) {
-                  void runCheck(trimmed);
-                }
+                const ask = shouldCheckOnBlur({
+                  trimmed,
+                  isSaved,
+                  hasVerdict: valid !== null,
+                  hasError: error !== null,
+                });
+                if (ask) void runCheck(trimmed);
               }}
               onKeyDown={(event) => {
                 // There is no <form> here, so Enter would otherwise do nothing at all. It checks
@@ -439,9 +449,6 @@ function ReviewLinkHelp({
   );
 }
 
-type JsonResult =
-  { ok: true; payload: Record<string, unknown> } | { ok: false; failure: SubmitFailure };
-
 /**
  * One JSON mutation, with the error envelope unpacked.
  *
@@ -488,30 +495,4 @@ async function readJsonBody(response: Response): Promise<Record<string, unknown>
   } catch {
     return {};
   }
-}
-
-function readFailure(payload: Record<string, unknown>): SubmitFailure {
-  const fallback: SubmitFailure = {
-    code: 'INTERNAL_ERROR',
-    message: 'We could not save your link just now. Please try again.',
-    fields: [],
-  };
-
-  const error = payload.error;
-  if (typeof error !== 'object' || error === null) return fallback;
-
-  const { code, message, details } = error as Record<string, unknown>;
-  const fields = (details as { fields?: unknown } | null | undefined)?.fields;
-
-  return {
-    code: typeof code === 'string' ? code : fallback.code,
-    message: typeof message === 'string' ? message : fallback.message,
-    fields: Array.isArray(fields) ? fields.filter((f): f is string => typeof f === 'string') : [],
-  };
-}
-
-/** The normalized URL the API stored, which is what gets shown back (ONB-02-03). */
-function readUrl(payload: Record<string, unknown>): string | null {
-  const { url } = payload;
-  return typeof url === 'string' && url.length > 0 ? url : null;
 }

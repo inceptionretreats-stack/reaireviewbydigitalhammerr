@@ -39,6 +39,9 @@ export function previousStep(id: OnboardingStepId): OnboardingStep | null {
   return index > 0 ? (ONBOARDING_STEPS[index - 1] ?? null) : null;
 }
 
+/** Mirrors businesses.status. Carried rather than flattened — see resumeStep. */
+export type BusinessLifecycle = 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
+
 /**
  * What the wizard already knows about a tenant, used to decide where to resume.
  *
@@ -47,31 +50,46 @@ export function previousStep(id: OnboardingStepId): OnboardingStep | null {
  * something out of order. Derived state cannot go stale; a stored cursor can.
  */
 export interface OnboardingProgress {
+  status: BusinessLifecycle;
   hasBusinessDetails: boolean;
   hasReviewLink: boolean;
   hasContactLinks: boolean;
   hasAiContext: boolean;
-  isPublished: boolean;
 }
 
 /**
- * The first step still needing attention.
+ * What publishing actually requires — and nothing more.
  *
- * Deliberately returns the earliest incomplete step rather than the furthest reached: the later
- * steps are cheap to pass through once done, and landing someone on step four when step two is
- * empty means they meet the publish blocker with no idea why.
+ * POST /api/v1/business/publish demands business details and a Google review link. Contact links
+ * (ONB-03) and AI context (ONB-04) are genuinely optional: ONB-03 ships a "Skip optional" button,
+ * and neither step blocks publish.
  */
-export function resumeStep(progress: OnboardingProgress): OnboardingStep {
-  if (progress.isPublished) return stepById('finish');
-  if (!progress.hasBusinessDetails) return stepById('business');
-  if (!progress.hasReviewLink) return stepById('review-link');
-  if (!progress.hasContactLinks) return stepById('links');
-  if (!progress.hasAiContext) return stepById('ai');
-  return stepById('finish');
+export function canPublish(progress: OnboardingProgress): boolean {
+  return progress.hasBusinessDetails && progress.hasReviewLink;
 }
 
-/** Steps a person may jump to directly: everything up to and including the resume point. */
-export function reachableSteps(progress: OnboardingProgress): OnboardingStepId[] {
-  const limit = stepIndex(resumeStep(progress).id);
-  return ONBOARDING_STEPS.filter((_, index) => index <= limit).map((s) => s.id);
+/** Publish requirements still outstanding, in wizard order, for a "what is missing" list. */
+export function missingPublishRequirements(progress: OnboardingProgress): OnboardingStep[] {
+  const missing: OnboardingStep[] = [];
+  if (!progress.hasBusinessDetails) missing.push(stepById('business'));
+  if (!progress.hasReviewLink) missing.push(stepById('review-link'));
+  return missing;
+}
+
+/**
+ * The first step still genuinely blocking progress.
+ *
+ * Only publish prerequisites are considered. An earlier version walked every step in order and
+ * returned the first with no stored row, which meant anyone who used ONB-03's "Skip optional"
+ * was sent back to that step on every single visit — no row is written, so the check never
+ * cleared, and the wizard demanded a step that publish does not require.
+ *
+ * A tenant past DRAFT goes to the final step regardless: it is where both the live state and the
+ * suspended state are explained, and re-walking setup for a published business is wrong.
+ */
+export function resumeStep(progress: OnboardingProgress): OnboardingStep {
+  if (progress.status !== 'DRAFT') return stepById('finish');
+  if (!progress.hasBusinessDetails) return stepById('business');
+  if (!progress.hasReviewLink) return stepById('review-link');
+  return stepById('finish');
 }

@@ -916,8 +916,25 @@ export async function run(
     return 2;
   }
 
-  // The pepper must match the running application's, or every seeded password verifies as
-  // wrong for a reason no error message will ever explain.
+  // Refuse to seed without the pepper the application verifies against.
+  //
+  // PasswordHasher mixes HASH_PEPPER into every hash, so a seed run without it writes hashes the
+  // app can never verify: the rows look perfectly valid, and every seeded login fails with
+  // "that password is not correct". Nothing about the failure points at the cause. This actually
+  // happened — the seed was run without loading .env while the web app had one — and the only
+  // symptom was an unopenable demo account.
+  //
+  // A missing pepper is also not a safe default in its own right: it silently weakens every hash
+  // it writes.
+  if (!env.HASH_PEPPER) {
+    console.error(
+      'HASH_PEPPER is not set. Seeded passwords would be hashed without the pepper the app ' +
+        'verifies with, so every seeded login would fail. Load the same environment the web ' +
+        'app uses before seeding.',
+    );
+    return 2;
+  }
+
   const hasher = new PasswordHasher({ pepper: env.HASH_PEPPER });
 
   /**

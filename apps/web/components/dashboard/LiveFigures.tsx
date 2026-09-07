@@ -1,5 +1,5 @@
 import { KpiCard } from '@ai-review/ui';
-import { describePlan } from './presentation';
+import { describePlan, describeQrSources } from './presentation';
 import type { DashboardQrSources, DashboardSummary } from './summary';
 
 /**
@@ -20,24 +20,25 @@ import type { DashboardQrSources, DashboardSummary } from './summary';
 export interface LiveFiguresProps {
   qrSources: DashboardQrSources;
   subscription: DashboardSummary['subscription'];
+  /**
+   * The business lifecycle state, because "active" is a property of the source *and* of the tenant:
+   * `lib/public-business.ts` resolves a QR only for an ACTIVE business, so on a DRAFT, SUSPENDED or
+   * CLOSED tenant no source is scanning whatever these counts say.
+   */
+  businessStatus: DashboardSummary['business']['status'];
 }
 
-export function LiveFigures({ qrSources, subscription }: LiveFiguresProps) {
+export function LiveFigures({ qrSources, subscription, businessStatus }: LiveFiguresProps) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <KpiCard label="Active QR sources" value={qrSources.active} hint={qrSourceHint(qrSources)} />
+      <KpiCard
+        label="Enabled QR sources"
+        value={qrSources.active}
+        hint={describeQrSources(qrSources, businessStatus)}
+      />
       {subscription && <GenerationAllowance subscription={subscription} />}
     </div>
   );
-}
-
-function qrSourceHint(qrSources: DashboardQrSources): string {
-  // D-026: every QR is dynamic, and publishing creates the first one. Saying so turns a zero from
-  // something that looks broken into the next thing to do.
-  if (qrSources.total === 0) return 'Your first QR code is created when you publish.';
-  if (qrSources.disabled === 1) return '1 more is disabled.';
-  if (qrSources.disabled > 1) return `${qrSources.disabled} more are disabled.`;
-  return 'Every source you have created is working.';
 }
 
 /**

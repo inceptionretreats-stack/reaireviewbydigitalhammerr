@@ -68,6 +68,11 @@ export async function loadOnboardingProgress(
     .limit(1);
 
   return {
+    // Carried through rather than flattened to a boolean. An earlier version reported
+    // isPublished as (status === 'ACTIVE'), which folded SUSPENDED and CLOSED in with
+    // never-published — so a suspended tenant was offered a Publish button that the publish
+    // route refuses outright.
+    status: business?.status ?? 'DRAFT',
     // The signup shell carries a placeholder category, so its presence means ONB-01 is untouched.
     hasBusinessDetails:
       business !== undefined &&
@@ -77,6 +82,5 @@ export async function loadOnboardingProgress(
     hasReviewLink: destination !== undefined,
     hasContactLinks: link !== undefined,
     hasAiContext: context !== undefined,
-    isPublished: business?.status === 'ACTIVE',
   };
 }

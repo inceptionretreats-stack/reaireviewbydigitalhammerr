@@ -13,8 +13,28 @@ import {
   Textarea,
   type SelectOption,
 } from '@ai-review/ui';
-import type { SubmitFailure } from '../auth/use-form-submit';
+import {
+  DESCRIPTION_MAX,
+  NAME_MAX,
+  PLACE_MAX,
+  contractMessage,
+  describeUnavailable,
+  isFieldKey,
+  readAvailability,
+  readFailure,
+  readSaved,
+  requiredErrors,
+  saveOutcome,
+  type Availability,
+  type BusinessIdentityValues,
+  type FieldErrors,
+  type FieldKey,
+  type SavedIdentity,
+} from './business-identity';
 import { WizardShell } from './WizardShell';
+
+// Re-exported because the page imports it from here; the definition moved, the import site did not.
+export type { BusinessIdentityValues };
 
 /**
  * ONB-01 — business identity.
@@ -26,8 +46,13 @@ import { WizardShell } from './WizardShell';
  * rather than faked.
  *
  * Saving is this screen's job — WizardShell owns the chrome, the progress rail and the routing, and
- * only wants a boolean back. `onContinue` and `onSaveAndExit` are therefore the same function: both
- * persist the same identity, and where the owner goes afterwards is the shell's business.
+ * only wants a boolean back. `onContinue` and `onSaveAndExit` are therefore the same function
+ * (`submit`): both persist the same identity, and where the owner goes afterwards is the shell's
+ * business. The one exception is the Flow I redirect notice, which has to be read before the shell
+ * routes away from it — see `submit`.
+ *
+ * The branch-heavy pure parts — required fields, rejection copy, payload narrowing — live in
+ * ./business-identity so they can be unit tested; the unit suite has no DOM.
  */
 
 /**
@@ -40,13 +65,16 @@ import { WizardShell } from './WizardShell';
 const AVAILABILITY_DEBOUNCE_MS = 450;
 
 /**
- * Mirrors businessIdentityRequest so the inputs can cap length as they are typed. The contract is
- * authoritative and is what actually gates the save; these only stop an owner writing 900
- * characters and then being told to cut them.
+ * The cap is stated in the hint, not only in the counter beside the box.
+ *
+ * Field wires the hint to the control with aria-describedby, so it is read out with the field. The
+ * counter is aria-hidden (see below) and `maxLength` truncates silently, so without this a screen
+ * reader user is told neither that a limit exists nor that input has stopped being accepted
+ * (AC-037, AC-038).
  */
-const NAME_MAX = 160;
-const DESCRIPTION_MAX = 500; // ONB-01: 0-500 (AMENDMENT-009 narrowed the column to match).
-const PLACE_MAX = 100;
+const DESCRIPTION_HINT =
+  `Optional, up to ${DESCRIPTION_MAX} characters. ` +
+  'A line or two about what you do — the AI uses it as background.';
 
 /**
  * India-focused starting list.
@@ -107,20 +135,6 @@ const CATEGORY_OPTIONS: readonly SelectOption[] = CATEGORY_LABELS.map((label) =>
   label,
 }));
 
-const FIELD_KEYS = [
-  'name',
-  'category',
-  'description',
-  'city',
-  'state',
-  'slug',
-  'timezone',
-] as const;
-type FieldKey = (typeof FIELD_KEYS)[number];
-type FieldErrors = Partial<Record<FieldKey, string>>;
-
-export type BusinessIdentityValues = Record<FieldKey, string>;
-
 /**
  * Constants that live in @ai-review/core, passed in as props rather than imported.
  *
@@ -163,19 +177,6 @@ type SlugVerdict =
   | { kind: 'available' }
   | { kind: 'unavailable'; message: string; suggestions: readonly string[] };
 
-interface Availability {
-  slug: string;
-  available: boolean;
-  reason: string | null;
-  suggestions: readonly string[];
-}
-
-interface SavedIdentity {
-  slug: string;
-  /** Flow I: the address this one replaced, which keeps redirecting rather than breaking. */
-  previousSlug: string | null;
-}
-
 export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: BusinessStepProps) {
   const { slugMinLength, slugMaxLength, aliasRetentionDays } = rules;
 
@@ -189,6 +190,11 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedIdentity | null>(null);
+  /**
+   * True while a Flow I redirect notice is on screen unread. See `submit`: it is what stops
+   * WizardShell routing away from the only copy that tells an owner their old address still works.
+   */
+  const [noticePending, setNoticePending] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const slugStatusId = useId();
@@ -212,7 +218,10 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
     // Clears this field's error, so a correction is not made under a stale message.
     setFieldErrors(({ [field]: _cleared, ...rest }) => rest);
     setFormError(null);
+    // The panel described what was saved, which this edit no longer matches. Dropping the pending
+    // flag with it is what makes the next Continue save the edit instead of navigating away.
     setSaved(null);
+    setNoticePending(false);
   }, []);
 
   const applyAvailability = useCallback(
@@ -266,13 +275,23 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
     const query = (slugEdited ? values.slug : values.name).trim();
     const key = `${askedAbout}:${query}`;
 
+    /*
+     * Both guards forget what was answered before going idle. Without that, deleting back to an
+     * empty field (or below the minimum) and then retyping the same text hits `key ===
+     * answered.current` below and returns with the verdict still forced to `idle` — an address that
+     * shows as valid with no "Available" badge and no status line at all. Re-asking once after the
+     * debounce is far cheaper than a silently blank verdict, and the memo's actual job — not asking
+     * per keystroke — is untouched.
+     */
     if (query === '') {
+      answered.current = '';
       setVerdict({ kind: 'idle' });
       return;
     }
     // Normalization only ever removes characters, so a name shorter than the minimum cannot yield a
     // legal address yet. Asking would report "too short" at every keystroke of a short name.
     if (askedAbout === 'name' && query.length < slugMinLength) {
+      answered.current = '';
       setVerdict({ kind: 'idle' });
       return;
     }
@@ -320,15 +339,22 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
     setSlugEdited(true);
     setVerdict({ kind: 'available' });
     setFieldErrors(({ slug: _cleared, ...rest }) => rest);
+    // Same reason as in `update`: the address on screen is no longer the one that was saved.
+    setSaved(null);
+    setNoticePending(false);
   }
 
   /**
-   * Persists the identity. Returns true only when the tenant now holds what is on screen, which is
-   * exactly what WizardShell needs in order to decide whether to move on.
+   * Persists the identity, answering with what the tenant now holds — or null if it holds nothing
+   * new, in which case the reason is already on screen.
+   *
+   * The saved identity rather than a boolean, because the caller has to know whether this save
+   * replaced an address: that is the difference between moving on and stopping to say so.
    */
-  const save = useCallback(async (): Promise<boolean> => {
+  const persist = useCallback(async (): Promise<SavedIdentity | null> => {
     setFormError(null);
     setSaved(null);
+    setNoticePending(false);
 
     const description = values.description.trim();
     const body = {
@@ -366,7 +392,7 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      return false;
+      return null;
     }
     setFieldErrors({});
 
@@ -385,7 +411,7 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
 
         if (named.length === 0) {
           setFormError(failure.message);
-          return false;
+          return null;
         }
 
         setFieldErrors(Object.fromEntries(named.map((field) => [field, failure.message])));
@@ -395,7 +421,7 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
           setVerdict({ kind: 'unavailable', message: failure.message, suggestions: [] });
           answered.current = '';
         }
-        return false;
+        return null;
       }
 
       const identity = readSaved(payload, body.slug);
@@ -405,14 +431,48 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
       setSlugEdited(true);
       setVerdict({ kind: 'available' });
       setSaved(identity);
-      return true;
+      return identity;
     } catch {
       setFormError('Could not reach the server. Check your connection and try again.');
-      return false;
+      return null;
     } finally {
       setBusy(false);
     }
   }, [slugMaxLength, slugMinLength, values, verdict]);
+
+  /**
+   * What WizardShell calls for both Continue and Save & exit.
+   *
+   * Flow I's disclosure versus the shell's routing. The shell navigates on every truthy return —
+   * `handleContinue` pushes the next step, `handleSaveAndExit` pushes /app — which would unmount the
+   * `saved` panel in the same tick it appeared. That panel is the only place an owner is ever told
+   * that the address they just replaced keeps redirecting for `aliasRetentionDays` days, and Flow I
+   * says they should be told rather than discover it.
+   *
+   * So a save that replaced an address answers false: the identity IS persisted, the notice stays on
+   * screen, and Continue relabels to ask for an acknowledgement. The next press leaves without
+   * re-saving, and an edit in between clears the flag so that the edit is saved instead (`update`).
+   * Nothing is retried and nothing is lost either way.
+   */
+  const submit = useCallback(async (): Promise<boolean> => {
+    // The notice has been on screen since the last press, so it has had its chance to be read.
+    if (noticePending) return true;
+
+    const outcome = saveOutcome(await persist());
+    if (outcome === 'hold-for-notice') setNoticePending(true);
+    return outcome === 'leave';
+  }, [noticePending, persist]);
+
+  /*
+   * The Continue button is at the foot of a long form and the panel is at its head, so on a phone
+   * the notice can be held for a disclosure the owner never sees scrolled off the top. Assistive
+   * technology gets it from the panel's role="status"; this is the same courtesy for everyone else.
+   * Default (instant) scrolling, so there is no animation to opt out of.
+   */
+  const noticeRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (noticePending) noticeRef.current?.scrollIntoView({ block: 'center' });
+  }, [noticePending]);
 
   const descriptionLeft = DESCRIPTION_MAX - values.description.length;
 
@@ -421,10 +481,13 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
       stepId="business"
       heading="Tell us about your business"
       description="This is what customers see when they land on your review page."
-      onContinue={save}
+      onContinue={submit}
       // The same function: both persist this identity, and only the destination differs — which is
       // the shell's decision, not this screen's.
-      onSaveAndExit={save}
+      onSaveAndExit={submit}
+      // Says what the press does while the redirect notice is waiting to be read: this one leaves,
+      // it does not save again.
+      continueLabel={noticePending ? 'Got it, continue' : undefined}
       busy={busy}
     >
       <div className="flex flex-col gap-5">
@@ -432,6 +495,7 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
 
         {saved && (
           <div
+            ref={noticeRef}
             role="status"
             className="rounded-card border border-success bg-success-soft px-4 py-3 text-sm text-success"
           >
@@ -449,10 +513,13 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
             {saved.previousSlug !== null && (
               // Flow I: the address this replaced keeps working, and an owner should be told so
               // rather than discovering it — anything already printed still leads here.
-              <p className="mt-1 break-all">
-                {publicUrlPrefix}
-                {saved.previousSlug} will redirect here for the next {aliasRetentionDays} days.
-              </p>
+              <>
+                <p className="mt-1 break-all">
+                  {publicUrlPrefix}
+                  {saved.previousSlug} will redirect here for the next {aliasRetentionDays} days.
+                </p>
+                <p className="mt-1">Your details are saved — continue when you have read this.</p>
+              </>
             )}
           </div>
         )}
@@ -495,11 +562,7 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
           )}
         </Field>
 
-        <Field
-          label="Short description"
-          error={fieldErrors.description}
-          hint="Optional. A line or two about what you do — the AI uses it as background."
-        >
+        <Field label="Short description" error={fieldErrors.description} hint={DESCRIPTION_HINT}>
           {(control) => (
             <>
               <Textarea
@@ -667,137 +730,4 @@ function SlugVerdictLine({ verdict }: { verdict: SlugVerdict }) {
 
 function describedBy(existing: string | undefined, statusId: string): string {
   return [existing, statusId].filter((value): value is string => value !== undefined).join(' ');
-}
-
-function isFieldKey(value: string): value is FieldKey {
-  return (FIELD_KEYS as readonly string[]).includes(value);
-}
-
-/**
- * ONB-01 marks name, category, city, state and the address required.
- *
- * businessIdentityRequest does not enforce all of that — city and state are `z.string().max(100)`
- * with no minimum — so PATCH would accept an empty city, loadOnboardingProgress would then report
- * this step unfinished, and the owner would be sent back here with nothing visibly wrong. Enforced
- * here, and raised as a contract gap rather than left to this screen forever.
- */
-function requiredErrors(body: {
-  name: string;
-  category: string;
-  city: string;
-  state: string;
-  slug: string;
-}): FieldErrors {
-  const errors: FieldErrors = {};
-  if (body.name === '') errors.name = 'Enter your business name.';
-  if (body.category === '') errors.category = 'Choose the category that fits best.';
-  if (body.city === '') errors.city = 'Enter the city you operate in.';
-  if (body.state === '') errors.state = 'Enter your state.';
-  if (body.slug === '') errors.slug = 'Choose an address for your page.';
-  return errors;
-}
-
-function contractMessage(field: FieldKey, slugMin: number, slugMax: number): string {
-  switch (field) {
-    case 'name':
-      return `Use between 2 and ${NAME_MAX} characters.`;
-    case 'category':
-      return 'That category is too long. Please pick one from the list.';
-    case 'description':
-      return `Keep the description to ${DESCRIPTION_MAX} characters or fewer.`;
-    case 'city':
-    case 'state':
-      return `Use ${PLACE_MAX} characters or fewer.`;
-    case 'slug':
-      return `Use between ${slugMin} and ${slugMax} characters.`;
-    case 'timezone':
-      // Never entered on this screen; it is carried through from the tenant.
-      return 'We could not save your timezone setting. Please contact support.';
-  }
-}
-
-/**
- * Copy for the rejection codes /business/slug-available returns.
- *
- * That endpoint answers with codes and no prose, so the wording lives here. Kept in step with the
- * messages PATCH /api/v1/business returns for the same codes, so an owner is never told two
- * different things about one rule.
- */
-function describeUnavailable(reason: string | null, slugMin: number, slugMax: number): string {
-  switch (reason) {
-    case 'TAKEN':
-      return 'That address is already taken. Please choose another.';
-    case 'TOO_SHORT':
-      return `Use at least ${slugMin} characters.`;
-    case 'TOO_LONG':
-      return `Use at most ${slugMax} characters.`;
-    case 'RESERVED':
-      return 'That address is reserved. Please choose another.';
-    case 'NUMERIC_ONLY':
-      return 'Include at least one letter.';
-    case 'INVALID_CHARACTERS':
-      return 'Use only lowercase letters, numbers and hyphens.';
-    case 'CONSECUTIVE_HYPHENS':
-      return 'Avoid two hyphens in a row.';
-    case 'LEADING_OR_TRAILING_HYPHEN':
-      return 'Do not start or end with a hyphen.';
-    default:
-      return 'That address cannot be used. Please choose another.';
-  }
-}
-
-function readAvailability(payload: unknown): Availability | null {
-  if (typeof payload !== 'object' || payload === null) return null;
-  const record = payload as Record<string, unknown>;
-  if (typeof record.slug !== 'string' || typeof record.available !== 'boolean') return null;
-
-  return {
-    slug: record.slug,
-    available: record.available,
-    reason: typeof record.reason === 'string' ? record.reason : null,
-    suggestions: Array.isArray(record.suggestions)
-      ? record.suggestions.filter((value): value is string => typeof value === 'string')
-      : [],
-  };
-}
-
-function readSaved(payload: unknown, fallbackSlug: string): SavedIdentity {
-  if (typeof payload !== 'object' || payload === null) {
-    return { slug: fallbackSlug, previousSlug: null };
-  }
-  const record = payload as Record<string, unknown>;
-
-  return {
-    slug: typeof record.slug === 'string' ? record.slug : fallbackSlug,
-    previousSlug: typeof record.previous_slug === 'string' ? record.previous_slug : null,
-  };
-}
-
-/**
- * The error envelope from 23_API_Error_Codes.md.
- *
- * components/auth/use-form-submit.ts unpacks the same shape, but that hook only issues POSTs and
- * this screen saves with PATCH. The SubmitFailure type is imported rather than redeclared so the
- * two cannot drift apart in shape; generalising the hook to take a method would remove the
- * duplication outright, but that module is not this one's to change.
- */
-function readFailure(payload: unknown): SubmitFailure {
-  const fallback: SubmitFailure = {
-    code: 'INTERNAL_ERROR',
-    message: 'Something went wrong. Please try again.',
-    fields: [],
-  };
-
-  if (typeof payload !== 'object' || payload === null || !('error' in payload)) return fallback;
-
-  const error = (payload as { error: Record<string, unknown> }).error;
-  const details = error.details as { fields?: unknown } | undefined;
-
-  return {
-    code: typeof error.code === 'string' ? error.code : fallback.code,
-    message: typeof error.message === 'string' ? error.message : fallback.message,
-    fields: Array.isArray(details?.fields)
-      ? details.fields.filter((value): value is string => typeof value === 'string')
-      : [],
-  };
 }

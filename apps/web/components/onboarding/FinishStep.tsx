@@ -15,9 +15,22 @@ import {
   TOUCH_TARGET,
   cx,
 } from '@ai-review/ui';
-import { useFormSubmit, type SubmitState } from '@/components/auth/use-form-submit';
+import { useFormSubmit } from '@/components/auth/use-form-submit';
 import { WizardShell } from './WizardShell';
-import { stepById, type OnboardingStepId } from './steps';
+import { stepById, type BusinessLifecycle } from './steps';
+import {
+  describeBlocker,
+  previewDraft,
+  readPublication,
+  readRefusal,
+  showsOnlyDefaultSections,
+  type PreviewSection,
+  type Publication,
+  type Refusal,
+} from './finish-preview';
+
+// Re-exported so callers can keep taking the props type from the component that owns the props.
+export type { PreviewSection };
 
 /**
  * ONB-05 — publish, and the first QR (Flow A steps 8-12).
@@ -35,14 +48,6 @@ import { stepById, type OnboardingStepId } from './steps';
  * Context terms are described as hints, because that is all they are (D-025, AC-010).
  */
 
-export interface PreviewSection {
-  /** business_links.id, or a synthetic id for the default section publish will create. */
-  id: string;
-  label: string;
-  /** The Review Us button, which is the public page primary action wherever it sits (D-015). */
-  isPrimary: boolean;
-}
-
 export interface FinishQrCode {
   /** qr_codes.id — what GET /qr/{id}/download takes. */
   id: string;
@@ -53,6 +58,15 @@ export interface FinishQrCode {
 
 export interface FinishStepProps {
   published: boolean;
+  /**
+   * The tenant's lifecycle state, carried separately from `published`.
+   *
+   * SUSPENDED and CLOSED tenants HAVE published, but the publish endpoint refuses them outright
+   * (BUSINESS_NOT_ACTIVE). Treating them as merely "published" would offer a Publish button that
+   * cannot succeed; treating them as unpublished would describe a live-then-suspended page as
+   * never launched. Both are wrong, so the state is explicit.
+   */
+  lifecycle: BusinessLifecycle;
   businessName: string;
   description: string | null;
   hasLogo: boolean;
@@ -72,19 +86,6 @@ const PREVIEW_ENDPOINT = '/api/v1/ai/test-preview';
 /** How many context terms are shown before the rest are summarised. */
 const TERMS_SHOWN = 6;
 
-/**
- * Every requirement the publish endpoint can name, and the step that satisfies it.
- *
- * One table serves both paths — the list derived server-side on render, and the `details.missing`
- * of a 409 — so the two cannot label the same key differently. Paths come from `steps.ts` rather
- * than as strings, because that file is the contract for where a step lives.
- */
-const REQUIREMENTS: Record<string, { label: string; step: OnboardingStepId }> = {
-  business_details: { label: 'Your business name, category and city', step: 'business' },
-  web_address: { label: 'Your web address', step: 'business' },
-  google_review_link: { label: 'Your Google review link', step: 'review-link' },
-};
-
 /** Anchors styled as buttons: see the download links for why these are not `Button`s. */
 const ACTION_BASE =
   'inline-flex items-center justify-center gap-2 rounded-control border px-4 ' +
@@ -94,28 +95,11 @@ const ACTION_SECONDARY = 'bg-bg text-ink border-line-strong hover:bg-surface';
 
 const TEXT_LINK = 'rounded font-semibold text-accent';
 
-interface Blocker {
-  key: string;
-  label: string;
-  /** null when the endpoint named a requirement this screen has not been taught. */
-  step: OnboardingStepId | null;
-}
-
-interface Refusal {
-  message: string;
-  /** Keys from `details.missing`, when the failure carried them. */
-  missing: readonly string[] | null;
-}
-
-interface Publication {
-  publicUrl: string | null;
-  qrCode: string | null;
-}
-
 type Phase = 'draft' | 'publishing' | 'live';
 
 export function FinishStep({
   published,
+  lifecycle,
   businessName,
   description,
   hasLogo,
@@ -128,6 +112,9 @@ export function FinishStep({
 }: FinishStepProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>(published ? 'live' : 'draft');
+  // Nothing on this screen can move a suspended or closed tenant forward — publish refuses it,
+  // and the resolution is commercial or support, not a button here.
+  const halted = lifecycle === 'SUSPENDED' || lifecycle === 'CLOSED';
   const [publication, setPublication] = useState<Publication | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'blocked'>('idle');
@@ -232,21 +219,48 @@ export function FinishStep({
 
   const previewText = previewDraft(preview.state);
   const previewFailure = preview.state.status === 'error' ? preview.state.failure.message : null;
-  const extraSections = sections.filter((section) => !section.isPrimary);
+  // True only when the Review Us row is actually in the preview and nothing else is. With no
+  // sections at all the blocker card above is already saying what is missing, so this stays
+  // silent rather than promising a button the preview box does not show.
+  const offerMoreLinks = showsOnlyDefaultSections(sections);
+
+  // A suspended or closed tenant has already published, so neither the draft nor the live copy
+  // fits: publish would be refused, and "your page is live" is not true either. Say what the
+  // state actually is and point at the only route out of it, which is not a button on this screen.
+  const haltedHeading = !halted
+    ? null
+    : lifecycle === 'SUSPENDED'
+      ? 'Your page is paused'
+      : 'This account is closed';
+  const haltedDescription =
+    lifecycle === 'SUSPENDED'
+      ? 'Your public page and QR codes are not serving customers at the moment. Contact support and we will go through it with you.'
+      : 'This business account has been closed, so its page and QR codes are switched off.';
 
   return (
     <WizardShell
       stepId="finish"
-      heading={live ? 'Your page is live' : 'Publish your page'}
+      heading={haltedHeading ?? (live ? 'Your page is live' : 'Publish your page')}
       description={
-        live
-          ? 'Print the QR code, put it where your customers are, and you are ready.'
-          : 'Publishing puts your page at your own address and creates your first QR code.'
+        halted
+          ? haltedDescription
+          : live
+            ? 'Print the QR code, put it where your customers are, and you are ready.'
+            : 'Publishing puts your page at your own address and creates your first QR code.'
       }
       onContinue={handleContinue}
       busy={phase === 'publishing'}
-      continueLabel={live ? 'Go to dashboard' : 'Publish my page'}
+      continueLabel={halted || live ? 'Go to dashboard' : 'Publish my page'}
     >
+      {halted && (
+        <div
+          role="status"
+          className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-ink"
+        >
+          <p className="font-semibold">{haltedHeading}</p>
+          <p className="mt-1 text-ink-muted">{haltedDescription}</p>
+        </div>
+      )}
       {/*
         A live region that exists before it has anything to say, so the phase change is announced
         rather than only shown by the heading swapping over (AC-037).
@@ -366,7 +380,7 @@ export function FinishStep({
           <p className="m-0 text-center text-sm text-accent">Send private feedback</p>
         </div>
 
-        {extraSections.length === 0 && (
+        {offerMoreLinks && (
           <p className="mt-3 mb-0 text-sm text-ink-muted">
             Only Review Us and private feedback will show.{' '}
             <Link href={stepById('links').path} className={cx(TEXT_LINK, FOCUS_RING)}>
@@ -585,54 +599,6 @@ function QrPanel({
       </p>
     </div>
   );
-}
-
-function describeBlocker(key: string): Blocker {
-  const known = REQUIREMENTS[key];
-  if (known) return { key, label: known.label, step: known.step };
-
-  // Forward compatibility: publish may grow a requirement this screen predates. Showing a raw key
-  // with no way forward is a dead end, so it goes to the resume router, which derives the right
-  // step from the tenant itself.
-  return { key, label: humanizeKey(key), step: null };
-}
-
-function humanizeKey(key: string): string {
-  const words = key.replaceAll('_', ' ').trim();
-  return words.length > 0 ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : 'One more detail';
-}
-
-function previewDraft(state: SubmitState): string | null {
-  if (state.status !== 'success') return null;
-  const text = state.payload.review_text;
-  return typeof text === 'string' && text.trim().length > 0 ? text.trim() : null;
-}
-
-function readRefusal(payload: unknown): Refusal {
-  const fallback: Refusal = { message: 'Something went wrong. Please try again.', missing: null };
-  if (typeof payload !== 'object' || payload === null || !('error' in payload)) return fallback;
-
-  const error = (payload as { error: Record<string, unknown> }).error;
-  const details = error.details as { missing?: unknown } | undefined;
-
-  return {
-    // 23_API_Error_Codes.md guarantees a safe, user-facing message on every failure, so it is
-    // shown as sent rather than remapped from the code here.
-    message: typeof error.message === 'string' ? error.message : fallback.message,
-    missing: Array.isArray(details?.missing)
-      ? details.missing.filter((key): key is string => typeof key === 'string')
-      : null,
-  };
-}
-
-function readPublication(payload: unknown): Publication {
-  const record =
-    typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
-
-  return {
-    publicUrl: typeof record.public_url === 'string' ? record.public_url : null,
-    qrCode: typeof record.qr_code === 'string' ? record.qr_code : null,
-  };
 }
 
 function clearTimer(ref: { current: ReturnType<typeof setTimeout> | null }): void {

@@ -35,3 +35,6 @@ Thumbs.db
 # Local scratch
 .cache/
 tmp/
+
+# Local development database cluster
+.pgdata/

@@ -16,7 +16,8 @@ import { DASHBOARD_NAV, isCurrentNavItem } from './nav-items';
  * Screens that do not exist yet render as plain text with a "Soon" badge, not as links. A nav item
  * that 404s is indistinguishable from a broken product, and the honest version costs nothing. The
  * unbuilt items are also not focusable, so a keyboard user tabs through what they can actually
- * reach instead of eleven dead stops (AC-037).
+ * reach rather than stopping on every item that goes nowhere (AC-037). Stated without a count on
+ * purpose: the number of unbuilt screens changes with every screen that ships.
  *
  * The current item is marked three ways — `aria-current="page"`, a heavier weight, and a filled
  * background — so it survives a screen reader, a monochrome display and the design brief's rule

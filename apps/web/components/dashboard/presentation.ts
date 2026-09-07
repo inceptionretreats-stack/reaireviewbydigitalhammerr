@@ -1,5 +1,6 @@
 import type { LifecycleStatus, PlanStatus } from '@ai-review/ui';
-import type { Business, Subscription } from '@ai-review/db';
+import type { Business, QrCode, Subscription } from '@ai-review/db';
+import type { DashboardQrSources } from './summary';
 
 /**
  * Maps the database's enums onto the words and badge families the dashboard shows.
@@ -11,10 +12,15 @@ import type { Business, Subscription } from '@ai-review/db';
  *
  * Types are derived from the schema's row types rather than restated, so adding a state to either
  * enum is a compile error here instead of a silently unlabelled badge.
+ *
+ * Every export is a pure function over erasable types, so all of it is testable without a database
+ * or a React renderer — which is the reason the QR-source fold and its sentence live here too
+ * rather than inside the query and the component that use them.
  */
 
 type BusinessStatus = Business['status'];
 type SubscriptionStatus = Subscription['status'];
+type QrStatus = QrCode['status'];
 
 export interface BusinessStatusPresentation {
   /** Badge family from the design brief: Active / Pending / Disabled. */
@@ -119,6 +125,69 @@ const PLAN: Record<SubscriptionStatus, PlanPresentation> = {
 
 export function describePlan(status: SubscriptionStatus): PlanPresentation {
   return PLAN[status];
+}
+
+/**
+ * Folds the grouped `qr_status` rows the dashboard query returns into the three numbers it shows.
+ *
+ * Drizzle returns one row per status *that exists*, so a tenant with nothing disabled has no
+ * DISABLED row at all and a tenant with no sources returns no rows — which is why the counters
+ * start at zero rather than being read out of the array.
+ */
+export function foldQrSources(
+  rows: readonly { status: QrStatus; rows: number }[],
+): DashboardQrSources {
+  const counts: DashboardQrSources = { active: 0, disabled: 0, total: 0 };
+  for (const row of rows) {
+    if (row.status === 'ACTIVE') counts.active += row.rows;
+    else counts.disabled += row.rows;
+    counts.total += row.rows;
+  }
+  return counts;
+}
+
+/**
+ * What the enabled-source count means right now — which depends on the tenant as much as on the
+ * sources.
+ *
+ * "Enabled" is a property of the row; "working" is a property of the tenant.
+ * `lib/public-business.ts` resolves a QR only for an ACTIVE business, so on a DRAFT, SUSPENDED or
+ * CLOSED tenant nothing scans whatever these counts say, and a card that claimed otherwise would
+ * keep a standee on a counter that answers "unavailable" (Flow J).
+ */
+export function describeQrSources(
+  qrSources: DashboardQrSources,
+  businessStatus: BusinessStatus,
+): string {
+  if (businessStatus === 'DRAFT') {
+    // D-026: every QR is dynamic and publishing creates the first one (ONB-05-01). Saying so turns
+    // a zero from something that looks broken into the next thing to do.
+    return qrSources.total === 0
+      ? 'Your first QR code is created when you publish.'
+      : 'Your sources start scanning once you publish.';
+  }
+
+  // SUSPENDED and CLOSED both resolve as unavailable. The number stays visible because it is the
+  // configuration the owner will come back to; the status badge and PublicPageCard carry what to do
+  // about it, so this sentence only has to stop being false.
+  if (businessStatus !== 'ACTIVE') {
+    return 'No source is scanning while your public page is unavailable.';
+  }
+
+  // Reachable only after publish if every source was later removed; publish itself creates one.
+  if (qrSources.total === 0) return 'You have no QR sources.';
+
+  // "more" presumes some are active, so it cannot be used when none is — "2 more are disabled."
+  // above a value of 0 tells an owner that two of some larger number are off.
+  if (qrSources.active === 0) {
+    return qrSources.disabled === 1
+      ? 'Your only source is disabled, so nothing scans.'
+      : `All ${qrSources.disabled} of your sources are disabled, so nothing scans.`;
+  }
+
+  if (qrSources.disabled === 1) return '1 more is disabled.';
+  if (qrSources.disabled > 1) return `${qrSources.disabled} more are disabled.`;
+  return 'Every source you have created is working.';
 }
 
 /**

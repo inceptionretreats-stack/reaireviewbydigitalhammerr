@@ -14,11 +14,11 @@ import { ReviewLinkStep, type ReviewLinkCheck } from '@/components/onboarding/Re
  * their link (AC-017) sees the current value immediately rather than an empty box that fills in
  * after a client fetch — on this field, a momentarily blank box reads as "my link is gone".
  *
- * No step-order guard here on purpose. `reachableSteps` exists for that, but this screen needs
- * nothing from ONB-01 beyond a tenant, and bouncing someone back would depend on how a different
- * screen decides its own step is complete. The cost of being wrong is asymmetric: an over-eager
- * redirect makes this step unreachable, while arriving early is harmless. `/onboarding` already
- * resumes at the earliest incomplete step, and the shell's Back link points at ONB-01.
+ * No step-order guard here on purpose. This screen needs nothing from ONB-01 beyond a tenant, and
+ * bouncing someone back would depend on how a different screen decides its own step is complete.
+ * The cost of being wrong is asymmetric: an over-eager redirect makes this step unreachable, while
+ * arriving early is harmless. `/onboarding` already resumes at the first step that actually blocks
+ * publishing (`resumeStep`), and the shell's Back link points at ONB-01.
  */
 
 export const metadata: Metadata = {
@@ -35,13 +35,27 @@ export const metadata: Metadata = {
  * invalidate cached public configuration (AC-017) — validation must not churn that cache, and the
  * spec separates `valid` from `saved` for the same reason.
  *
- * It resolves no tenant and touches no database, which is what makes it safe to expose without one:
- * it is a pure function of the string the caller already has, returns nothing the caller did not
- * supply, and has no side effect to abuse. Keep it that way — the moment it reads tenant data it
- * needs `requireTenant`.
+ * It resolves no tenant and touches no database — it is a pure function of the string the caller
+ * already has, and returns nothing the caller did not supply — but it still resolves a session
+ * first. A Server Action is a publicly invocable POST keyed by its action id, so it inherits none
+ * of this screen's guards: not the layout's `getSession`, not the page's `TenantGuard`, not the
+ * rate limiter the route handlers sit behind. The check keeps unauthenticated server compute off
+ * the endpoint and, more usefully, keeps a future edit that reads tenant data from doing so behind
+ * an unguarded entry point. The moment it reads tenant data it needs `requireTenant` as well.
  */
 async function checkReviewUrl(url: string): Promise<ReviewLinkCheck> {
   'use server';
+
+  const session = await getSession();
+  if (!session) {
+    // Thrown rather than returned as a rejection. Every `ReviewLinkCheck` rejection has to name one
+    // of the four validator reasons, so returning one would tell a merchant whose session expired
+    // mid-form that a perfectly good link "does not look like a web address". A thrown check is
+    // already handled as advisory by the step ("we could not check your link just now — you can
+    // still press Continue"), which keeps their pasted link on screen, and it tells an anonymous
+    // caller nothing that a dropped connection would not. The message names no detail (AC-030).
+    throw new Error('A session is required to check a review link');
+  }
 
   const result = validateGoogleReviewUrl(url);
 

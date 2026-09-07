@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { businesses, subscriptions, users } from '@ai-review/db';
-import { normalizePhone, validatePasswordStrength } from '@ai-review/core';
+import { normalizePhone, privacyHash, validatePasswordStrength } from '@ai-review/core';
 import { signupRequest } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
@@ -115,10 +115,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return apiError('INTERNAL_ERROR', 'We could not create your account. Please try again.');
   }
 
+  // Hashed, not raw. 13_Security_Privacy_Compliance.md forbids retaining a raw IP, the column
+  // is a char(64) digest, and the login and password-change routes both hash it — signup writing
+  // the plain address left the same column holding two different kinds of value.
+  const signupIp = clientIp(request);
   const session = await sessionService().create({
     userId,
     userAgent: request.headers.get('user-agent'),
-    ipHash: clientIp(request) || null,
+    ipHash: signupIp ? privacyHash(signupIp, env().HASH_PEPPER) : null,
   });
   await setSessionCookie(session.token, session.expiresAt);
 

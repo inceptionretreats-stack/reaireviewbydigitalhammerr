@@ -3,6 +3,17 @@
 import { useCallback, useState } from 'react';
 import { Button, Card, Field, InlineError, TagInput, Textarea } from '@ai-review/ui';
 import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import {
+  SUMMARY_MAX,
+  contextSignature,
+  defaultModeCopy,
+  previewFromPayload,
+  previewIsStale,
+  sendJson,
+  summaryAnnouncement,
+  summaryCounterText,
+  type PreviewState,
+} from './ai-context';
 import { WizardShell } from './WizardShell';
 
 /**
@@ -12,8 +23,11 @@ import { WizardShell } from './WizardShell';
  * mode name), two actions (Generate preview, Continue) and four states (default, preview loading,
  * preview ready, AI error). Fields are rendered in the spec's order.
  *
- * Three product decisions shape the copy at least as much as the controls, which is why this file
- * carries more prose than markup.
+ * Everything this screen *decides* lives in ./ai-context — envelope parsing, the preview state
+ * machine, the stale-preview signature, the counter's announcement thresholds and what the mode
+ * card may truthfully claim — so it is unit-tested rather than only eyeballed. What is left here is
+ * markup and copy, and the copy is shaped by three product decisions at least as much as the
+ * controls are.
  *
  * D-025 / AC-010 / ONB-04-01 — merchant terms are context, never mandatory output. The field is
  * labelled "Business context" and carries the helper text from 09_AI_Prompt_and_Generation_Spec.md
@@ -33,14 +47,9 @@ import { WizardShell } from './WizardShell';
  * so, so the result is framed as a starting point and never as the review that will be posted.
  *
  * Reliability: an AI failure never blocks Continue. The preview is a convenience, and blocking
- * onboarding on a provider outage is the failure mode AC-036 exists to prevent.
+ * onboarding on a provider outage is the failure mode AC-036 exists to prevent — including when
+ * the failure is the preview's own rate limit (see the endpoint's ./preview-limit).
  */
-
-/** `aiContextRequest` caps the summary at 2000; mirrored so a long summary cannot 422 on save. */
-const SUMMARY_MAX = 2000;
-
-/** Show the remaining count only near the limit — a counter that ticks from 2000 is noise. */
-const SUMMARY_COUNTER_FROM = 200;
 
 /**
  * Verbatim from 09_AI_Prompt_and_Generation_Spec.md, "Merchant keywords implementation". The
@@ -52,22 +61,18 @@ const CONTEXT_HELPER =
   'Add services or topics that help AI understand your business. These are context hints and may ' +
   'not appear in every review.';
 
-/** The name PUT /ai/context gives the mode it creates on first save. Kept in step by copy only. */
-const DEFAULT_MODE_NAME = 'Balanced';
-
-/** The four states ONB-04 requires: default (`idle`), preview loading, preview ready, AI error. */
-type PreviewState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'ready'; draft: string; compliancePassed: boolean; signature: string }
-  | { status: 'error'; message: string };
-
 export interface AiContextStepProps {
   initialSummary: string;
   initialServices: readonly string[];
   initialContextTerms: readonly string[];
-  /** Active review mode name, or null before the first save creates one. */
+  /** Active review mode name, or null when no unarchived mode is switched on. */
   activeModeName: string | null;
+  /**
+   * Whether the tenant has any review_modes row at all. PUT /ai/context creates Balanced only when
+   * there are none, so this is what decides whether the card may promise that (see
+   * `defaultModeCopy`).
+   */
+  hasAnyMode: boolean;
 }
 
 export function AiContextStep({
@@ -75,6 +80,7 @@ export function AiContextStep({
   initialServices,
   initialContextTerms,
   activeModeName,
+  hasAnyMode,
 }: AiContextStepProps) {
   const [summary, setSummary] = useState(initialSummary);
   const [services, setServices] = useState<readonly string[]>(initialServices);
@@ -120,32 +126,14 @@ export function AiContextStep({
 
     if (!result.ok) {
       // The API supplies a safe, user-facing message for every failure (23_API_Error_Codes.md),
-      // so it is shown verbatim rather than remapped — including on the 429 the preview's rate
-      // limit produces, where a generic "try again" would hide that waiting is the fix.
+      // so it is shown verbatim rather than remapped — including on the 429 the preview's own
+      // rate limit produces, where a generic "try again" would hide that waiting is the fix.
       setPreview({ status: 'error', message: result.failure.message });
       return;
     }
 
-    const draft = typeof result.payload.review_text === 'string' ? result.payload.review_text : '';
-
-    if (draft.trim() === '') {
-      setPreview({
-        status: 'error',
-        message: 'The preview came back empty. Please try generating it again.',
-      });
-      return;
-    }
-
-    setPreview({
-      status: 'ready',
-      draft,
-      // The endpoint reports whether the draft cleared the AC-011/AC-012 output gates. Treated as
-      // passed when the field is absent, so an unexpected payload shape cannot raise a false
-      // alarm; when it is explicitly false the owner is told, because a draft a customer would
-      // never be shown is not a fair sample of the product.
-      compliancePassed: result.payload.compliance_passed !== false,
-      signature: contextSignature(summary, services, contextTerms),
-    });
+    const signature = contextSignature(summary, services, contextTerms);
+    setPreview(previewFromPayload(result.payload, signature));
   }, [save, summary, services, contextTerms]);
 
   const fieldFailure = (name: string): string | null =>
@@ -153,9 +141,8 @@ export function AiContextStep({
 
   const summaryRemaining = SUMMARY_MAX - summary.length;
   const previewLoading = preview.status === 'loading';
-  const previewStale =
-    preview.status === 'ready' &&
-    preview.signature !== contextSignature(summary, services, contextTerms);
+  const previewStale = previewIsStale(preview, contextSignature(summary, services, contextTerms));
+  const modeCopy = defaultModeCopy({ activeModeName, hasAnyMode });
 
   return (
     <WizardShell
@@ -191,14 +178,25 @@ export function AiContextStep({
                 onChange={(event) => setSummary(event.target.value)}
               />
               {/*
-                The region is always rendered and only its text changes: a live region created at
-                the moment its content first appears is frequently not announced at all. An empty
-                <p> generates no line box, so it costs no layout.
+                The exact count, updated on every keystroke, for anyone who can see it. It is not
+                itself a live region: a polite region queues one utterance per character, so
+                announcing this text would bury an owner's typing echo under two hundred of them.
+                `aria-hidden` so the milestone region below is the single announced source rather
+                than a second, contradictory reading of the same number.
               */}
-              <p aria-live="polite" className="text-sm text-ink-muted">
-                {summaryRemaining <= SUMMARY_COUNTER_FROM
-                  ? `${summaryRemaining} characters left of ${SUMMARY_MAX}.`
-                  : ''}
+              <p aria-hidden="true" className="text-sm text-ink-muted">
+                {summaryCounterText(summaryRemaining)}
+              </p>
+              {/*
+                The announced version, bucketed by `summaryAnnouncement` into three thresholds and
+                a "full" message, so a screen reader hears four utterances across the last 200
+                characters rather than two hundred. Always
+                rendered and only its text changes: a live region created at the moment its content
+                first appears is frequently not announced at all. An empty <p> generates no line
+                box, so it costs no layout.
+              */}
+              <p aria-live="polite" className="sr-only">
+                {summaryAnnouncement(summaryRemaining)}
               </p>
             </>
           )}
@@ -244,14 +242,19 @@ export function AiContextStep({
           worse than no input, so the mode is reported rather than edited, and the owner is told
           where renaming lives. AI-02 owns renaming; see the concern raised with this module.
 
+          What it reports comes from `defaultModeCopy`, which distinguishes "no modes at all" —
+          the only case where saving creates Balanced — from "modes exist, none switched on". The
+          card used to promise the former in both cases, which was a promise the endpoint does not
+          keep.
+
           The second paragraph is AI-02's rule that a mode shifts emphasis and never sentiment,
           said in the owner's language. It is also the answer to "can I make this more positive?",
           which is the question a mode name invites.
         */}
         <Card title="Default review mode" titleAs="h2">
           <p className="text-sm text-ink">
-            <span className="font-semibold">{activeModeName ?? DEFAULT_MODE_NAME}</span>
-            {activeModeName === null && ' — set up for you when you save this step.'}
+            <span className="font-semibold">{modeCopy.title}</span>
+            {modeCopy.note !== null && ` — ${modeCopy.note}`}
           </p>
           <p className="mt-2 text-sm text-ink-muted">
             A mode changes which topics a draft leans on. It never changes how positive a draft is,
@@ -338,91 +341,4 @@ export function AiContextStep({
       </div>
     </WizardShell>
   );
-}
-
-/**
- * Identifies the context a draft was generated from, so a preview can admit it predates the
- * owner's latest edits rather than appearing to reflect them.
- */
-function contextSignature(
-  summary: string,
-  services: readonly string[],
-  contextTerms: readonly string[],
-): string {
-  return JSON.stringify([summary.trim(), services, contextTerms]);
-}
-
-type JsonResult =
-  { ok: true; payload: Record<string, unknown> } | { ok: false; failure: SubmitFailure };
-
-/**
- * One JSON call with the error envelope from 23_API_Error_Codes.md unpacked.
- *
- * `useFormSubmit` is not reused: it is POST-only and binds one endpoint per instance, and this
- * screen needs a PUT to /ai/context and a POST to /ai/test-preview. Its `SubmitFailure` type is
- * imported so the two cannot drift in what they surface to a person. The parsing below wants a
- * shared home in `lib/` the moment a second screen needs a non-POST call.
- *
- * No CSRF token is threaded through: `verifyCsrf` checks the Origin header, which the browser
- * sets on a same-origin mutation by itself.
- */
-async function sendJson(
-  endpoint: string,
-  method: 'POST' | 'PUT',
-  body: Record<string, unknown>,
-): Promise<JsonResult> {
-  let response: Response;
-
-  try {
-    response = await fetch(endpoint, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    // A network failure, not a rejected request: says so rather than implying an entry is wrong.
-    return {
-      ok: false,
-      failure: {
-        code: 'NETWORK',
-        message: 'Could not reach the server. Check your connection and try again.',
-        fields: [],
-      },
-    };
-  }
-
-  const payload = await readJsonBody(response);
-  return response.ok ? { ok: true, payload } : { ok: false, failure: readFailure(payload) };
-}
-
-/** A body that is missing or not JSON (a proxy's 502 page) is treated as an empty one. */
-async function readJsonBody(response: Response): Promise<Record<string, unknown>> {
-  if (response.status === 204) return {};
-
-  try {
-    const parsed: unknown = await response.json();
-    return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function readFailure(payload: Record<string, unknown>): SubmitFailure {
-  const fallback: SubmitFailure = {
-    code: 'INTERNAL_ERROR',
-    message: 'Something went wrong. Please try again.',
-    fields: [],
-  };
-
-  const error = payload.error;
-  if (typeof error !== 'object' || error === null) return fallback;
-
-  const { code, message, details } = error as Record<string, unknown>;
-  const fields = (details as { fields?: unknown } | null | undefined)?.fields;
-
-  return {
-    code: typeof code === 'string' ? code : fallback.code,
-    message: typeof message === 'string' ? message : fallback.message,
-    fields: Array.isArray(fields) ? fields.filter((f): f is string => typeof f === 'string') : [],
-  };
 }

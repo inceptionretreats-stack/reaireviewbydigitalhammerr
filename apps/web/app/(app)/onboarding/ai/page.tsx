@@ -6,6 +6,7 @@ import { aiBusinessContexts, reviewModes } from '@ai-review/db';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 import { AiContextStep } from '@/components/onboarding/AiContextStep';
+import { toStringArray } from '@/components/onboarding/ai-context';
 
 /**
  * ONB-04 — `/onboarding/ai`.
@@ -35,10 +36,15 @@ export default async function Page() {
   const tenant = await new TenantGuard(database).resolveActive(await getSession());
   if (!tenant.ok) redirect('/login');
 
-  // Two independent single-row lookups, so they are issued together rather than one after the
+  // Three independent single-row lookups, so they are issued together rather than one after the
   // other. Onboarding is deliberately not gated on an ACTIVE tenant: it runs against a DRAFT
   // business, which is the one state that legitimately is not active yet (Flow J).
-  const [contextRows, modeRows] = await Promise.all([
+  //
+  // The active mode and "any mode at all" are separate reads on purpose. PUT /ai/context creates
+  // Balanced only when the tenant has NO review_modes rows, so the card may promise that only in
+  // that case — a business whose modes are all archived or all switched off has an active mode of
+  // null and would otherwise be told that saving creates one, which the endpoint will not do.
+  const [contextRows, activeModeRows, anyModeRows] = await Promise.all([
     database
       .select({
         summary: aiBusinessContexts.summary,
@@ -59,6 +65,11 @@ export default async function Page() {
         ),
       )
       .limit(1),
+    database
+      .select({ id: reviewModes.id })
+      .from(reviewModes)
+      .where(eq(reviewModes.businessId, tenant.businessId))
+      .limit(1),
   ]);
 
   const context = contextRows[0];
@@ -68,18 +79,8 @@ export default async function Page() {
       initialSummary={context?.summary ?? ''}
       initialServices={toStringArray(context?.services)}
       initialContextTerms={toStringArray(context?.contextTerms)}
-      activeModeName={modeRows[0]?.name ?? null}
+      activeModeName={activeModeRows[0]?.name ?? null}
+      hasAnyMode={anyModeRows.length > 0}
     />
   );
-}
-
-/**
- * `services` and `context_terms` are jsonb with no `$type<string[]>()`, so Drizzle hands them back
- * as `unknown`. Narrowing rather than casting: the column is only ever written through
- * `aiContextRequest`, but a hand-edited or seeded row can hold anything, and a bad value would
- * otherwise crash the step instead of degrading to an empty list.
- */
-function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === 'string');
 }
