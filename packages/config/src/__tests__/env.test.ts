@@ -54,4 +54,41 @@ describe('loadEnv', () => {
   it('does not require Razorpay or Cloudflare credentials before E10/E11', () => {
     expect(() => loadEnv(valid)).not.toThrow();
   });
+
+  /**
+   * The stub provider returns three canned drafts that read exactly like genuine reviews. Serving
+   * one to a real customer would be the fabricated-content failure this product exists to avoid,
+   * so the key is optional only away from production.
+   */
+  it('runs without an OpenAI key outside production, leaving the stub to be selected', () => {
+    const { OPENAI_API_KEY: _omitted, ...withoutKey } = valid;
+    expect(loadEnv(withoutKey).OPENAI_API_KEY).toBeUndefined();
+  });
+
+  /**
+   * The regression that prompted the rule. .env.example ships `OPENAI_API_KEY=`, which arrives as
+   * an empty string, and .optional() alone still ran that through the length check — so the file
+   * the project tells you to copy would not boot.
+   */
+  it('treats an empty OpenAI key as absent rather than as a too-short secret', () => {
+    expect(loadEnv({ ...valid, OPENAI_API_KEY: '' }).OPENAI_API_KEY).toBeUndefined();
+  });
+
+  it('still rejects a short but non-empty secret', () => {
+    expect(() => loadEnv({ ...valid, OPENAI_API_KEY: 'too-short' })).toThrow(EnvValidationError);
+  });
+
+  it('refuses to boot production without an OpenAI key', () => {
+    const { OPENAI_API_KEY: _omitted, ...withoutKey } = valid;
+
+    try {
+      loadEnv({ ...withoutKey, NODE_ENV: 'production' });
+      expect.unreachable('production must not fall back to the stub provider');
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError);
+      expect((error as EnvValidationError).issues).toEqual([
+        expect.stringContaining('OPENAI_API_KEY'),
+      ]);
+    }
+  });
 });

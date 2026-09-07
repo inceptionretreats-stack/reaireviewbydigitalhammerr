@@ -11,6 +11,7 @@ import {
 import {
   PostgresQuotaStore,
   QuotaService,
+  OpenAiProvider,
   ReviewGenerator,
   StubAiProvider,
   type AiProvider,
@@ -145,7 +146,9 @@ export async function loadPreviousDrafts(
  * Provider selection.
  *
  * The stub is used whenever no API key is configured, so local development and CI exercise the
- * whole flow — quota, gates, funnel — without reaching a paid provider.
+ * whole flow — quota, gates, funnel — without reaching a paid provider. Production cannot reach
+ * that branch: packages/config requires the key there, so a deployment that forgets it fails at
+ * boot rather than quietly serving canned drafts as though a model had written them.
  *
  * Note there is no automatic failover to the fallback model. Terra costs 10x Luna, so a
  * full-traffic failover during an incident would take AI spend from roughly 5% of revenue to
@@ -153,8 +156,8 @@ export async function loadPreviousDrafts(
  * is both the specified behaviour and the affordable one.
  */
 export function selectProvider(apiKey: string | undefined): AiProvider {
-  if (!apiKey || apiKey.startsWith('CHANGE_ME')) return new StubAiProvider('ok');
-  return new StubAiProvider('ok');
+  if (!apiKey) return new StubAiProvider('ok');
+  return new OpenAiProvider({ apiKey });
 }
 
 export function buildGenerator(db: Database, provider: AiProvider): ReviewGenerator {

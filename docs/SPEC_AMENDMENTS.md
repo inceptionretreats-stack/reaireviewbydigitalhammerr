@@ -171,6 +171,29 @@ sweep is still attempted on every change, and the failure is reported rather tha
 
 ---
 
+### AMENDMENT-017 — `/` is a product landing page; the spec names no screen for it
+
+`03_Screen_Field_Button_Spec.md` covers every authenticated screen and both public tenant surfaces
+(`/{slug}` and `/r/{code}`), but nothing for the root of `review.digitalhammerr.com`. It cannot stay
+empty: it is where a business owner arrives from a search, a card or a word of mouth, and the only
+page that has to explain the product rather than perform it.
+
+The page states what the product does, how the customer's three steps run, what it costs, and —
+given equal weight — the four things it will not do: post on a customer's behalf, ask for a star
+rating, claim a review was submitted, or oblige a customer to keep the merchant's terms. Those are
+D-028, D-009, AC-025 and D-025 restated as a promise to the reader rather than as internal rules.
+
+The page is public HTML, so `e2e/landing.spec.ts` extends the AC-006 sweep to it. A marketing page
+is the likeliest place for a decorative row of stars to appear the first time someone is asked to
+make the product look friendlier, and that would be a rating control on the public surface however
+it was intended.
+
+Outside production the page also renders the seeded tenant's real QR and links into the running
+flows, which is development scaffolding rather than a product decision: the block is absent when
+`NODE_ENV` is production or the seed has not been run.
+
+---
+
 ## Architecture amendments — require product-owner sign-off
 
 ### ADR-AMEND-A — no separate NestJS service

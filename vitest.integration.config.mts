@@ -10,6 +10,22 @@ import { defineConfig } from 'vitest/config';
  *
  * passWithNoTests is explicitly false so an empty selection fails loudly.
  */
+/**
+ * These suites connect to a real database and every one of them fails loudly without
+ * DATABASE_URL. Vitest does not read .env into process.env on its own, so `pnpm test:integration`
+ * only worked for someone who happened to have exported it by hand — a documented script looking
+ * broken on a machine where the database was in fact running.
+ *
+ * Like `node --env-file`, this does not overwrite a variable that is already set, so CI's real
+ * environment still wins. CI has no .env file at all, which is why a missing one is not an error.
+ */
+try {
+  process.loadEnvFile('.env');
+} catch {
+  // No .env — CI, or a checkout that has not been configured yet. The suites report the missing
+  // variable themselves, and more clearly than this would.
+}
+
 export default defineConfig({
   test: {
     include: ['**/__tests__/integration/**/*.test.ts'],
