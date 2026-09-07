@@ -1,0 +1,2042 @@
+openapi: 3.1.0
+
+info:
+  title: AI Review by Digital Hammerr API — maintained V1 contract
+  version: 1.0.0-impl.1
+  summary: The endpoints that actually exist, documented from the handlers.
+  description: |
+    This is the **maintained** contract. `docs/spec/08_OpenAPI_v1.yaml` is the frozen delivered
+    artefact and remains the contract of record for V1 *scope* — every path it lists is still in
+    scope. It is not usable as a validation contract: OPEN-04 in `docs/SPEC_AMENDMENTS.md` records
+    that most of its operations declare a bare `200` with no schema, `/auth/login` has no request
+    body at all, and only `SignupRequest`, `ReviewGeneration` and `Error` are defined. The pack's
+    own required "Contract: OpenAPI response validation" suite cannot be written against it.
+
+    Everything here was read out of `apps/web/app/api/v1/**/route.ts` rather than copied from the
+    skeleton, and every operation carries `x-implemented-by` naming the handler it describes. Field
+    constraints come from the Zod contracts in `packages/contracts/src`, which are authoritative:
+    where this YAML would disagree with them, this YAML is wrong.
+
+    Two things to know before reading:
+
+    - **`x-error-codes`** on each error response lists the `error.code` values that handler can
+      actually emit at that status. It is an extension rather than a narrowed schema because the
+      envelope is a fixed shape and repeating a four-level-deep `enum` override on some sixty
+      responses would bury the useful part. The codes and their statuses come from
+      `docs/spec/23_API_Error_Codes.md`, mirrored in `apps/web/lib/api-error.ts`.
+    - **The delta from the skeleton** is in `x-skeleton-delta` at the bottom of this file: paths
+      the skeleton lists that do not exist yet, paths that exist but the skeleton omits, and paths
+      where the two disagree on shape. That delta is the point of this document.
+
+    Not documented here because they are not JSON API endpoints: the public renderer routes
+    (`/[slug]`, `/[slug]/review`, `/[slug]/feedback`, `/r/[code]`) resolve tenants server-side in
+    React Server Components. The skeleton's `GET /public/business/{slug}` and
+    `GET /public/qr/{code}` are the JSON equivalents of that work and have no route handler — see
+    the delta.
+
+servers:
+  - url: https://review.digitalhammerr.com/api/v1
+    description: Production (APP_BASE_URL)
+  - url: http://localhost:3000/api/v1
+    description: Local development
+
+# Same convention as the frozen file: session auth is the default, public operations opt out with
+# `security: []`. RBAC rule 2 — no operation takes a business id, the tenant comes from the session.
+security:
+  - sessionCookie: []
+
+tags:
+  - name: Auth
+    description: Account creation, session lifecycle and password reset (AUTH-01 … AUTH-03).
+  - name: Business
+    description: Tenant identity, profile sections, review destination and publish (ONB-01 … ONB-05).
+  - name: AI
+    description: Tenant AI context and the non-quota owner preview (ONB-04, AI-01).
+  - name: QR
+    description: |
+      Dynamic QR sources and their printable artwork (QR-01). Landed after the rest of this
+      document was written, so treat the QR entries in `x-skeleton-delta` as the least settled part
+      of it.
+  - name: Public
+    description: |
+      Unauthenticated customer-flow endpoints. No session, no CSRF check (they carry no authority),
+      and no star rating is accepted or returned anywhere (D-009, AC-006).
+
+paths:
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [Auth]
+      summary: Create an owner account plus its DRAFT tenant
+      description: |
+        AUTH-01. Writes the user, a DRAFT shell business and a FREE subscription in one
+        transaction, so an invalid request cannot leave a partial active tenant behind (AC-001),
+        then issues a session cookie and reports where to land.
+
+        `422` covers every rejection: malformed JSON, a Zod failure, a password that fails the
+        strength rules in `packages/core`, an unnormalizable mobile, and an email already in use.
+        The duplicate-email case is a deliberate disclosure — AUTH-01 specifies that state and a
+        signup form cannot work without it. The neutral-response rule belongs to
+        `/auth/forgot-password`, not here.
+
+        **Not rate limited today.** No limiter call exists in this handler, unlike login and
+        forgot-password. Recorded in `docs/openapi/README.md` under known gaps.
+      security: []
+      x-implemented-by: apps/web/app/api/v1/auth/signup/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignupRequest' }
+      responses:
+        '201':
+          description: Account, DRAFT tenant and session created.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SessionCookieSet' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignupResponse' }
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '422':
+          description: |
+            Malformed body, field validation, weak password, invalid mobile, or email already
+            registered. `details.fields` names the offending fields only — never their values
+            (AUTH-01-03, AC-030).
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                emailTaken:
+                  value:
+                    error:
+                      code: VALIDATION_FAILED
+                      message: An account with that email already exists.
+                      request_id: 6b1f2c40-9a3e-4d21-8f0b-1c7e5a9d4e11
+                      details: { fields: [email] }
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [Auth]
+      summary: Authenticate and rotate the session identifier
+      description: |
+        AUTH-02. The limiter is inspected before the password is verified, so a locked-out
+        identity never reaches the Argon2id comparison (AC-002, first half). Any session already
+        on the browser is revoked before the new one is issued (AC-002, second half) — that is
+        what closes session fixation.
+
+        Every failure returns the same code and message whether the account is missing, the
+        password is wrong, or the account is locked. Only `Retry-After` differs, and only once the
+        limiter trips: a `401` **can** carry `Retry-After`, because the failure limiter's interval
+        is attached to the uniform response rather than replacing it with a `429`.
+      security: []
+      x-implemented-by: apps/web/app/api/v1/auth/login/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated; a fresh session cookie is set.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SessionCookieSet' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LandingResponse' }
+        '401':
+          description: |
+            Uniform credential failure. May carry `Retry-After` once repeated failures trip the
+            per-identity limiter, even though the status is not 429.
+          x-error-codes: [AUTH_INVALID_CREDENTIALS]
+          headers:
+            Retry-After: { $ref: '#/components/headers/RetryAfterOptional' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '422':
+          description: Malformed body, or email/password missing or malformed.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: Attempt limiter tripped before the password was checked.
+          x-error-codes: [AUTH_RATE_LIMITED]
+          headers:
+            Retry-After: { $ref: '#/components/headers/RetryAfter' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      operationId: clearLoginCookie
+      tags: [Auth]
+      summary: Clear the session cookie without revoking the session row
+      description: |
+        Present in the handler and absent from the skeleton. It clears the cookie only — it does
+        **not** revoke the `sessions` row and does **not** verify CSRF (`verifyCsrf` is called in
+        `POST` only). Use `POST /auth/logout` to actually end a session; that one revokes the row.
+
+        Documented rather than recommended. Flagged in `docs/openapi/README.md`.
+      security: []
+      x-implemented-by: apps/web/app/api/v1/auth/login/route.ts
+      responses:
+        '204':
+          description: Cookie cleared. Idempotent; no body.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SessionCookieCleared' }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [Auth]
+      summary: Revoke the current session and clear the cookie
+      description: |
+        Both halves matter: clearing the cookie alone leaves a live row a captured token could
+        still present, and revoking alone leaves the browser sending a dead cookie. Returns `204`
+        whether or not a session was found — logging out is idempotent, and a client clearing
+        state should never have to handle an error for having nothing to clear.
+
+        SET-01's "log out other sessions" is a separate settings operation that revokes siblings,
+        not this one.
+      x-implemented-by: apps/web/app/api/v1/auth/logout/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      responses:
+        '204':
+          description: Session revoked if one existed; cookie cleared either way.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SessionCookieCleared' }
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [Auth]
+      summary: Request a password-reset link
+      description: |
+        AUTH-03-01 requires neutral success wording, so `202` is the **only** response this
+        endpoint produces other than a CSRF rejection. Malformed JSON, a body that fails
+        validation, an unknown address, a known address, a rate-limited caller and a mail
+        transport failure all return the identical payload below.
+
+        The consequence to hold onto: a caller learns nothing from the response, so all diagnosis
+        lives in the server log. A `429` here would confirm the address is worth retrying, which
+        is exactly the enumeration this endpoint must not offer — the address is its only input.
+      security: []
+      x-implemented-by: apps/web/app/api/v1/auth/forgot-password/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForgotPasswordRequest' }
+      responses:
+        '202':
+          description: Accepted. Says nothing about whether an account exists.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+              example:
+                message: If that email address has an account, a reset link is on its way.
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [Auth]
+      summary: Consume a reset token and set a new password
+      description: |
+        AUTH-03-02. **Absent from the delivered skeleton**, which defines `/auth/forgot-password`
+        with no counterpart to consume the token it issues (OPEN-03).
+
+        Single use is enforced by an atomic conditional `UPDATE … WHERE used_at IS NULL RETURNING`,
+        not a read followed by a write: two requests arriving together with the same leaked token
+        would both observe `used_at IS NULL` and both proceed. The claim and the password change
+        are one transaction, so a token can never be spent without the password actually changing.
+
+        Password strength is checked *before* the token is claimed, so a weak password does not
+        burn the user's one use and force a second email.
+
+        Every token failure — expired, already used, never existed — returns the same `422` and
+        message. Distinguishing them tells someone holding a stale link something about the
+        account rather than about their request.
+
+        On success every session for that user is revoked, including the caller's own
+        (`13_Security_Privacy_Compliance.md`): if the reason for resetting was that someone else
+        had access, leaving their session live defeats the point.
+      security: []
+      x-implemented-by: apps/web/app/api/v1/auth/reset-password/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+      responses:
+        '200':
+          description: Password changed; all sessions revoked and the cookie cleared.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SessionCookieCleared' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+              example:
+                message: Your password has been changed. Please sign in.
+                next: /login
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '422':
+          description: |
+            Malformed body, a password failing the length or strength rules, or an invalid,
+            expired or already-used token — all one code, one message per class.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                staleToken:
+                  value:
+                    error:
+                      code: VALIDATION_FAILED
+                      message: That reset link is no longer valid. Please request a new one.
+                      request_id: 0c9a7d3f-5b18-4e6a-9f22-77b1c0a4e9d2
+
+  /business:
+    get:
+      operationId: getBusiness
+      tags: [Business]
+      summary: Read the caller's own business identity
+      description: |
+        ONB-01 and the identity half of PROFILE-01. The tenant is resolved from the session, so
+        there is no business id in the URL or body to tamper with (RBAC rule 2, AC-003).
+
+        Note the response mixes casing: `publishedAt` is camelCase because the fields are Drizzle
+        select aliases passed straight through, while `slug` is appended separately. Recorded as a
+        known inconsistency in `docs/openapi/README.md` rather than silently normalised here — the
+        onboarding client already reads it in this shape.
+      x-implemented-by: apps/web/app/api/v1/business/route.ts
+      responses:
+        '200':
+          description: Business identity plus its current primary slug.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+    patch:
+      operationId: updateBusiness
+      tags: [Business]
+      summary: Update identity and claim a web address
+      description: |
+        The slug is claimed **first**. If it is taken the identity update must not have happened —
+        otherwise the owner is told "that address is taken" while their business name has silently
+        changed, the partial write AC-001 objects to elsewhere.
+
+        A successful claim reports `previous_slug` and `previous_slug_redirects`, because Flow I
+        keeps the old address working as a redirect and the owner should be told that rather than
+        discover it.
+
+        `config_version` is bumped so cached public configuration is invalidated; AC-017 depends
+        on a change here being visible immediately.
+      x-implemented-by: apps/web/app/api/v1/business/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BusinessIdentityRequest' }
+      responses:
+        '200':
+          description: Identity saved and slug claimed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessIdentityUpdateResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '409':
+          description: |
+            The slug is held by another business, or is still serving as another business's
+            redirect — one namespace, `business_slugs` (AMENDMENT-005).
+          x-error-codes: [SLUG_UNAVAILABLE]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                taken:
+                  value:
+                    error:
+                      code: SLUG_UNAVAILABLE
+                      message: That web address is already taken. Please choose another.
+                      request_id: 41d0a2c8-6e77-4c9b-b6f1-2e8c5a0d3f47
+                      details: { fields: [slug] }
+        '422':
+          description: |
+            Malformed body, an identity field failing its Zod rule, or a slug that is malformed
+            rather than taken (reserved word, bad characters, leading/trailing or doubled hyphen,
+            digits only). `details.fields` names the fields.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /business/slug-available:
+    get:
+      operationId: checkSlugAvailability
+      tags: [Business]
+      summary: Check a candidate web address and offer alternatives
+      description: |
+        **Absent from the delivered skeleton.** Drives the `slug available` / `slug unavailable`
+        states in ONB-01.
+
+        Authenticated on purpose. An open endpoint answering "does this slug exist" would
+        enumerate every business on the platform, and the slug is the one identifier that is both
+        guessable and public. A session does not stop a determined crawler — the public page
+        answers the same question — but it keeps this from being the convenient way to do it.
+
+        Availability is asked on behalf of the caller's own business, so a business reclaiming a
+        slug it still holds as a redirect is correctly told it is available.
+
+        Always `200`, including for a malformed candidate: an unusable slug is a state of the form
+        field, not a failed request. Suggestions are checked for claimability before being
+        offered, because a suggestion that is itself taken is worse than none.
+      x-implemented-by: apps/web/app/api/v1/business/slug-available/route.ts
+      parameters:
+        - name: slug
+          in: query
+          required: false
+          description: |
+            The candidate. Omitted or empty is treated as an invalid candidate (`TOO_SHORT`)
+            rather than as a bad request, so the form can call this on every keystroke.
+          schema: { type: string, maxLength: 64 }
+      responses:
+        '200':
+          description: Verdict, normalised candidate, and up to three claimable alternatives.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlugAvailabilityResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+
+  /business/review-destination:
+    get:
+      operationId: getReviewDestination
+      tags: [Business]
+      summary: Read the primary Google review destination
+      description: |
+        ONB-02. `review_destinations` is the single owner of this URL (AMENDMENT-003); the
+        `GOOGLE_REVIEW` row in `business_links` is a presentation row only and carries no url,
+        enforced by `ck_google_review_has_no_url`.
+
+        Returns `200` with `url: null` when nothing has been set yet — an unconfigured
+        destination is the normal state during onboarding, not a missing resource.
+      x-implemented-by: apps/web/app/api/v1/business/review-destination/route.ts
+      responses:
+        '200':
+          description: The primary destination, or nulls if unset.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewDestinationResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+    put:
+      operationId: setReviewDestination
+      tags: [Business]
+      summary: Create or replace the primary Google review destination
+      description: |
+        The edit path AC-017 requires. OPEN-03 records that the skeleton offers
+        `POST /business/review-destinations` with no way to edit one, while AC-017 requires that
+        changing the Google URL immediately changes the destination for every existing dynamic QR.
+
+        An idempotent `PUT` on the single primary destination is the smaller surface: V1 has
+        exactly one primary per business (`uq_one_primary_review_destination`), so there is no id
+        for a caller to supply and nothing to enumerate.
+
+        The URL is validated by `validateGoogleReviewUrl` in `packages/core`, **not** by a generic
+        `url()` check: ONB-02-02 restricts this to Google hosts, and this field is where every
+        customer is sent after copying a draft. A merchant typo here silently routes real traffic
+        nowhere, which is worse than a rejected form. `http://` is rejected rather than upgraded.
+
+        Note the request body is read with a hand-rolled `url` extraction rather than
+        `reviewDestinationRequest` from `packages/contracts`, so `label` is ignored and always
+        stored as `Google`. Flagged in `docs/openapi/README.md`.
+      x-implemented-by: apps/web/app/api/v1/business/review-destination/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewDestinationUpdateRequest' }
+      responses:
+        '200':
+          description: |
+            Destination saved and `config_version` bumped, which is what invalidates the cached
+            public configuration. Existing dynamic QRs already resolve to the new URL.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewDestinationUpdateResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '422':
+          description: |
+            `REVIEW_DESTINATION_INVALID` — not a URL, not https, not a supported Google host, or
+            missing a place reference. `VALIDATION_FAILED` — the body was not JSON.
+          x-error-codes: [REVIEW_DESTINATION_INVALID, VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                unsupportedHost:
+                  value:
+                    error:
+                      code: REVIEW_DESTINATION_INVALID
+                      message: That does not look like a Google review link.
+                      request_id: 9f3b1e77-2a44-4c05-8d90-6b2e1f4a7c33
+                      details: { fields: [url] }
+
+  /business/links:
+    get:
+      operationId: listBusinessLinks
+      tags: [Business]
+      summary: List the profile sections in display order
+      description: |
+        ONB-03 and the section list behind PROFILE-01. Ordered by `sort_order`.
+
+        As with `GET /business`, keys are Drizzle aliases, so `sortOrder` is camelCase here while
+        the public renderer's `PublicBusinessResponse` in `packages/contracts` uses `sort_order`.
+        Two different payloads for two different consumers; noted so nobody assumes one shape.
+      x-implemented-by: apps/web/app/api/v1/business/links/route.ts
+      responses:
+        '200':
+          description: Every section row for this tenant, enabled or not.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessLinksResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+    put:
+      operationId: replaceBusinessLinks
+      tags: [Business]
+      summary: Upsert the five default profile sections
+      description: |
+        Replaces the values of the five defaults from D-014, in the order the Decision Log lists
+        them: `GOOGLE_REVIEW`, `WHATSAPP`, `CALL`, `INSTAGRAM`, `FACEBOOK`. A default not named in
+        the request is cleared rather than left alone — this is a whole-list `PUT`.
+
+        `GOOGLE_REVIEW` is always enabled and carries no target of its own (AMENDMENT-003).
+        Everything else is enabled only once it has somewhere to point (ONB-03-02): the handler
+        refuses to set `is_enabled` without a target so the failure is a clear `422` rather than a
+        `ck_enabled_link_has_target` violation.
+
+        The response is a **count**, not the saved list — call `GET` to read it back. The
+        `enabled` field in the request is currently ignored; enablement is derived from whether a
+        target is present. `WEBSITE`, `DIRECTIONS` and `CUSTOM` are accepted and validated by this
+        handler but are not among the five it writes, so they are inert until the per-section
+        endpoints in the delta exist.
+      x-implemented-by: apps/web/app/api/v1/business/links/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BusinessLinksUpdateRequest' }
+      responses:
+        '200':
+          description: The five defaults were upserted and `config_version` bumped.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessLinksUpdateResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '422':
+          description: |
+            Malformed body or section list, an unsupported `type`, a phone that will not normalise
+            to a 10-digit Indian mobile (D-002), or a URL that is not `https://`.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /business/publish:
+    post:
+      operationId: publishBusiness
+      tags: [Business]
+      summary: Take the tenant live and mint its default QR
+      description: |
+        ONB-05. Publishing is the moment a tenant becomes reachable by the public, so readiness is
+        enforced here rather than trusted — a DRAFT business is half-configured by design, since
+        the wizard saves as it goes.
+
+        The status change, the default section safety net and the QR reservation are one
+        transaction. ONB-05-01 requires publish to create the default QR source and ONB-05-02
+        requires the canonical route to work immediately: a QR resolving to a business still
+        marked DRAFT would render the unavailable page, and an ACTIVE business with no QR leaves
+        Flow A step 11 with nothing to download.
+
+        Idempotent on a republish: `published_at` is preserved as the date the business first went
+        live, and an existing QR code is returned rather than a second one minted.
+
+        A `SUSPENDED` or `CLOSED` tenant cannot publish its way back to live (Flow J).
+      x-implemented-by: apps/web/app/api/v1/business/publish/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      responses:
+        '200':
+          description: Tenant is ACTIVE, with its public URL and default QR.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublishResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '409':
+          description: |
+            Either prerequisites are missing — `details.missing` lists any of `business_details`,
+            `web_address`, `google_review_link` — or the tenant is SUSPENDED/CLOSED, in which case
+            there is no `details`. The Google review link is the one genuinely non-negotiable
+            prerequisite: without it the customer journey ends at a Copy button with nowhere to go
+            and AC-036 has no direct link to fall back on.
+          x-error-codes: [BUSINESS_NOT_ACTIVE]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                notReady:
+                  value:
+                    error:
+                      code: BUSINESS_NOT_ACTIVE
+                      message: A few things are still needed before you can publish.
+                      request_id: c7e4a1b9-33d2-4f68-91aa-8de0c5b27f14
+                      details: { missing: [google_review_link] }
+        '500':
+          description: |
+            Includes QR reservation exhausting its five collision retries. That path throws rather
+            than returning the envelope, so the body is the framework's, not `Error`. Recorded as
+            a gap in `docs/openapi/README.md`.
+          x-error-codes: [INTERNAL_ERROR]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /ai/context:
+    get:
+      operationId: getAiContext
+      tags: [AI]
+      summary: Read the tenant's AI context and its review modes
+      description: |
+        ONB-04 and AI-01. `modes` is read-only here — the skeleton's `/ai/modes` CRUD does not
+        exist yet, so this is the only way to see them.
+
+        AI-01-02: nothing in this handler reads or writes `ai_prompt_versions`. The global system
+        prompt is admin-only data (ADR-006) and a business owner cannot reach it.
+      x-implemented-by: apps/web/app/api/v1/ai/context/route.ts
+      responses:
+        '200':
+          description: Context hints and the tenant's review modes.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AiContextResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+    put:
+      operationId: replaceAiContext
+      tags: [AI]
+      summary: Replace the tenant's AI context hints
+      description: |
+        D-025 shapes this: merchant terms are AI **context**, never mandatory wording. There is
+        deliberately no field for required keywords and there must be no setting resembling
+        keywords required in every review (AC-010, `09_AI_Prompt_and_Generation_Spec.md`).
+        `aiContextRequest` omits it too, so adding one would take a deliberate edit in two places.
+
+        First save also creates the `Balanced` review mode, because generation resolves an active
+        mode and would otherwise find none on a fresh tenant. Balanced carries no extra terms by
+        design — a mode shifts emphasis, and the default should shift nothing. A mode is never a
+        sentiment gate (AI-02).
+      x-implemented-by: apps/web/app/api/v1/ai/context/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AiContextRequest' }
+      responses:
+        '200':
+          description: Saved, `Balanced` ensured, and `config_version` bumped.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [saved]
+                properties:
+                  saved: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '422':
+          description: Malformed body, or a field over its length or array limit.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /ai/test-preview:
+    post:
+      operationId: aiTestPreview
+      tags: [AI]
+      summary: Generate an owner preview that does not consume quota
+      description: |
+        ONB-04 "Generate preview" and AI-01 "Test preview". ONB-04-02 and AI-01-01 both require
+        that a preview does not consume quota, so this deliberately bypasses `QuotaService` and
+        `ReviewGenerator` and calls the provider directly. That is why it is a separate endpoint
+        rather than a flag on the public one — a flag is something a public caller could set, and
+        the free tier would be bypassable.
+
+        No `ai_generations` row is written, so a preview never appears in analytics or in the
+        funnel as a customer draft. Compliance is still checked: the draft an owner sees is the
+        one their customers will get, so a preview that skipped the AC-011/AC-012 gates would
+        misrepresent the product to the person deciding whether to publish.
+
+        `compliance_passed: false` still returns `200` with the text, because the owner is being
+        shown what the gate saw. `requires_experience_confirmation` and `editable_by_customer` are
+        surfaced so the owner understands this is a starting point their customer edits and
+        confirms, not a review that will be posted as-is (ADR-008).
+
+        **Not rate limited today**, despite costing a real provider call — the handler makes no
+        limiter call, though its own doc comment claims otherwise. Flagged in
+        `docs/openapi/README.md`.
+      x-implemented-by: apps/web/app/api/v1/ai/test-preview/route.ts
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      responses:
+        '200':
+          description: A preview draft. Never persisted, never counted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AiTestPreviewResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '403': { $ref: '#/components/responses/CsrfRejected' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+        '503':
+          description: |
+            No active prompt version, or the provider failed or timed out. One code for both: a
+            raw provider error must never reach a client (AC-030). The message tells the owner
+            they can still finish setting up and publish, because the preview is not a
+            prerequisite for anything.
+          x-error-codes: [AI_PROVIDER_UNAVAILABLE]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /qr:
+    get:
+      operationId: listQrSources
+      tags: [QR]
+      summary: List this tenant's QR sources
+      description: |
+        The list state of QR-01, oldest first so the default source created at publish (ONB-05-01)
+        stays at the top and the order does not reshuffle under the owner as they add sources.
+
+        Deliberately not gated on `requireActiveTenant`: Flow J restricts a suspended tenant from
+        *mutating* its configuration, and a suspended owner still needs to see which standees exist
+        in order to understand what their customers are currently hitting.
+
+        `resolve_url` is what the standee encodes — the opaque dynamic URL, never the Google URL and
+        never the slug (ADR-002, D-026). That single indirection is why a printed standee survives
+        every later change of destination, web address or domain (AC-017).
+
+        No pagination: QR-01 specifies none and a tenant has a handful of standees. The handler caps
+        the result at 500 rows so an unbounded `SELECT` cannot become a multi-megabyte response; a
+        tenant reaching that needs real pagination rather than a larger cap.
+      x-implemented-by: apps/web/app/api/v1/qr/route.ts
+      responses:
+        '200':
+          description: Every QR source for this tenant, enabled or disabled.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QrSourceListResponse' }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '404': { $ref: '#/components/responses/TenantNotFound' }
+
+  /qr/{id}/download:
+    get:
+      operationId: downloadQrImage
+      tags: [QR]
+      summary: Download a QR source's printable artwork
+      description: |
+        The Download SVG / Download PNG actions of QR-01. **Not a JSON endpoint** — the body is the
+        image itself.
+
+        Both formats render synchronously. `02_System_Architecture.md` permits PNG export to be
+        asynchronous, on the usual assumption that rasterising needs a canvas; it does not here, so
+        deferring it would mean handing the button back a job id and a polling state for no gain.
+
+        Ownership is part of the `WHERE` clause rather than a check on the returned row, so the
+        query cannot read another tenant's artwork at all — an id in a URL is exactly the IDOR shape
+        AC-003 tests for (RBAC rule 3). A malformed id, a missing row and another tenant's row all
+        answer `404` identically, which is what stops this being an existence oracle for other
+        tenants' ids.
+
+        A DISABLED source still yields its artwork. The printed artefact is permanent and the
+        configuration around it is what changes (D-026), so refusing the image for a standee that
+        happens to be paused today inverts that relationship.
+
+        The response is `attachment` with `nosniff`, because an SVG served inline from our own
+        origin is a script execution context.
+      x-implemented-by: apps/web/app/api/v1/qr/[id]/download/route.ts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The QR source's id. Must belong to the caller's tenant.
+          schema: { type: string, format: uuid }
+        - name: format
+          in: query
+          required: false
+          description: |
+            Absent or empty means `svg`, which is what the frozen skeleton declares as the default.
+            Any other value is a `422` rather than a silent fallback.
+          schema: { type: string, enum: [svg, png], default: svg }
+      responses:
+        '200':
+          description: |
+            The QR image. Error-correction level H, a four-module ISO/IEC 18004 quiet zone, and pure
+            black on opaque white — a printed code has no second channel to fall back on, so
+            maximum luminance contrast is the same principle as AC-038 applied to a machine reader.
+            Size is server-fixed, so no request can be turned into an expensive raster.
+          headers:
+            Content-Disposition:
+              description: |
+                RFC 6266, carrying both filename forms. The ASCII `filename` is built by allowlist,
+                so a source label cannot inject a header. `filename*` carries the real label, so a
+                Devanagari or Tamil label arrives intact. The opaque code is appended to both, which
+                keeps two standees both labelled "Counter" distinguishable on disk.
+              required: true
+              schema: { type: string }
+            X-Content-Type-Options:
+              required: true
+              schema: { type: string, const: nosniff }
+            Cache-Control:
+              description: |
+                `private, max-age=300`. The artwork is stable for the life of the row because the
+                code is immutable (QR-01-01), but the encoded host comes from `APP_BASE_URL`, a
+                deploy-time input — long enough to absorb a double-click, short enough never to
+                outlive a base-URL change.
+              required: true
+              schema: { type: string }
+          content:
+            image/svg+xml:
+              schema: { type: string }
+            image/png:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/AuthRequired' }
+        '404':
+          description: |
+            No such source, not this tenant's, an id that is not a UUID, or no resolvable tenant —
+            all one code and one message. `QR_NOT_FOUND` stays reserved for public `/r/{code}`
+            resolution, where the subject genuinely is an unknown code.
+          x-error-codes: [RESOURCE_NOT_FOUND]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: '`format` was present but was neither `svg` nor `png`.'
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          description: |
+            The render failed. The payload is a short ASCII URL that always fits a version-6 symbol,
+            so this is an environment problem rather than bad input: logged in full, reported
+            generically (AC-030).
+          x-error-codes: [INTERNAL_ERROR]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /public/review/generate:
+    post:
+      operationId: generatePublicReview
+      tags: [Public, AI]
+      summary: Generate one editable AI-assisted review draft
+      description: |
+        REV-01 and Flow D. The ordering carries the acceptance criteria: quota is reserved inside
+        the generator before the provider call (AC-013), released on failure (AC-014), and the
+        quality gate's internal retry sits inside that one reservation so two provider calls stay
+        one customer generation.
+
+        The tenant is resolved server-side from `slug` or `qr_code`; it is never taken from the
+        body. An earlier revision accepted a business id, which let a caller burn any business's
+        free quota and leaked internal UUIDs to the browser. A `qr_code` wins over a `slug`
+        because it also carries source attribution, and its disabled state must win over the
+        business merely being reachable (QR-01-02).
+
+        No star rating is accepted or returned at any point (D-009, AC-006), and no response ever
+        suggests the review was posted — the platform only observes that Google was opened
+        (D-028, AC-025).
+
+        `requires_experience_confirmation` is a constant `true`: ADR-008 and AC-008 make the
+        confirmation gate mandatory, so there is no valid response where it is false. Encoding it
+        as a constant means a client cannot be written against a shape where Copy is enabled
+        without it.
+
+        Behaviour worth knowing: with no `dh_anon` cookie the request still succeeds, but with no
+        rate limiting and no regeneration history, since both are keyed on the anonymous session
+        (AC-035 — the customer flow continues regardless). A body with neither `slug` nor
+        `qr_code` resolves to nothing and returns `404`, not `422`, because this handler does not
+        run `generateReviewRequest` from `packages/contracts` over the body. Flagged in
+        `docs/openapi/README.md`.
+      security: []
+      x-implemented-by: apps/web/app/api/v1/public/review/generate/route.ts
+      parameters:
+        - $ref: '#/components/parameters/AnonymousSessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateReviewRequest' }
+      responses:
+        '200':
+          description: One draft, persisted, with quota already accounted for.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewGeneration' }
+        '402':
+          description: |
+            Free quota exhausted (Flow E step 3). The message is deliberately business-safe: it
+            must not suggest the business has done anything wrong, and the direct review link on
+            the page stays available (AC-036).
+          x-error-codes: [PLAN_QUOTA_EXHAUSTED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: |
+            No such slug or QR, a retired-slug redirect, a suspended or closed business, or a body
+            naming neither. All report identically, so the endpoint cannot be used to enumerate
+            which businesses exist or which have been suspended. `QR_NOT_FOUND` is defined in
+            `23_API_Error_Codes.md` but this handler collapses it into `RESOURCE_NOT_FOUND` for
+            that reason.
+          x-error-codes: [RESOURCE_NOT_FOUND]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: |
+            Raised by the generator when the tenant or its subscription is not in a state that may
+            generate. Reachable only through the generator's own checks — the resolver's
+            equivalent failure is folded into the `404` above.
+          x-error-codes: [BUSINESS_NOT_ACTIVE]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '410':
+          description: |
+            The QR was deliberately disabled (QR-01-02). Distinct from `404` on purpose: the code
+            is genuine and printed on physical material, so "gone" is the honest status and the
+            owner can be told a specific standee is dead.
+          x-error-codes: [QR_DISABLED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: The body was not JSON.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: |
+            AC-032, decided before anything expensive: a denied request reaches neither the
+            provider nor the free quota. Four dimensions in one atomic decision — session burst,
+            session hourly, adaptive IP prefix, and fair-use observation for Pro tenants.
+            `FAIR_USE_THROTTLED` is the Pro-tenant dimension (D-006). Always carries `Retry-After`
+            — a bare 429 with no interval does not really satisfy AC-032. A denial is also
+            recorded as `ai_generate_failure` with `provider: rate_limit`.
+          x-error-codes: [PUBLIC_RATE_LIMITED, FAIR_USE_THROTTLED]
+          headers:
+            Retry-After: { $ref: '#/components/headers/RetryAfter' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          description: The draft could not be persisted after a successful provider call.
+          x-error-codes: [INTERNAL_ERROR]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: |
+            `AI_PROVIDER_UNAVAILABLE` — no active prompt version, or the provider failed or timed
+            out. `AI_OUTPUT_REJECTED` — the quality or safety gate failed after its retry (AC-011,
+            AC-012). Both keep the page usable: the customer can still write their own review and
+            the direct Google link still works (AC-036). Per ADR-007 and the guardrail in
+            `docs/SPEC_AMENDMENTS.md`, this state is **not** a failover to a more expensive model;
+            degrading to the retry state is both the specified and the correct commercial
+            behaviour.
+          x-error-codes: [AI_PROVIDER_UNAVAILABLE, AI_OUTPUT_REJECTED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /public/events:
+    post:
+      operationId: recordPublicEvent
+      tags: [Public]
+      summary: Record one allow-listed public analytics event
+      description: |
+        Events are allow-listed against the delivered taxonomy (AN-01-01) because the payload
+        comes from a browser and is untrusted, and ingestion failure must never break the customer
+        flow (AC-035).
+
+        The identity properties every event requires — `business_id`, `anonymous_session_id`,
+        `qr_code_id` — are injected server-side from resolved state and stripped from anything the
+        client sent. A client claiming a different `business_id` cannot write into another
+        tenant's analytics. An earlier revision expected the client to send them; it sent
+        `qr_code` instead and never sent the two required ones, so every event failed validation
+        and the entire customer funnel silently recorded nothing behind a `202`. Injecting
+        server-side makes that failure mode structurally impossible.
+
+        `accepted` tells you whether the row was actually stored. An unresolvable slug, an
+        off-taxonomy event and a database failure all return `202` with `accepted: false` — the
+        customer is never affected, but the caller is not told it worked either.
+      security: []
+      x-implemented-by: apps/web/app/api/v1/public/events/route.ts
+      parameters:
+        - $ref: '#/components/parameters/AnonymousSessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublicEventRequest' }
+      responses:
+        '202':
+          description: 'Accepted. `accepted: false` means it was not stored.'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted]
+                properties:
+                  accepted:
+                    type: boolean
+                    description: True only if a row was written.
+        '422':
+          description: The body was not JSON, or `name` was absent.
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /public/feedback:
+    post:
+      operationId: submitPrivateFeedback
+      tags: [Public]
+      summary: Submit private feedback to the business
+      description: |
+        FB-01. Open to every visitor with no login and no sentiment precondition (PUB-01-01,
+        FB-01-01, AC-024). Nothing in the payload describes how the visit went, because nothing
+        asks (D-009, AC-006).
+
+        AC-039 governs what leaves this handler. The customer's name and mobile are stored for the
+        business and go nowhere else: not into analytics properties, not into a log line, not into
+        the response, and not echoed back in a validation error. The response deliberately omits
+        the feedback id — nothing in the customer flow needs it.
+
+        A badly typed mobile does not reject the submission; it is stored as typed, because losing
+        the message over a phone number would lose the part the business actually needs.
+
+        Rate limiting is two layers. The Redis limiter is primary and the only one that sees the
+        IP prefix, so it is what catches a client cycling cookies; a database check over the last
+        hour survives a Redis outage. Both return `PUBLIC_RATE_LIMITED`, but only the limiter path
+        sets `Retry-After` — the database fallback has no interval to report. Both are skipped
+        entirely when there is no `dh_anon` cookie, since both are keyed on the anonymous session.
+      security: []
+      x-implemented-by: apps/web/app/api/v1/public/feedback/route.ts
+      parameters:
+        - $ref: '#/components/parameters/AnonymousSessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitFeedbackRequest' }
+      responses:
+        '201':
+          description: Stored for the business.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received]
+                properties:
+                  received: { type: boolean, const: true }
+        '404':
+          description: |
+            Unknown slug, a retired-slug redirect, or a suspended business — identical responses,
+            so this endpoint cannot enumerate businesses either.
+          x-error-codes: [RESOURCE_NOT_FOUND]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: |
+            Malformed body, a missing or too-short message, or a field over its limit.
+            `details.fields` maps field name to rule message — never to the submitted value
+            (AC-039).
+          x-error-codes: [VALIDATION_FAILED]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: |
+            Too many submissions from this anonymous session. `Retry-After` is present on the
+            Redis-limiter path and absent on the database fallback.
+          x-error-codes: [PUBLIC_RATE_LIMITED]
+          headers:
+            Retry-After: { $ref: '#/components/headers/RetryAfterOptional' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          description: The insert returned no row.
+          x-error-codes: [INTERNAL_ERROR]
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: dh_session
+      description: |
+        Opaque session token. `SESSION_COOKIE_NAME` in `packages/config/src/env.ts` defaults to
+        `dh_session`; a deployment may rename it. Set `HttpOnly`, `SameSite=Lax`, `Path=/`, and
+        `Secure` in production (`13_Security_Privacy_Compliance.md`: no auth token in
+        localStorage). Only the token's SHA-256 is stored server-side, in `sessions`
+        (AMENDMENT-001) — the raw value exists only in the cookie.
+
+        Authenticated handlers resolve the tenant from this cookie and compare resource ownership;
+        no endpoint accepts a business id (RBAC rule 2, AC-003). An expired, revoked and absent
+        cookie are indistinguishable in every response, so a caller cannot probe whether a token
+        was ever valid.
+
+  parameters:
+    OriginHeader:
+      name: Origin
+      in: header
+      required: true
+      description: |
+        CSRF defence for cookie-authenticated mutations (`apps/web/lib/csrf.ts`). Every browser
+        sends `Origin` on a cross-origin mutation, so its **absence** on a state-changing request
+        is itself rejected, and a value that is not `APP_BASE_URL` (plus localhost outside
+        production) is rejected too. Custom tenant domains are deliberately not accepted: they
+        serve the public renderer only, and widening this would make any hostname a tenant can
+        point at us a trusted origin for the dashboard.
+
+        Public endpoints are exempt — they carry no session and no authority — as is
+        `DELETE /auth/login`, which is a gap rather than a decision.
+      schema: { type: string, format: uri }
+      example: https://review.digitalhammerr.com
+    AnonymousSessionCookie:
+      name: dh_anon
+      in: cookie
+      required: false
+      description: |
+        The anonymous public session (E3-02). The customer never has an account (D-008), so this
+        is the only continuity the public flow has: it ties a scan to a generation to a copy to a
+        Google open, which is what makes the AN-01 funnel possible. AN-01-02 is explicit that it
+        identifies a session, not a person; the stored hash binds the token to the business, so it
+        is not a cross-tenant correlator.
+
+        Optional at every endpoint. Absent, the request still succeeds — with no rate limiting, no
+        regeneration history and no session attribution (AC-035). **Nothing in the current tree
+        mints this cookie**: `apps/web/lib/anonymous-session.ts` only reads it and names
+        `middleware.ts` as responsible, and no `middleware.ts` exists yet. See
+        `docs/openapi/README.md`.
+      schema: { type: string }
+
+  headers:
+    RetryAfter:
+      description: |
+        Seconds to wait, always at least 1. Set from the limiter's own interval by
+        `apps/web/lib/api-error.ts`.
+      required: true
+      schema: { type: integer, minimum: 1 }
+    RetryAfterOptional:
+      description: |
+        Present only when the denying layer had an interval to report. See the operation
+        description for which path sets it.
+      required: false
+      schema: { type: integer, minimum: 1 }
+    SessionCookieSet:
+      description: |
+        Sets the session cookie: `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` in production, and
+        `Expires` from the session's own expiry (longer when `remember_me` was sent).
+      schema: { type: string }
+    SessionCookieCleared:
+      description: The session cookie set to an empty value with an expiry in the past.
+      schema: { type: string }
+
+  responses:
+    AuthRequired:
+      description: No session, or a session that no longer resolves.
+      x-error-codes: [AUTH_REQUIRED]
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: AUTH_REQUIRED
+              message: Please sign in and try again.
+              request_id: 2f8c6a11-4b7d-4e93-a0c5-9d31e7b0a284
+    CsrfRejected:
+      description: |
+        The `Origin` header was missing or did not match this application. Only reachable on
+        mutating methods — `requireTenant` runs the check before it looks for a session, so a
+        forged cross-site request is refused without a database read.
+      x-error-codes: [FORBIDDEN]
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: FORBIDDEN
+              message: Request rejected.
+              request_id: 8a41d0e2-1c93-4f57-b8d6-3e0a2c5f9b17
+    TenantNotFound:
+      description: |
+        The signed-in user has no resolvable business. A broken invariant rather than a normal
+        state — signup creates the shell tenant in the same transaction as the user — reported as
+        not-found rather than as a server error because the caller can do nothing with either.
+      x-error-codes: [RESOURCE_NOT_FOUND]
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    InternalError:
+      description: Unexpected failure. Safe message only; never a provider error or stack trace.
+      x-error-codes: [INTERNAL_ERROR]
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      description: |
+        The single error envelope from `docs/spec/23_API_Error_Codes.md`, produced by
+        `apps/web/lib/api-error.ts`. `request_id` is a fresh UUID on every error so a
+        customer-facing message can be traced to a log line without the message itself carrying
+        anything. Provider errors, stack traces and internal identifiers never appear in it
+        (AC-030).
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              description: |
+                One of the codes in `23_API_Error_Codes.md`. Each error response in this document
+                lists the subset its handler emits under `x-error-codes`.
+              enum:
+                - AUTH_REQUIRED
+                - AUTH_INVALID_CREDENTIALS
+                - AUTH_RATE_LIMITED
+                - FORBIDDEN
+                - TENANT_SCOPE_VIOLATION
+                - VALIDATION_FAILED
+                - RESOURCE_NOT_FOUND
+                - SLUG_UNAVAILABLE
+                - BUSINESS_NOT_ACTIVE
+                - REVIEW_DESTINATION_INVALID
+                - PLAN_QUOTA_EXHAUSTED
+                - FAIR_USE_THROTTLED
+                - PUBLIC_RATE_LIMITED
+                - AI_PROVIDER_UNAVAILABLE
+                - AI_OUTPUT_REJECTED
+                - QR_NOT_FOUND
+                - QR_DISABLED
+                - DOMAIN_ALREADY_CLAIMED
+                - DOMAIN_VERIFICATION_PENDING
+                - PAYMENT_VERIFICATION_FAILED
+                - SUBSCRIPTION_NOT_ACTIVE
+                - UPLOAD_INVALID
+                - ADMIN_REASON_REQUIRED
+                - INTERNAL_ERROR
+            message:
+              type: string
+              description: Safe, user-facing, already written for display. Never a raw error.
+            request_id: { type: string, format: uuid }
+            details:
+              type: object
+              additionalProperties: true
+              description: |
+                Present only where a client can act on it. In practice: `fields` (an array of
+                field names, or a name-to-message map on public feedback) and `missing` (publish
+                prerequisites).
+
+    SignupRequest:
+      type: object
+      description: |
+        `signupRequest` in `packages/contracts/src/auth.ts`. `accept_terms` is a literal `true`,
+        not a boolean: an unchecked box is not a valid signup (AUTH-01).
+      required: [full_name, email, mobile, password, accept_terms]
+      properties:
+        full_name: { type: string, minLength: 2, maxLength: 80 }
+        email: { type: string, format: email }
+        mobile:
+          type: string
+          minLength: 8
+          maxLength: 20
+          description: |
+            Normalised to E.164 by `normalizePhone`; D-002 expects a bare 10-digit Indian mobile.
+            A value that will not normalise is a `422` on `mobile`.
+        password:
+          type: string
+          minLength: 12
+          maxLength: 256
+          format: password
+          description: |
+            Length is checked by Zod; `validatePasswordStrength` in `packages/core` additionally
+            rejects common and low-variety passwords. Never logged and never echoed (AUTH-01-03).
+        accept_terms: { type: boolean, const: true }
+
+    SignupResponse:
+      type: object
+      required: [next, onboarding_required]
+      properties:
+        next:
+          type: string
+          description: Where to land. `/app` for an owner; `landingPathFor` decides.
+          example: /app
+        onboarding_required:
+          type: boolean
+          const: true
+          description: |
+            Always true — signup creates a DRAFT shell tenant, so the wizard always follows
+            (AUTH-01-01, ONB-01).
+
+    LoginRequest:
+      type: object
+      description: |
+        `loginRequest` in `packages/contracts/src/auth.ts`. **The frozen skeleton declares no
+        request body for this operation at all** (OPEN-04).
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password:
+          type: string
+          minLength: 1
+          maxLength: 256
+          format: password
+          description: |
+            `min(1)`, deliberately not the 12 of signup: rejecting a short password at the login
+            form would tell an attacker the stored one is longer than what they tried.
+        remember_me:
+          type: boolean
+          description: Extends the session lifetime. Absent is treated as false.
+
+    LandingResponse:
+      type: object
+      required: [next]
+      properties:
+        next:
+          type: string
+          description: |
+            `/admin` for a super-admin, `/app` otherwise (AUTH-02-03). The two consoles are
+            separately guarded (RBAC rule 4), so this is a hint for the client, not the authority.
+          example: /app
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    ResetPasswordRequest:
+      type: object
+      description: '`resetPasswordRequest` in `packages/contracts/src/auth.ts`.'
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          minLength: 20
+          description: |
+            From the emailed link. Only its SHA-256 is stored, in `password_reset_tokens`
+            (AMENDMENT-002); single use is enforced by `used_at`.
+        password: { type: string, minLength: 12, maxLength: 256, format: password }
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, description: Ready to display as-is. }
+        next: { type: string, description: Where to send the user next, when there is one. }
+
+    BusinessResponse:
+      type: object
+      description: |
+        Keys are Drizzle select aliases, hence `publishedAt` rather than `published_at`. Not
+        normalised here because the onboarding client already reads this shape; see
+        `docs/openapi/README.md`.
+      required: [name, category, description, city, state, timezone, status, publishedAt, slug]
+      properties:
+        name: { type: string, maxLength: 160 }
+        category:
+          type: string
+          maxLength: 100
+          description: |
+            Free text. Until ONB-01 runs, this and `name` hold the placeholder values signup
+            wrote, which is how `POST /business/publish` detects an unconfigured shell.
+        description: { type: [string, 'null'], maxLength: 500 }
+        city: { type: [string, 'null'], maxLength: 100 }
+        state: { type: [string, 'null'], maxLength: 100 }
+        timezone:
+          type: string
+          maxLength: 64
+          default: Asia/Kolkata
+          description: |
+            AMENDMENT-004. AC-026 requires date filters in the business-local timezone or a
+            documented default, and `analytics_daily_business.metric_date` is a bare date.
+        status: { $ref: '#/components/schemas/BusinessStatus' }
+        publishedAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            When the business **first** went live. Preserved across republishes — analytics and
+            support both read it as the first-live date.
+        slug:
+          type: [string, 'null']
+          description: The current primary slug, or null before one is claimed.
+
+    BusinessStatus:
+      type: string
+      enum: [DRAFT, ACTIVE, SUSPENDED, CLOSED]
+      description: |
+        `business_status`. DRAFT is served on no public surface. SUSPENDED and CLOSED cannot
+        publish back to live (Flow J).
+
+    BusinessIdentityRequest:
+      type: object
+      description: |
+        `businessIdentityRequest` in `packages/contracts/src/business.ts`. `city` and `state` are
+        required keys with no minimum length, so an empty string is accepted and stored as one —
+        the columns are nullable but this handler writes what it is given.
+      required: [name, category, city, state, slug]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 160 }
+        category: { type: string, minLength: 1, maxLength: 100 }
+        description:
+          type: string
+          maxLength: 500
+          description: "ONB-01 specifies 0-500 (AMENDMENT-009, narrowed from the schema's 1000)."
+        city: { type: string, maxLength: 100 }
+        state: { type: string, maxLength: 100 }
+        slug:
+          type: string
+          minLength: 3
+          maxLength: 48
+          description: |
+            Zod checks length only. `validateSlug` in `packages/core` is authoritative on shape:
+            lowercase letters, digits and single interior hyphens, not a reserved word, not digits
+            only. `normalizeSlug` is applied first, so ordinary punctuation and spacing are fixed
+            rather than rejected.
+        timezone: { type: string, maxLength: 64, default: Asia/Kolkata }
+
+    BusinessIdentityUpdateResponse:
+      type: object
+      required: [slug, previous_slug, previous_slug_redirects]
+      properties:
+        slug: { type: string, description: The slug now serving this business. }
+        previous_slug:
+          type: [string, 'null']
+          description: The slug it replaced, or null on a first claim.
+        previous_slug_redirects:
+          type: boolean
+          description: |
+            True whenever a previous slug existed. Flow I keeps it redirecting, and it stays in
+            the one `business_slugs` namespace (AMENDMENT-005) so no other business can claim it
+            meanwhile.
+
+    SlugAvailabilityResponse:
+      type: object
+      required: [slug, available, reason, suggestions]
+      properties:
+        slug:
+          type: string
+          description: The normalised candidate — what would actually be claimed.
+        available: { type: boolean }
+        reason:
+          type: [string, 'null']
+          description: Null when available.
+          enum:
+            - null
+            - TAKEN
+            - TOO_SHORT
+            - TOO_LONG
+            - INVALID_CHARACTERS
+            - LEADING_OR_TRAILING_HYPHEN
+            - CONSECUTIVE_HYPHENS
+            - RESERVED
+            - NUMERIC_ONLY
+        suggestions:
+          type: array
+          maxItems: 3
+          items: { type: string }
+          description: |
+            Empty when the candidate is available. Each one has been checked as claimable for this
+            business — offering a suggestion that is itself taken is worse than offering none.
+
+    ReviewDestinationResponse:
+      type: object
+      required: [url, label]
+      properties:
+        url:
+          type: [string, 'null']
+          format: uri
+          description: Null until ONB-02 has been completed.
+        label: { type: string, maxLength: 80, default: Google }
+
+    ReviewDestinationUpdateRequest:
+      type: object
+      description: |
+        Only `url` is read. `reviewDestinationRequest` in `packages/contracts` also carries
+        `label`, but this handler does not use that schema and always stores `Google`; sending a
+        label is silently ignored. Flagged in `docs/openapi/README.md`.
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: |
+            Must be `https://` on a Google review host and carry a place reference
+            (`validateGoogleReviewUrl`, ONB-02-02). Tracking parameters are stripped. `http://` is
+            rejected rather than upgraded — silently rewriting a merchant's destination is the
+            wrong default for a field that redirects real customers.
+
+    ReviewDestinationUpdateResponse:
+      type: object
+      required: [url, host]
+      properties:
+        url: { type: string, format: uri, description: The stored, canonicalised URL. }
+        host:
+          type: string
+          description: The accepted Google host, echoed so the UI can confirm what it matched.
+
+    BusinessLinkType:
+      type: string
+      enum: [GOOGLE_REVIEW, WHATSAPP, CALL, INSTAGRAM, FACEBOOK, WEBSITE, DIRECTIONS, CUSTOM]
+      description: |
+        `link_type` (AMENDMENT-013). Closed because `19_Admin_Panel_Spec.md` lists allowed profile
+        section types as platform configuration. `GOOGLE_REVIEW` is a presentation row only and
+        carries no url of its own (AMENDMENT-003, `ck_google_review_has_no_url`).
+
+    BusinessLinksResponse:
+      type: object
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          items:
+            type: object
+            required: [id, type, label, url, phone, enabled, sortOrder]
+            properties:
+              id: { type: string, format: uuid }
+              type: { $ref: '#/components/schemas/BusinessLinkType' }
+              label: { type: string }
+              url: { type: [string, 'null'], format: uri }
+              phone: { type: [string, 'null'], description: E.164. }
+              enabled:
+                type: boolean
+                description: |
+                  A section with nothing to point at is never enabled — enforced by
+                  `ck_enabled_link_has_target`, not by convention (ONB-03-02, PROFILE-01-02).
+              sortOrder: { type: integer, description: Ascending display order (D-015). }
+
+    BusinessLinksUpdateRequest:
+      type: object
+      description: |
+        A whole-list replacement of the five defaults. A default not named here is cleared. The
+        `enabled` field is accepted but ignored: enablement is derived from whether a target is
+        present.
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          items:
+            type: object
+            required: [type]
+            properties:
+              type: { $ref: '#/components/schemas/BusinessLinkType' }
+              url:
+                type: [string, 'null']
+                description: 'For URL section types. Must be `https://`. Empty clears it.'
+              phone:
+                type: [string, 'null']
+                description: |
+                  For `WHATSAPP` and `CALL`. Normalised to E.164; a value that will not normalise
+                  is a `422`. Empty clears it.
+              enabled: { type: boolean, description: Ignored. See the schema description. }
+
+    BusinessLinksUpdateResponse:
+      type: object
+      required: [sections]
+      properties:
+        sections:
+          type: integer
+          const: 5
+          description: |
+            The number of default sections upserted (D-014), not the saved list. Call `GET` to
+            read the rows back.
+
+    PublishResponse:
+      type: object
+      required: [status, slug, public_url, qr_code, qr_url]
+      properties:
+        status: { type: string, const: ACTIVE }
+        slug: { type: string }
+        public_url:
+          type: string
+          format: uri
+          description: 'The canonical route, live immediately (ONB-05-02).'
+        qr_code:
+          type: string
+          description: |
+            The opaque code for the default `Main QR` source (ONB-05-01). Stable across
+            republishes — a new code would otherwise invalidate printed material.
+        qr_url:
+          type: string
+          format: uri
+          description: |
+            What the QR image encodes. Dynamic: it resolves through the platform on every scan, so
+            changing the review destination changes where it lands (AC-017).
+
+    QrSourceListResponse:
+      type: object
+      required: [sources]
+      properties:
+        sources:
+          type: array
+          maxItems: 500
+          description: |
+            Oldest first, ties broken by id — rows created in one transaction can share `created_at`
+            to the microsecond, and an unstable order in a list with Rename and Disable buttons is
+            how the wrong row gets clicked.
+          items:
+            type: object
+            required:
+              - id
+              - code
+              - source_label
+              - internal_note
+              - status
+              - created_at
+              - resolve_url
+            properties:
+              id: { type: string, format: uuid }
+              code:
+                type: string
+                description: |
+                  The opaque printed code. Immutable for the life of the row (QR-01-01) — a new code
+                  would invalidate printed material.
+              source_label:
+                type: string
+                maxLength: 120
+                description: |
+                  Wire names mirror `qrSourceRequest` in `packages/contracts`, so what QR-01 sends
+                  when it creates or renames a source is exactly what it reads back.
+              internal_note: { type: [string, 'null'], maxLength: 500 }
+              status: { type: string, enum: [ACTIVE, DISABLED] }
+              created_at:
+                type: string
+                format: date-time
+                description: |
+                  A UTC instant. Rendering it in `businesses.timezone` (AMENDMENT-004) is the
+                  client's job — AC-026 governs date *filters* on analytics, not the transport
+                  format of a timestamp.
+              resolve_url:
+                type: string
+                format: uri
+                description: |
+                  What the standee encodes: the opaque dynamic URL (ADR-002, D-026). Surfaced so an
+                  owner can check a printed code by hand and support can be given a link that
+                  resolves the way a scan does.
+
+    AiContextResponse:
+      type: object
+      required: [summary, services, context_terms, modes]
+      properties:
+        summary: { type: [string, 'null'], maxLength: 2000 }
+        services:
+          type: array
+          maxItems: 30
+          items: { type: string, maxLength: 80 }
+        context_terms:
+          type: array
+          maxItems: 30
+          items: { type: string, maxLength: 80 }
+          description: |
+            Hints for the generator, never mandatory output (D-025, AC-010). Nothing in the
+            product may present these as words that must appear in every review.
+        modes:
+          type: array
+          description: |
+            Read-only here. `isActive` is camelCase for the same reason as elsewhere — it is a
+            Drizzle alias. Exactly one mode is active; a mode shifts emphasis and is never a
+            sentiment gate (AI-02).
+          items:
+            type: object
+            required: [id, name, isActive]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              isActive: { type: boolean }
+
+    AiContextRequest:
+      type: object
+      description: |
+        `aiContextRequest` in `packages/contracts/src/business.ts`. There is deliberately **no**
+        field for required or mandatory keywords, and none may be added (D-025, AC-010).
+      properties:
+        summary: { type: string, maxLength: 2000 }
+        services:
+          type: array
+          maxItems: 30
+          default: []
+          items: { type: string, maxLength: 80 }
+        context_terms:
+          type: array
+          maxItems: 30
+          default: []
+          items: { type: string, maxLength: 80 }
+
+    AiTestPreviewResponse:
+      type: object
+      required:
+        - review_text
+        - prompt_version
+        - editable_by_customer
+        - requires_experience_confirmation
+        - compliance_passed
+        - counts_toward_quota
+      properties:
+        review_text: { type: string }
+        prompt_version: { type: string }
+        editable_by_customer:
+          type: boolean
+          const: true
+          description: 'The customer always edits before copying (ADR-008).'
+        requires_experience_confirmation: { type: boolean, const: true }
+        compliance_passed:
+          type: boolean
+          description: |
+            The AC-011/AC-012 gate result for this draft. Can be false with a `200`: the owner is
+            being shown what the gate saw.
+        counts_toward_quota:
+          type: boolean
+          const: false
+          description: 'ONB-04-02 and AI-01-01 — a preview never consumes quota.'
+
+    GenerateReviewRequest:
+      type: object
+      description: |
+        `generateReviewRequest` in `packages/contracts/src/public.ts`. Both identifiers are
+        optional in the schema, but a request naming neither resolves to no tenant and returns
+        `404`. The skeleton's `public_business_ref` is not accepted — see the delta.
+      properties:
+        slug: { type: string, minLength: 3, maxLength: 48 }
+        qr_code:
+          type: string
+          minLength: 6
+          maxLength: 32
+          description: |
+            Wins over `slug` when both are sent: it also carries source attribution, and a
+            disabled QR must win over the business merely being reachable by slug (QR-01-02).
+        previous_generation_id:
+          type: string
+          format: uuid
+          description: |
+            Recorded as the parent of this draft, so a regeneration chain is traceable (AC-009).
+            The similarity gate compares against the previous drafts for the anonymous session,
+            not against this id.
+
+    ReviewGeneration:
+      type: object
+      description: '`generateReviewResponse` in `packages/contracts/src/public.ts`.'
+      required: [generation_id, review_text, prompt_version, requires_experience_confirmation]
+      properties:
+        generation_id: { type: string, format: uuid }
+        review_text:
+          type: string
+          minLength: 20
+          maxLength: 1200
+          description: |
+            A first draft to edit, not a finished review. No star rating accompanies it and none
+            is ever requested (D-009, AC-006).
+        prompt_version: { type: string }
+        requires_experience_confirmation:
+          type: boolean
+          const: true
+          description: |
+            A constant, not a flag. ADR-008 and AC-008 make the confirmation gate mandatory, so no
+            valid response has it false and no client can be written against a shape where Copy is
+            enabled without it.
+
+    PublicEventRequest:
+      type: object
+      description: |
+        `publicEventRequest` in `packages/contracts/src/public.ts`. Identity properties
+        (`business_id`, `anonymous_session_id`, `qr_code_id`) are stripped from `properties` and
+        injected server-side, so a client cannot write into another tenant.
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: |
+            Must be in the taxonomy generated from `11_Analytics_Event_Taxonomy.csv` (AN-01-01).
+            Anything else is dropped with `accepted: false`. Per AC-025 no event name implies a
+            review was submitted, and per D-009 no event property carries a star rating — both
+            asserted by test.
+          enum:
+            - qr_scan
+            - review_page_view
+            - ai_generate_click
+            - ai_generate_success
+            - ai_generate_failure
+            - ai_regenerate_click
+            - review_edit
+            - experience_confirmed
+            - review_copy
+            - google_open
+            - private_feedback_open
+            - private_feedback_submit
+            - profile_view
+            - profile_link_click
+            - review_request_prepared
+            - review_request_marked_sent
+            - review_request_link_click
+            - qr_created
+            - custom_domain_added
+            - custom_domain_activated
+            - subscription_checkout_started
+            - subscription_activated
+            - admin_business_suspended
+        slug: { type: string, minLength: 3, maxLength: 48 }
+        qr_code: { type: string, minLength: 6, maxLength: 32 }
+        properties:
+          type: object
+          default: {}
+          additionalProperties: true
+          description: |
+            Event-specific properties. Each event's required set is in the generated taxonomy;
+            a missing one means the event is dropped with `accepted: false`.
+
+    SubmitFeedbackRequest:
+      type: object
+      description: |
+        `submitFeedbackRequest` in `packages/contracts/src/public.ts`. Only the message is
+        required — FB-01 asks for as little as possible. Values are trimmed before validation, so
+        whitespace does not satisfy the minimum and an empty optional field becomes absent rather
+        than an empty string.
+      required: [slug, message]
+      properties:
+        slug: { type: string, minLength: 3, maxLength: 48 }
+        name: { type: string, maxLength: 120 }
+        mobile:
+          type: string
+          maxLength: 20
+          description: |
+            Stored as E.164 when it normalises and as typed when it does not. Rejecting the
+            submission over a phone number would lose the message, which is the part the business
+            needs.
+        message: { type: string, minLength: 5, maxLength: 2000 }
+
+# ---------------------------------------------------------------------------------------------
+# The delta from the delivered skeleton. This is the part worth reading.
+#
+# docs/spec/08_OpenAPI_v1.yaml remains the contract of record for V1 scope: nothing recorded as
+# not-implemented has been dropped. What follows records where the running system and the frozen
+# document differ today, so neither is mistaken for the other.
+# ---------------------------------------------------------------------------------------------
+x-skeleton-delta:
+  frozen-document: docs/spec/08_OpenAPI_v1.yaml
+  recorded-in: docs/SPEC_AMENDMENTS.md — OPEN-03, OPEN-04
+
+  absent-from-skeleton-but-implemented:
+    - path: /auth/reset-password
+      methods: [post]
+      note: |
+        The skeleton defines `/auth/forgot-password` with no counterpart to consume the token it
+        issues, so AUTH-03-02's single-use expiring token was unimplementable. OPEN-03.
+    - path: /business/review-destination
+      methods: [get, put]
+      note: |
+        The skeleton offers `POST /business/review-destinations` (plural, a collection) with no
+        edit path, while AC-017 requires the Google URL to be changeable. Implemented as an
+        idempotent PUT on the single primary destination — V1 allows exactly one per business, so
+        there is no id to supply and nothing to enumerate. OPEN-03.
+    - path: /business/slug-available
+      methods: [get]
+      note: |
+        Required by ONB-01's slug-available / slug-unavailable field states, which the skeleton
+        provides no endpoint for. Authenticated deliberately, to avoid shipping a tenant
+        enumerator.
+    - path: /auth/login
+      methods: [delete]
+      note: |
+        Exists in the handler; clears the cookie without revoking the session row and without a
+        CSRF check. Documented, not endorsed — see README.
+
+  implemented-with-a-different-shape:
+    - skeleton: POST /public/review/generate with a required `public_business_ref`
+      actual: |
+        Accepts `slug` and/or `qr_code`. Nothing mints or resolves a `public_business_ref`, and
+        the browser already holds the public slug and the printed QR code, so a third public
+        identifier would be one more thing to keep in step for no gain.
+    - skeleton: POST /business/links, PATCH and DELETE /business/links/{id}, POST /business/links/reorder
+      actual: |
+        A single whole-list `PUT /business/links` upserting the five D-014 defaults. Per-section
+        create, edit, delete and reorder are still needed for PROFILE-01 and D-015, and are not
+        built.
+    - skeleton: GET and POST /business/review-destinations
+      actual: GET and PUT /business/review-destination (singular). See above.
+    - skeleton: GET /ai/modes and its mutations
+      actual: |
+        Modes are returned read-only inside `GET /ai/context`, and a `Balanced` default is created
+        on first save. Creating, editing and activating a mode are not built.
+
+  listed-in-skeleton-not-implemented:
+    - group: Business profile sections
+      operations:
+        - POST /business/links
+        - PATCH /business/links/{id}
+        - DELETE /business/links/{id}
+        - POST /business/links/reorder
+    - group: Review destinations (collection form)
+      operations:
+        - GET /business/review-destinations
+        - POST /business/review-destinations
+      note: OPEN-03 also lists PATCH and DELETE /business/review-destinations/{id} as missing.
+    - group: Review modes
+      operations:
+        - GET /ai/modes
+        - POST /ai/modes
+        - PATCH /ai/modes/{id}
+        - POST /ai/modes/{id}/activate
+    - group: Public JSON resolution
+      operations:
+        - GET /public/qr/{code}
+        - GET /public/business/{slug}
+      note: |
+        The work exists but not as JSON endpoints: `/[slug]` and `/r/[code]` resolve the tenant in
+        Server Components via `resolveBySlug` / `resolveByQrCode`. `publicBusinessResponse` in
+        `packages/contracts` is already the response shape if a client ever needs these.
+    - group: QR management
+      operations:
+        - POST /qr
+        - PATCH /qr/{id}
+      note: |
+        `GET /qr` and `GET /qr/{id}/download` landed while this document was being written and are
+        documented above. Creating an additional source and renaming or disabling one are still
+        unbuilt, so QR-01 is readable but not editable: publish mints the one default source and
+        nothing can add a second. This group is the entry most likely to be out of date — re-derive
+        it from `apps/web/app/api/v1/qr/**/route.ts` before relying on it.
+    - group: CRM
+      operations:
+        - GET /customers
+        - POST /customers
+        - PATCH /customers/{id}
+        - DELETE /customers/{id}
+        - POST /review-requests/preview
+        - POST /review-requests
+        - POST /review-requests/{id}/mark-sent
+      note: |
+        OPEN-02 is related: nothing resolves `review_requests.tracking_token_hash`, so Flow F
+        step 9 attribution cannot work even once these exist.
+    - group: Private feedback inbox
+      operations:
+        - GET /feedback
+        - PATCH /feedback/{id}
+      note: |
+        `POST /public/feedback` stores messages that no endpoint yet reads back, so FB-01 is
+        write-only today.
+    - group: Analytics
+      operations:
+        - GET /analytics/overview
+        - GET /analytics/qr
+        - GET /analytics/links
+      note: |
+        Events are being ingested and the daily rollup table exists, but nothing serves AN-01.
+    - group: Custom domains
+      operations:
+        - GET /domains
+        - POST /domains
+        - POST /domains/{id}/check
+        - DELETE /domains/{id}
+    - group: Subscription and payments
+      operations:
+        - GET /subscription
+        - POST /subscription/checkout
+        - POST /webhooks/razorpay
+      note: |
+        OPEN-03: AC-015 and AC-016 require server-side checkout signature verification. Neither
+        the checkout endpoint nor the webhook exists in the tree yet.
+    - group: Admin
+      operations:
+        - GET /admin/businesses
+        - GET /admin/businesses/{id}
+        - PATCH /admin/businesses/{id}
+        - GET /admin/ai/prompt-versions
+        - POST /admin/ai/prompt-versions
+        - POST /admin/ai/prompt-versions/{id}/activate
+        - GET /admin/settings
+        - PATCH /admin/settings
+      note: |
+        OPEN-03 adds `GET /admin/audit-logs`, which the skeleton omits. Super-admin MFA storage
+        exists (AMENDMENT-007) but the enrolment and challenge flow does not, and
+        `19_Admin_Panel_Spec.md` makes MFA mandatory — so no admin endpoint should ship before it.
+
+  codes-defined-but-not-yet-emitted-anywhere:
+    note: |
+      From `23_API_Error_Codes.md`. Listed so the taxonomy is not mistaken for a description of
+      what the API currently does. `QR_NOT_FOUND` is the interesting one: it is deliberately
+      collapsed into `RESOURCE_NOT_FOUND` on the public endpoints so they cannot be used to
+      enumerate businesses, so it may never be emitted at all.
+    codes:
+      - TENANT_SCOPE_VIOLATION
+      - QR_NOT_FOUND
+      - DOMAIN_ALREADY_CLAIMED
+      - DOMAIN_VERIFICATION_PENDING
+      - PAYMENT_VERIFICATION_FAILED
+      - PAYMENT_ALREADY_PROCESSED
+      - SUBSCRIPTION_NOT_ACTIVE
+      - UPLOAD_INVALID
+      - ADMIN_REASON_REQUIRED
