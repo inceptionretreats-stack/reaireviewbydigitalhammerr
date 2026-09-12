@@ -32,6 +32,7 @@ export function LiveFigures({ qrSources, subscription, businessStatus }: LiveFig
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <KpiCard
+        className="dashboard-kpi dashboard-kpi--green"
         label="Enabled QR sources"
         value={qrSources.active}
         hint={describeQrSources(qrSources, businessStatus)}
@@ -42,11 +43,7 @@ export function LiveFigures({ qrSources, subscription, businessStatus }: LiveFig
 }
 
 /**
- * The free allowance (D-004, AC-013), or what replaces it on a paid plan.
- *
- * `free_generations_used` keeps incrementing after an upgrade, so on Pro it is a historical figure
- * and not a ceiling. Presenting it as "3 of 10" to a paying tenant would tell them they are about
- * to run out of something they have already bought their way past.
+ * The lifetime Free allowance or the independent annual Pro allowance.
  */
 function GenerationAllowance({
   subscription,
@@ -55,32 +52,19 @@ function GenerationAllowance({
 }) {
   const plan = describePlan(subscription.status);
 
-  if (!plan.freeQuotaGoverns) {
-    const fairUse = subscription.fairUseMonthlySoftLimit;
-    return (
-      <KpiCard
-        label="AI generations"
-        value="Included"
-        hint={
-          fairUse === null
-            ? 'Covered by your plan.'
-            : `Covered by your plan, up to a fair-use limit of ${fairUse} a month.`
-        }
-      />
-    );
-  }
-
-  // ck_free_used_within_limit makes this non-negative at the database level, so there is nothing
-  // to clamp.
-  const remaining = subscription.freeGenerationLimit - subscription.freeGenerationsUsed;
+  const isPro = plan.quotaKind === 'PRO';
+  const used = isPro ? subscription.proGenerationsUsed : subscription.freeGenerationsUsed;
+  const limit = isPro ? subscription.proGenerationLimit : subscription.freeGenerationLimit;
+  const remaining = limit - used;
 
   return (
     <KpiCard
-      label="Free AI generations used"
-      value={`${subscription.freeGenerationsUsed} of ${subscription.freeGenerationLimit}`}
+      className="dashboard-kpi dashboard-kpi--blue"
+      label={isPro ? 'Pro Ai drafts used this year' : 'Free Ai drafts used'}
+      value={`${used.toLocaleString('en-IN')} of ${limit.toLocaleString('en-IN')}`}
       hint={
         remaining > 0
-          ? `${remaining} left.`
+          ? `${remaining.toLocaleString('en-IN')} left${isPro ? ' this subscription year' : ''}.`
           : // 02_System_Architecture is explicit that an exhausted quota must never block the
             // direct Google button. An owner who reads "none left" as "my page is dead" would
             // take the standees down.

@@ -28,24 +28,47 @@ let cached: RateLimiter | undefined;
 let redis: Redis | undefined;
 
 function redisClient(): Redis {
-  redis ??= new Redis(env().REDIS_URL, {
-    // A limiter must not hold a request open waiting for Redis. Failing fast hands control to
-    // the fallback store, which is the whole point of having one.
-    maxRetriesPerRequest: 1,
-    connectTimeout: 1_000,
-    commandTimeout: 1_000,
-    enableOfflineQueue: false,
-    lazyConnect: true,
-  });
+  if (!redis) {
+    redis = new Redis(env().REDIS_URL, {
+      // A limiter must not hold a request open waiting for Redis. Failing fast hands control to
+      // the fallback store, which is the whole point of having one.
+      maxRetriesPerRequest: 1,
+      connectTimeout: 1_000,
+      commandTimeout: 1_000,
+      enableOfflineQueue: false,
+      lazyConnect: true,
+    });
+
+    // ioredis prints its own "Unhandled error event" warning when a client has no listener. The
+    // rejected command is still reported by RateLimiter's onStoreUnavailable callback below, so
+    // this prevents duplicate dev-server noise without hiding the operational failure.
+    redis.on('error', () => undefined);
+  }
   return redis;
 }
+
+/**
+ * Fallback warnings, once per check per process rather than once per request.
+ *
+ * With no Redis running every request fell back, and every fallback printed the full ioredis
+ * stack — a screen of identical traces per customer that buried the one line that mattered when
+ * generation actually failed. The first occurrence still carries the error; later ones are a
+ * single line, so the condition stays visible without drowning everything else.
+ */
+const fallbackSeen = new Set<string>();
 
 export function rateLimiter(): RateLimiter {
   cached ??= new RateLimiter(new RedisRateLimitStore(redisClient()), {
     fallbackStore: new MemoryRateLimitStore(),
     config: scaledConfig(),
     onStoreUnavailable: (error, checkName) => {
-      console.warn(`[rate-limit] ${checkName} fell back to in-process limiting`, error);
+      if (fallbackSeen.has(checkName)) return;
+      fallbackSeen.add(checkName);
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[rate-limit] ${checkName} fell back to in-process limiting (${reason}). ` +
+          'Limits are per instance until Redis is reachable; reported once per process.',
+      );
     },
   });
   return cached;

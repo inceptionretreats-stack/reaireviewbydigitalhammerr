@@ -60,7 +60,10 @@ export interface DashboardSummary {
     currency: string;
     freeGenerationLimit: number;
     freeGenerationsUsed: number;
+    proGenerationLimit: number;
+    proGenerationsUsed: number;
     fairUseMonthlySoftLimit: number | null;
+    startsAt: Date | null;
     expiresAt: Date | null;
   } | null;
   qrSources: DashboardQrSources;
@@ -116,7 +119,10 @@ export async function loadDashboardSummary(
           currency: subscriptions.currency,
           freeGenerationLimit: subscriptions.freeGenerationLimit,
           freeGenerationsUsed: subscriptions.freeGenerationsUsed,
+          proGenerationLimit: subscriptions.proGenerationLimit,
+          proGenerationsUsed: subscriptions.proGenerationsUsed,
           fairUseMonthlySoftLimit: subscriptions.fairUseMonthlySoftLimit,
+          startsAt: subscriptions.startsAt,
           expiresAt: subscriptions.expiresAt,
         })
         .from(subscriptions)

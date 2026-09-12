@@ -28,7 +28,11 @@ export interface PublicPageCardProps {
 export function PublicPageCard({ publicUrl, isLive, statusNote, liveSince }: PublicPageCardProps) {
   if (!publicUrl) {
     return (
-      <Card title="Your public page" titleAs="h2">
+      <Card
+        title="Your public page"
+        titleAs="h2"
+        className="dashboard-section-card dashboard-section-card--red"
+      >
         {/* Deliberately does not say a QR code points at this address, because none does. A QR
             encodes /r/{code} — a permanent code that resolves through us (ADR-002, D-026) — which
             is exactly why AC-017 can promise that changing the address, the Google URL or the
@@ -52,6 +56,7 @@ export function PublicPageCard({ publicUrl, isLive, statusNote, liveSince }: Pub
     <Card
       title="Your public page"
       titleAs="h2"
+      className="dashboard-section-card dashboard-section-card--red"
       description={statusNote}
       footer={liveSince ? `Live since ${liveSince}.` : undefined}
     >

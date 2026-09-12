@@ -12,8 +12,8 @@
  *  - An internal quality-gate retry counts as ONE customer generation, not two, even though
  *    it costs two provider calls. Provider cost is tracked separately.
  *  - A business test preview consumes nothing (AI-01-01, ONB-04-02).
- *  - Pro is fair-use unlimited: no counter, soft alerting only, and no hidden hard cap
- *    advertised to normal users (D-006).
+ *  - Pro gets 2,000 successful public generations in each paid annual period. The Free lifetime
+ *    counter is preserved separately when a business upgrades or its paid period ends.
  */
 
 export type EntitlementMode = 'FREE' | 'PRO' | 'BLOCKED';
@@ -22,7 +22,11 @@ export interface Entitlement {
   mode: EntitlementMode;
   freeGenerationsUsed: number;
   freeGenerationLimit: number;
-  /** Soft threshold for Pro fair-use alerting. Never enforced as a hard cap. */
+  proGenerationsUsed: number;
+  proGenerationLimit: number;
+  periodStartsAt: Date | null;
+  periodEndsAt: Date | null;
+  /** Independent abuse-observation threshold; it does not replace the annual plan cap. */
   fairUseMonthlySoftLimit: number | null;
 }
 
@@ -32,12 +36,14 @@ export type QuotaDenial =
 /**
  * A held reservation. Exactly one of commit() or release() must be called.
  *
- * `counted` distinguishes a Free reservation that incremented the counter from a Pro one that
- * did not, which is what ai_generations.counted_toward_quota records.
+ * `mode` records which independent counter was reserved. Successful public generations on both
+ * plans are counted; previews never enter this reservation path.
  */
 export interface QuotaReservation {
   businessId: string;
   mode: 'FREE' | 'PRO';
+  /** Identifies the paid year so a late failure cannot decrement a newly renewed period. */
+  periodStartsAt: Date | null;
   counted: boolean;
   usedAfterReserve: number;
 }
@@ -45,6 +51,11 @@ export interface QuotaReservation {
 export type QuotaOutcome =
   | { ok: true; reservation: QuotaReservation }
   | { ok: false; reason: QuotaDenial; entitlement: Entitlement };
+
+export interface QuotaConsumption {
+  usedAfterReserve: number;
+  periodStartsAt: Date | null;
+}
 
 /**
  * Storage contract for quota consumption.
@@ -57,11 +68,11 @@ export interface QuotaStore {
   getEntitlement(businessId: string): Promise<Entitlement | null>;
 
   /**
-   * Atomically increments usage if and only if it is below the limit.
+   * Atomically increments the selected plan's usage if and only if it is below the limit.
    * Resolves to the new count, or null when the limit is already reached.
    */
-  tryConsume(businessId: string): Promise<number | null>;
+  tryConsume(businessId: string, mode: QuotaReservation['mode']): Promise<QuotaConsumption | null>;
 
   /** Compensating decrement, used when the provider call fails (AC-014). */
-  release(businessId: string): Promise<void>;
+  release(reservation: QuotaReservation): Promise<void>;
 }

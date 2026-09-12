@@ -174,16 +174,14 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   await recordProfileView(content.businessId);
 
   return (
-    <main className="shell">
-      <PublicProfile
-        slug={content.slug}
-        name={content.name}
-        description={content.description}
-        logoUrl={content.logoUrl}
-        coverUrl={content.coverUrl}
-        sections={content.sections}
-      />
-    </main>
+    <PublicProfile
+      slug={content.slug}
+      name={content.name}
+      description={content.description}
+      logoUrl={content.logoUrl}
+      coverUrl={content.coverUrl}
+      sections={content.sections}
+    />
   );
 }
 

@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 import { AiContextStep } from '@/components/onboarding/AiContextStep';
 import { toStringArray } from '@/components/onboarding/ai-context';
+import { toDraftLanguage } from '@/lib/draft-language';
 
 /**
  * ONB-04 — `/onboarding/ai`.
@@ -23,7 +24,7 @@ import { toStringArray } from '@/components/onboarding/ai-context';
  */
 
 export const metadata: Metadata = {
-  title: 'AI context | AI Review',
+  title: 'Ai context | Ai Review',
   description: 'Tell the writing assistant what your business does.',
 };
 
@@ -50,6 +51,7 @@ export default async function Page() {
         summary: aiBusinessContexts.summary,
         services: aiBusinessContexts.services,
         contextTerms: aiBusinessContexts.contextTerms,
+        draftLanguage: aiBusinessContexts.draftLanguage,
       })
       .from(aiBusinessContexts)
       .where(eq(aiBusinessContexts.businessId, tenant.businessId))
@@ -79,6 +81,7 @@ export default async function Page() {
       initialSummary={context?.summary ?? ''}
       initialServices={toStringArray(context?.services)}
       initialContextTerms={toStringArray(context?.contextTerms)}
+      initialDraftLanguage={toDraftLanguage(context?.draftLanguage)}
       activeModeName={activeModeRows[0]?.name ?? null}
       hasAnyMode={anyModeRows.length > 0}
     />

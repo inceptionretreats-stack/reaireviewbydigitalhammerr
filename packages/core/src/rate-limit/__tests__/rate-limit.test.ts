@@ -225,7 +225,7 @@ describe('composed dimensions (AC-032)', () => {
   });
 });
 
-describe('fair use is observed, not enforced (D-006)', () => {
+describe('paid hourly abuse threshold is observed, not enforced', () => {
   const enforced = rule({ name: 'public.session_hourly', limit: 10 });
   const soft = rule({
     name: 'public.business_fair_use',
@@ -252,7 +252,7 @@ describe('fair use is observed, not enforced (D-006)', () => {
     ]);
   });
 
-  /** Advertising the soft window in a header is the hidden cap D-006 forbids. */
+  /** The observation window is not the advertised annual allowance and must not pose as one. */
   it('keeps the soft dimension out of the response headers', async () => {
     const limiter = new RateLimiter(new MemoryRateLimitStore(), { now: clock().now });
 
@@ -594,7 +594,7 @@ describe('public generation (09 abuse controls)', () => {
     expect((await limiter.publicGeneration(third)).allowed).toBe(false);
   });
 
-  it('adds the fair-use observation only for a paid business (D-006)', async () => {
+  it('adds the paid abuse observation only for a paid business', async () => {
     const free = publicGenerationCheck({ ...subject, plan: 'FREE' }, 1);
     const pro = publicGenerationCheck({ ...subject, plan: 'PRO' }, 1);
 

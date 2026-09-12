@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState, type DragEvent } from 'react';
 import { Badge, Button, Field, InlineError, Input, Toggle } from '@ai-review/ui';
 import {
@@ -34,9 +33,6 @@ import {
  * Review Us section carries no url field of its own (AMENDMENT-003): its destination lives in
  * `review_destinations` and is edited on ONB-02, which is the single-owner property AC-017 needs.
  */
-
-/** ONB-02 — the only screen in V1 that owns the Google destination. */
-const REVIEW_LINK_PATH = '/onboarding/review-link';
 
 export interface SectionRowProps {
   section: EditorSection;
@@ -180,15 +176,14 @@ export function SectionRow({
 
       {section.type === 'GOOGLE_REVIEW' ? (
         <p className="text-sm text-ink-muted">
-          {descriptor.hint} That destination is set on{' '}
-          <Link
-            href={REVIEW_LINK_PATH}
+          {descriptor.hint}{' '}
+          <a
+            href="#review-location"
             className="font-medium text-accent underline-offset-4 hover:underline"
           >
-            your Google review link
-          </Link>
-          {' — '}
-          changing it there updates this button and every printed QR code at once.
+            Change the location above
+          </a>{' '}
+          and this button—and every printed QR code—updates at once.
         </p>
       ) : (
         <Field

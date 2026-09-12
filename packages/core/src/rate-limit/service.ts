@@ -44,8 +44,8 @@ import type {
  *  2. **Public generation fails OPEN** if there is no fallback either. AC-035 wins, for a
  *     reason beyond the letter of it: abuse is not actually unbounded in that state. A Free
  *     business is capped at ten lifetime generations by the Postgres quota counter (AC-013),
- *     which does not involve Redis at all, and a Pro business is fair-use by decision (D-006).
- *     The rate limiter shapes traffic; the quota is the hard bound, and it survives.
+ *     which does not involve Redis at all, and a Pro business has the same durable annual
+ *     backstop. The rate limiter shapes traffic; the quota is the hard bound, and it survives.
  *  3. **Login fails CLOSED.** There is no equivalent backstop for credential stuffing — no
  *     durable counter caps password guesses — so failing open here would turn any Redis
  *     outage into an unmetered guessing window against every account, and an attacker who can
@@ -285,9 +285,8 @@ export function toRetryAfterSeconds(retryAfterMs: number): number {
 /**
  * Response headers for a decision.
  *
- * OBSERVE dimensions are excluded on purpose. Publishing the fair-use window in an
- * X-RateLimit-Limit header is precisely the "hidden hard cap advertised to normal users" that
- * D-006 rules out — and it would be a lie as well, since the dimension never denies anything.
+ * OBSERVE dimensions are excluded on purpose. Publishing an observation window in an
+ * X-RateLimit-Limit header would be a lie because the dimension never denies anything.
  * The most constrained enforced dimension is the one described.
  */
 export function rateLimitHeaders(decision: RateLimitDecision): Record<string, string> {

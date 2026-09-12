@@ -25,7 +25,12 @@
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
     "tunnel": "node scripts/tunnel.mjs",
-    "ai:model": "node scripts/set-ai-model.mjs"
+    "ai:model": "node scripts/set-ai-model.mjs",
+    "dev:up": "node scripts/dev-up.mjs",
+    "dev:down": "node scripts/dev-down.mjs",
+    "dev:status": "node scripts/dev-up.mjs --status",
+    "db:reencode": "node --env-file=.env scripts/db-reencode.mjs",
+    "admin:create": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/create-admin.mjs"
   },
   "devDependencies": {
     "@ai-review/config": "workspace:*",
@@ -37,8 +42,10 @@
     "drizzle-orm": "^0.45.2",
     "embedded-postgres": "18.4.0-beta.17",
     "eslint": "^10.9.1",
+    "jsqr": "^1.4.0",
     "pg": "^8.23.0",
     "prettier": "^3.9.6",
+    "sharp": "^0.35.4",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.68.0",

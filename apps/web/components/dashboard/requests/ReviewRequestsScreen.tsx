@@ -89,7 +89,7 @@ export async function ReviewRequestsScreen({
         <h1 className="text-2xl font-bold tracking-tight text-ink">Ask a customer, personally</h1>
         <p className="max-w-prose text-sm text-ink-muted">
           Prepare a message for one customer, then send it yourself from WhatsApp or paste it
-          wherever you like. AI Review never messages your customers for you.
+          wherever you like. Ai Review never messages your customers for you.
         </p>
       </header>
 

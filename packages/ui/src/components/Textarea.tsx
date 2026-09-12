@@ -15,7 +15,14 @@ export function Textarea({ className, rows = 4, ...rest }: TextareaProps) {
     <textarea
       {...rest}
       rows={rows}
-      className={cx(CONTROL_SURFACE, CONTROL_INVALID, FOCUS_RING, 'resize-y', className)}
+      className={cx(
+        'ui-textarea',
+        CONTROL_SURFACE,
+        CONTROL_INVALID,
+        FOCUS_RING,
+        'resize-y',
+        className,
+      )}
     />
   );
 }

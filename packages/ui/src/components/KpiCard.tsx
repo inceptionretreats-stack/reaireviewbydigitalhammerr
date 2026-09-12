@@ -44,7 +44,9 @@ const TREND_TONE: Record<TrendTone, string> = {
 
 export function KpiCard({ label, value, hint, trend, className }: KpiCardProps) {
   return (
-    <div className={cx('rounded-card border border-line bg-bg p-4 shadow-sm', className)}>
+    <div
+      className={cx('ui-kpi-card rounded-card border border-line bg-bg p-4 shadow-sm', className)}
+    >
       <dl>
         <dt className="text-sm font-medium text-ink-muted">{label}</dt>
         <dd className="mt-1 text-3xl font-semibold tabular-nums text-ink">{value}</dd>

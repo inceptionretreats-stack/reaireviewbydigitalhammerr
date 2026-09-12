@@ -16,7 +16,7 @@ import { ReviewRequestsScreen } from '@/components/dashboard/requests/ReviewRequ
  */
 
 export const metadata: Metadata = {
-  title: 'Review requests | AI Review',
+  title: 'Review requests | Ai Review',
   description: 'Prepare a personal review request you send yourself.',
 };
 

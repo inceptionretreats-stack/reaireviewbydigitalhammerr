@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 
 export const metadata: Metadata = {
-  title: 'Customers | AI Review',
+  title: 'Customers | Ai Review',
   description: 'The people you can ask for a review, one at a time.',
 };
 

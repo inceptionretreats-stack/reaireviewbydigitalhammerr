@@ -1,3 +1,4 @@
+import { DEFAULT_GUIDANCE } from '@ai-review/core';
 import { describe, expect, it } from 'vitest';
 import {
   DEMO_BUSINESS_ID,
@@ -29,12 +30,13 @@ import {
 const NOW = new Date('2026-08-29T06:00:00.000Z');
 
 function planFromSpec(overrides: Partial<SeedPlanInput> = {}): SeedPlanResult {
-  const { seed, prompt } = loadSpecDocuments();
+  const { seed, prompt, currentPrompt } = loadSpecDocuments();
   let issued = 0;
 
   return buildSeedPlan({
     seed,
     prompt,
+    currentPrompt,
     ownerPasswordHash: 'argon2id$owner',
     adminPasswordHash: 'argon2id$admin',
     now: NOW,
@@ -348,22 +350,29 @@ describe('tenant rows the seed file does not describe', () => {
     expect(subscription.status).toBe('FREE');
     expect(subscription.freeGenerationLimit).toBe(10);
     expect(subscription.freeGenerationsUsed).toBe(0);
+    expect(subscription.proGenerationLimit).toBe(2000);
+    expect(subscription.proGenerationsUsed).toBe(0);
   });
 
   /**
    * Without an ACTIVE row here `loadActivePromptVersion` returns null and every generation
    * answers AI_PROVIDER_UNAVAILABLE, so this is what makes the seeded tenant usable at all.
    */
-  it('seeds the ACTIVE prompt version from 10_AI_Prompt_Templates.json', () => {
-    const { promptVersion, admin } = planFromSpec().plan;
-    const { prompt } = loadSpecDocuments();
+  it('activates 1.1.0 from scripts/prompt-versions and archives the frozen 1.0.0', () => {
+    const { promptVersion, archivedPromptVersions, admin } = planFromSpec().plan;
+    const { prompt, currentPrompt } = loadSpecDocuments();
 
     expect(promptVersion.status).toBe('ACTIVE');
-    expect(promptVersion.version).toBe(prompt.version);
+    expect(promptVersion.version).toBe('1.1.0');
+    expect(promptVersion.version).toBe(currentPrompt.version);
     expect(promptVersion.model).toBe('gpt-5.6-luna');
-    expect(promptVersion.maxOutputTokens).toBe(220);
+    // Raised from 220: Roman-script Hindi tokenises worse than English, and a draft cut off at
+    // the cap is a non-retryable failure, not a shorter draft (CHANGE-003).
+    expect(promptVersion.maxOutputTokens).toBe(320);
     expect(promptVersion.reasoningEffort).toBe('none');
-    expect(promptVersion.systemPrompt).toBe(prompt.system_prompt);
+    expect(promptVersion.systemPrompt).toBe(currentPrompt.system_prompt);
+    expect(promptVersion.systemPrompt).toMatch(/DRAFT_LANGUAGE/);
+    expect(promptVersion.systemPrompt).not.toMatch(/English draft/);
     expect(promptVersion.outputSchema).toEqual(prompt.output_schema);
     expect(promptVersion.rolloutPercent).toBe(100);
     expect(promptVersion.activatedAt).toBe(NOW);
@@ -371,6 +380,46 @@ describe('tenant rows the seed file does not describe', () => {
     expect(promptVersion.createdBy).toBe(admin.id);
     expect(admin.role).toBe('SUPER_ADMIN');
     expect(admin.email).toBe(PLATFORM_ADMIN_EMAIL);
+
+    expect(archivedPromptVersions).toHaveLength(1);
+    const [archived] = archivedPromptVersions;
+    expect(archived?.version).toBe(prompt.version);
+    expect(archived?.status).toBe('ARCHIVED');
+    expect(archived?.activatedAt).toBeNull();
+    expect(archived?.rolloutPercent).toBe(0);
+    expect(archived?.systemPrompt).toBe(prompt.system_prompt);
+    expect(archived?.id).not.toBe(promptVersion.id);
+  });
+
+  /**
+   * The frozen template cannot be edited (docs/spec is a contract), so 1.1.0 is a copy with
+   * exactly one sentence changed — and this is what stops it drifting into a rewrite. Everything
+   * that follows the language sentence, and the output schema OpenAI's strict mode depends on,
+   * must stay byte-identical to 1.0.0.
+   */
+  it('keeps 1.1.0 verbatim to the frozen 1.0.0 except for the language sentence', () => {
+    const { prompt, currentPrompt } = loadSpecDocuments();
+    const OLD = 'Produce one editable English draft for a real customer.';
+    const NEW =
+      'Produce one editable draft for a real customer, written in the language named by DRAFT_LANGUAGE in the user message and following its LANGUAGE_RULES.';
+
+    expect(prompt.system_prompt).toContain(OLD);
+    expect(currentPrompt.system_prompt).toBe(prompt.system_prompt.replace(OLD, NEW));
+    expect(currentPrompt.output_schema).toEqual(prompt.output_schema);
+    expect(currentPrompt.default_model).toBe(prompt.default_model);
+    expect(currentPrompt.reasoning_effort).toBe(prompt.reasoning_effort);
+  });
+
+  /** CHANGE-004: the rules travel on the version row, and the current template carries them. */
+  it('seeds 1.1.0 with the default writing rules as data', () => {
+    const { promptVersion, archivedPromptVersions } = planFromSpec().plan;
+    expect(promptVersion.guidance).toEqual(DEFAULT_GUIDANCE);
+    // The frozen 1.0.0 has no guidance of its own; it is filled with the defaults on the way in.
+    expect(archivedPromptVersions[0]?.guidance).toEqual(DEFAULT_GUIDANCE);
+  });
+
+  it('seeds the demo tenant as Hinglish (CHANGE-003)', () => {
+    expect(planFromSpec().plan.aiContext.draftLanguage).toBe('hinglish');
   });
 
   it('carries the AI business context through as unranked hints', () => {

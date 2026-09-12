@@ -16,7 +16,14 @@ export function Input({ className, ...rest }: InputProps) {
   return (
     <input
       {...rest}
-      className={cx(CONTROL_SURFACE, TOUCH_TARGET, CONTROL_INVALID, FOCUS_RING, className)}
+      className={cx(
+        'ui-input',
+        CONTROL_SURFACE,
+        TOUCH_TARGET,
+        CONTROL_INVALID,
+        FOCUS_RING,
+        className,
+      )}
     />
   );
 }

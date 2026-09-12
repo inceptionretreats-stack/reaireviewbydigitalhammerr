@@ -30,7 +30,7 @@ import { LinksStep, type SavedContactLinks } from '@/components/onboarding/Links
  */
 
 export const metadata: Metadata = {
-  title: 'Contact links | AI Review',
+  title: 'Contact links | Ai Review',
   description: 'Choose which contact and social buttons appear on your public page.',
 };
 

@@ -53,7 +53,7 @@ const PLOTTED: readonly { event: ReportedEvent; label: string }[] = [
 const TABLE_EVENTS: readonly { event: ReportedEvent; label: string; short: string }[] = [
   { event: 'qr_scan', label: 'QR code scanned', short: 'Scans' },
   { event: 'review_page_view', label: 'Review page opened', short: 'Pages' },
-  { event: 'ai_generate_success', label: 'AI draft created', short: 'Drafts' },
+  { event: 'ai_generate_success', label: 'Ai draft created', short: 'Drafts' },
   { event: 'review_copy', label: 'Review copied', short: 'Copies' },
   { event: 'google_open', label: 'Google review page opened', short: 'Google opened' },
 ];

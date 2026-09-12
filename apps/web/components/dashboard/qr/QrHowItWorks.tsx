@@ -35,7 +35,7 @@ export function QrHowItWorks() {
         <div>
           <dt className="text-sm font-semibold text-ink">Every code goes to your review page</dt>
           <dd className="m-0 mt-1 max-w-prose text-sm text-ink-muted">
-            A scan opens your AI review page, where the customer writes their review with a little
+            A scan opens your Ai review page, where the customer writes their review with a little
             help and then opens Google themselves to post it. This destination is the same for every
             QR code in this version, so there is nothing to choose here.
           </dd>

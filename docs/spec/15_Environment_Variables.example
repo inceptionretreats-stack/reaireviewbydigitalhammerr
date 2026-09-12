@@ -53,5 +53,6 @@ LOG_LEVEL=info
 
 # Product settings default bootstraps (database becomes source of truth)
 FREE_AI_GENERATION_LIMIT=10
+PRO_ANNUAL_GENERATION_LIMIT=2000
 PRO_ANNUAL_PRICE_PAISE=99900
 DEFAULT_TIMEZONE=Asia/Kolkata

@@ -70,7 +70,7 @@ export function Table<T>({
     column.align === 'end' ? 'text-end' : 'text-start';
 
   return (
-    <div className={cx(!stackOnMobile && 'overflow-x-auto', className)}>
+    <div className={cx('ui-table', !stackOnMobile && 'overflow-x-auto', className)}>
       <table
         role="table"
         className={cx('w-full border-collapse text-sm text-ink', stackOnMobile && 'max-md:block')}

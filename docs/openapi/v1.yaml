@@ -1282,9 +1282,9 @@ paths:
               schema: { $ref: '#/components/schemas/ReviewGeneration' }
         '402':
           description: |
-            Free quota exhausted (Flow E step 3). The message is deliberately business-safe: it
-            must not suggest the business has done anything wrong, and the direct review link on
-            the page stays available (AC-036).
+            The active Free lifetime or Pro annual allowance is exhausted (Flow E step 3). The
+            message is deliberately business-safe: it must not suggest the business has done
+            anything wrong, and the direct review link on the page stays available (AC-036).
           x-error-codes: [PLAN_QUOTA_EXHAUSTED]
           content:
             application/json:
@@ -1327,12 +1327,13 @@ paths:
         '429':
           description: |
             AC-032, decided before anything expensive: a denied request reaches neither the
-            provider nor the free quota. Four dimensions in one atomic decision — session burst,
-            session hourly, adaptive IP prefix, and fair-use observation for Pro tenants.
-            `FAIR_USE_THROTTLED` is the Pro-tenant dimension (D-006). Always carries `Retry-After`
-            — a bare 429 with no interval does not really satisfy AC-032. A denial is also
-            recorded as `ai_generate_failure` with `provider: rate_limit`.
-          x-error-codes: [PUBLIC_RATE_LIMITED, FAIR_USE_THROTTLED]
+            provider nor the plan allowance. Enforced session-burst, session-hourly and adaptive
+            IP-prefix dimensions are evaluated in one atomic decision; the Pro short-window
+            dimension is observation-only because the advertised 2,000-draft annual allowance is
+            the durable paid cap (D-030). Always carries `Retry-After` — a bare 429 with no interval
+            does not really satisfy AC-032. A denial is also recorded as `ai_generate_failure`
+            with `provider: rate_limit`.
+          x-error-codes: [PUBLIC_RATE_LIMITED]
           headers:
             Retry-After: { $ref: '#/components/headers/RetryAfter' }
           content:
@@ -1643,6 +1644,7 @@ components:
                 - DOMAIN_ALREADY_CLAIMED
                 - DOMAIN_VERIFICATION_PENDING
                 - PAYMENT_VERIFICATION_FAILED
+                - PAYMENTS_NOT_CONFIGURED
                 - SUBSCRIPTION_NOT_ACTIVE
                 - UPLOAD_INVALID
                 - ADMIN_REASON_REQUIRED
@@ -2110,9 +2112,11 @@ components:
 
     AiContextResponse:
       type: object
-      required: [summary, services, context_terms, modes]
+      required: [summary, services, context_terms, draft_language, modes]
       properties:
         summary: { type: [string, 'null'], maxLength: 2000 }
+        draft_language:
+          $ref: '#/components/schemas/DraftLanguage'
         services:
           type: array
           maxItems: 30
@@ -2155,6 +2159,17 @@ components:
           maxItems: 30
           default: []
           items: { type: string, maxLength: 80 }
+        draft_language:
+          allOf: [{ $ref: '#/components/schemas/DraftLanguage' }]
+          default: hinglish
+
+    DraftLanguage:
+      type: string
+      enum: [en, hinglish]
+      description: |
+        The language a business's AI review drafts are written in (CHANGE-003). `hinglish` is
+        everyday spoken Hindi in Roman script mixed with English, the way people in India write
+        Google reviews. Default is `hinglish`. Dashboard and customer-page chrome stay English.
 
     AiTestPreviewResponse:
       type: object
@@ -2451,6 +2466,55 @@ x-skeleton-delta:
       note: |
         Exists in the handler; clears the cookie without revoking the session row and without a
         CSRF check. Documented, not endorsed — see README.
+    - path: /subscription
+      methods: [get]
+      note: |
+        SUB-01 (CHANGE-004). Plan, entitlement source, period, usage, the platform price checkout
+        would charge, whether Razorpay is configured, whether renewal is offered (inside the last
+        30 days of a paid year, or after it), and payment history. In the skeleton, implemented
+        as listed.
+    - path: /subscription/checkout
+      methods: [post]
+      note: |
+        Creates a Razorpay order for `platform_settings.annual_price_paise` and a CREATED
+        `payments` row; answers 201 with the public key id, order id, amount, currency, business
+        name and prefill for Checkout.js. Requires an ACTIVE tenant. Answers
+        `PAYMENTS_NOT_CONFIGURED` (503) without Razorpay keys — online payment is optional
+        because admin activation exists. Emits `subscription_checkout_started`.
+    - path: /subscription/verify
+      methods: [post]
+      note: |
+        Absent from the skeleton; the browser half of AC-015/AC-016 that OPEN-03 recorded as
+        missing. Body is Checkout.js's success object verbatim (`razorpay_order_id`,
+        `razorpay_payment_id`, `razorpay_signature`). The signature is checked server-side
+        against the key secret, the order must belong to the calling business, and any failure
+        is one answer, `PAYMENT_VERIFICATION_FAILED`. Activation goes through the same
+        `SubscriptionService.activatePro` an admin grant uses, so a CAPTURED payment activates
+        nothing twice. Emits `subscription_activated` when it did activate.
+    - path: /webhooks/razorpay
+      methods: [post]
+      note: |
+        No session, no CSRF: proof is `X-Razorpay-Signature` over the raw body. Idempotent by
+        `X-Razorpay-Event-Id` in `payment_webhook_events` (body hash when absent). 400 when the
+        signature does not verify; 503 while unconfigured; 200 for processed, duplicate, ignored
+        and for a permanent failure the ledger recorded (unknown order, wrong amount). A delivery
+        that failed part-way is processed again on redelivery — safe because settlement is
+        idempotent.
+    - path: /admin/overview, /admin/businesses, /admin/businesses/{id}, /admin/settings, /admin/audit-logs
+      methods: [get, patch]
+      note: |
+        E12 subset (CHANGE-004): `PATCH /admin/businesses/{id}` is action-based
+        (`activate_pro`, `revoke_pro`, `adjust_free_quota`, `reset_free_usage`, `suspend`,
+        `reactivate`) and every action carries a reason written to `admin_audit_logs` in the
+        same transaction. `GET /admin/audit-logs` is the endpoint OPEN-03 recorded as missing.
+        Guarded by `requireAdmin` (CSRF + session + SUPER_ADMIN). Super-admin MFA is not built;
+        `19_Admin_Panel_Spec.md` makes it mandatory, so admin accounts must not exist on a
+        publicly reachable deployment until it is.
+    - path: /admin/ai/prompt-versions, /admin/ai/prompt-versions/{id}, …/{id}/activate, …/{id}/archive
+      methods: [get, post, patch]
+      note: |
+        ADMIN-03 / ADR-006: prompt versions with their writing rules as data (`guidance`),
+        DRAFT → ACTIVE → ARCHIVED, one ACTIVE at a time, rollback by activating an archived one.
 
   implemented-with-a-different-shape:
     - skeleton: POST /public/review/generate with a required `public_business_ref`
@@ -2528,28 +2592,6 @@ x-skeleton-delta:
         - POST /domains
         - POST /domains/{id}/check
         - DELETE /domains/{id}
-    - group: Subscription and payments
-      operations:
-        - GET /subscription
-        - POST /subscription/checkout
-        - POST /webhooks/razorpay
-      note: |
-        OPEN-03: AC-015 and AC-016 require server-side checkout signature verification. Neither
-        the checkout endpoint nor the webhook exists in the tree yet.
-    - group: Admin
-      operations:
-        - GET /admin/businesses
-        - GET /admin/businesses/{id}
-        - PATCH /admin/businesses/{id}
-        - GET /admin/ai/prompt-versions
-        - POST /admin/ai/prompt-versions
-        - POST /admin/ai/prompt-versions/{id}/activate
-        - GET /admin/settings
-        - PATCH /admin/settings
-      note: |
-        OPEN-03 adds `GET /admin/audit-logs`, which the skeleton omits. Super-admin MFA storage
-        exists (AMENDMENT-007) but the enrolment and challenge flow does not, and
-        `19_Admin_Panel_Spec.md` makes MFA mandatory — so no admin endpoint should ship before it.
 
   codes-defined-but-not-yet-emitted-anywhere:
     note: |
@@ -2562,8 +2604,10 @@ x-skeleton-delta:
       - QR_NOT_FOUND
       - DOMAIN_ALREADY_CLAIMED
       - DOMAIN_VERIFICATION_PENDING
-      - PAYMENT_VERIFICATION_FAILED
       - PAYMENT_ALREADY_PROCESSED
       - SUBSCRIPTION_NOT_ACTIVE
       - UPLOAD_INVALID
-      - ADMIN_REASON_REQUIRED
+    emitted-since:
+      - PAYMENT_VERIFICATION_FAILED — /subscription/verify, /subscription/checkout, /webhooks/razorpay (CHANGE-004)
+      - ADMIN_REASON_REQUIRED — every admin mutation (CHANGE-004)
+      - PAYMENTS_NOT_CONFIGURED — 503; not in 23_API_Error_Codes.md, added by CHANGE-004

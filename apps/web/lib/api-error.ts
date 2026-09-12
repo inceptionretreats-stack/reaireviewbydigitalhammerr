@@ -32,6 +32,9 @@ export const ERROR_STATUS: Record<string, number> = {
   DOMAIN_VERIFICATION_PENDING: 409,
   PAYMENT_VERIFICATION_FAILED: 400,
   SUBSCRIPTION_NOT_ACTIVE: 402,
+  // CHANGE-004: online payment is optional in production because admin activation exists; a
+  // checkout attempted without Razorpay keys is refused with this rather than a misleading 500.
+  PAYMENTS_NOT_CONFIGURED: 503,
   UPLOAD_INVALID: 422,
   ADMIN_REASON_REQUIRED: 422,
   INTERNAL_ERROR: 500,

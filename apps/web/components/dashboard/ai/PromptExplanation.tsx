@@ -39,6 +39,10 @@ export function PromptExplanation() {
           not the sentiment.
         </li>
         <li>
+          Your draft language decides whether it is written in Hinglish or in English. The words are
+          still the customer&apos;s to change.
+        </li>
+        <li>
           The draft stays deliberately unspecific about anything nobody has told us: no waiting
           times, prices, staff names, or results. Your customer knows those things; we do not, and
           inventing them would put words in their mouth.

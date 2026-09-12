@@ -73,6 +73,7 @@ export async function DashboardOverview() {
           amount of configuration can complete. Both are transient by design. */}
       {showFirstSteps && (
         <FirstStepsCard
+          businessName={summary.business.name}
           qrPreviewSrc={firstStepsQr}
           qrCode={summary.primaryQr?.code ?? null}
           qrDownloadId={summary.primaryQr?.id ?? null}

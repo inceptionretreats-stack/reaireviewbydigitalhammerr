@@ -139,7 +139,8 @@ function firstTripped(
     const dimension = dimensions[index];
     const reading = readings[index];
     if (!dimension || !reading) continue;
-    // OBSERVE dimensions are measured and reported but never deny (D-006).
+    // OBSERVE dimensions are measured and reported but never deny; D-030's annual quota is
+    // enforced durably by Postgres, not by this short-window traffic shaper.
     if (dimension.rule.enforcement !== 'ENFORCE') continue;
     if (reading.count >= dimension.rule.limit) return index;
   }

@@ -150,7 +150,7 @@ export function SignupForm() {
         Create account
       </Button>
 
-      <p className="text-center text-sm text-ink-muted">
+      <p className="auth-switch text-center text-sm text-ink-muted">
         Already have an account?{' '}
         <a href="/login" className="text-accent">
           Sign in

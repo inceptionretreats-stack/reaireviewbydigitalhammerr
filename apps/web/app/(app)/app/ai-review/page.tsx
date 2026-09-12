@@ -8,6 +8,7 @@ import { ActiveModeCard } from '@/components/dashboard/ai/ActiveModeCard';
 import { AiReviewSettings } from '@/components/dashboard/ai/AiReviewSettings';
 import { PromptExplanation } from '@/components/dashboard/ai/PromptExplanation';
 import { db } from '@/lib/db';
+import { toDraftLanguage } from '@/lib/draft-language';
 import { getSession } from '@/lib/session';
 
 /**
@@ -29,7 +30,7 @@ import { getSession } from '@/lib/session';
  */
 
 export const metadata: Metadata = {
-  title: 'AI review context | AI Review',
+  title: 'Ai review context | Ai Review',
   description: 'The background your customers’ drafts are written from.',
 };
 
@@ -55,6 +56,7 @@ export default async function Page() {
         summary: aiBusinessContexts.summary,
         services: aiBusinessContexts.services,
         contextTerms: aiBusinessContexts.contextTerms,
+        draftLanguage: aiBusinessContexts.draftLanguage,
       })
       .from(aiBusinessContexts)
       .where(eq(aiBusinessContexts.businessId, tenant.businessId))
@@ -68,7 +70,7 @@ export default async function Page() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-semibold tracking-wider text-ink-muted uppercase">AI review</p>
+        <p className="text-xs font-semibold tracking-wider text-ink-muted">Ai review</p>
         <h1 className="text-2xl font-bold tracking-tight text-ink">
           What your customers&rsquo; drafts are built from
         </h1>
@@ -83,6 +85,7 @@ export default async function Page() {
         initialSummary={context?.summary ?? ''}
         initialServices={toStringArray(context?.services)}
         initialContextTerms={toStringArray(context?.contextTerms)}
+        initialDraftLanguage={toDraftLanguage(context?.draftLanguage)}
         profileDescription={businessRows[0]?.description ?? ''}
       />
 

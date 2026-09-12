@@ -100,7 +100,9 @@ describe('migration 0000', () => {
     const { rows } = await pool.query(
       `SELECT conname FROM pg_constraint WHERE contype='c' AND conname IN
        ('ck_google_review_has_no_url','ck_enabled_link_has_target','ck_alias_has_expiry',
-        'ck_free_used_within_limit','ck_free_used_non_negative','ck_rollout_percent')`,
+         'ck_free_used_within_limit','ck_free_used_non_negative','ck_pro_limit_positive',
+         'ck_pro_used_non_negative','ck_pro_used_within_limit','ck_subscription_period_pair',
+         'ck_subscription_period_order','ck_paid_status_has_period','ck_rollout_percent')`,
     );
     expect(rows.map((r) => r.conname).sort()).toEqual([
       'ck_alias_has_expiry',
@@ -108,8 +110,64 @@ describe('migration 0000', () => {
       'ck_free_used_non_negative',
       'ck_free_used_within_limit',
       'ck_google_review_has_no_url',
+      'ck_paid_status_has_period',
+      'ck_pro_limit_positive',
+      'ck_pro_used_non_negative',
+      'ck_pro_used_within_limit',
       'ck_rollout_percent',
+      'ck_subscription_period_order',
+      'ck_subscription_period_pair',
     ]);
+  });
+
+  it('defaults the annual Pro allowance to 2,000 drafts', async () => {
+    const { rows } = await pool.query(
+      `SELECT column_name, column_default
+       FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'subscriptions'
+         AND column_name IN ('pro_generation_limit', 'pro_generations_used')
+       ORDER BY column_name`,
+    );
+
+    expect(rows).toEqual([
+      { column_name: 'pro_generation_limit', column_default: '2000' },
+      { column_name: 'pro_generations_used', column_default: '0' },
+    ]);
+  });
+
+  /** CHANGE-003: every business, including one that never saved a context row, is Hinglish. */
+  it('defaults the draft language to Hinglish and never leaves it null', async () => {
+    const { rows } = await pool.query(
+      `SELECT udt_name, column_default, is_nullable
+       FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'ai_business_contexts'
+         AND column_name = 'draft_language'`,
+    );
+
+    expect(rows).toEqual([
+      {
+        udt_name: 'draft_language',
+        column_default: "'hinglish'::draft_language",
+        is_nullable: 'NO',
+      },
+    ]);
+
+    const { rows: values } = await pool.query(
+      `SELECT enumlabel FROM pg_enum
+       WHERE enumtypid = 'draft_language'::regtype ORDER BY enumsortorder`,
+    );
+    expect(values.map((row: { enumlabel: string }) => row.enumlabel)).toEqual(['en', 'hinglish']);
+  });
+
+  it('resets paid usage when a new subscription year starts', async () => {
+    const { rows } = await pool.query(
+      `SELECT tgname
+       FROM pg_trigger
+       WHERE tgrelid = 'subscriptions'::regclass
+         AND tgname = 'trg_reset_pro_quota_on_period_change'
+         AND NOT tgisinternal`,
+    );
+    expect(rows).toEqual([{ tgname: 'trg_reset_pro_quota_on_period_change' }]);
   });
 
   it('exposes the partition-management function the worker calls', async () => {

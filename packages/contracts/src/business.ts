@@ -26,10 +26,19 @@ export type ReviewDestinationRequest = z.infer<typeof reviewDestinationRequest>;
  * "mandatory keywords in every review". Terms are context hints, and the absence of that field
  * from the contract is what stops one being added by accident.
  */
+/**
+ * CHANGE-003. The language drafts are written in, per business. Mirrors the `draft_language`
+ * enum in @ai-review/db and DRAFT_LANGUAGES in @ai-review/core; a test pins all three together.
+ */
+export const DRAFT_LANGUAGES = ['en', 'hinglish'] as const;
+export type DraftLanguage = (typeof DRAFT_LANGUAGES)[number];
+export const DEFAULT_DRAFT_LANGUAGE: DraftLanguage = 'hinglish';
+
 export const aiContextRequest = z.object({
   summary: z.string().max(2000).optional(),
   services: z.array(z.string().max(80)).max(30).default([]),
   context_terms: z.array(z.string().max(80)).max(30).default([]),
+  draft_language: z.enum(DRAFT_LANGUAGES).default(DEFAULT_DRAFT_LANGUAGE),
 });
 export type AiContextRequest = z.infer<typeof aiContextRequest>;
 

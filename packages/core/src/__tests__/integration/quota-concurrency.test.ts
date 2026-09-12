@@ -84,6 +84,71 @@ describe('free quota under real concurrency', () => {
     expect(outcomes.filter((o) => o.ok)).toHaveLength(10);
   });
 
+  it('admits exactly one concurrent Pro reservation when one annual draft remains', async () => {
+    await pool.query(
+      `UPDATE subscriptions
+       SET status = 'PRO_ACTIVE', starts_at = now() - interval '1 day',
+           expires_at = now() + interval '364 days', pro_generation_limit = 2000,
+           pro_generations_used = 1999
+       WHERE business_id = $1`,
+      [businessId],
+    );
+    const service = new QuotaService(new PostgresQuotaStore(db));
+
+    const outcomes = await Promise.all(
+      Array.from({ length: 20 }, () => service.reserve(businessId)),
+    );
+
+    expect(outcomes.filter((outcome) => outcome.ok)).toHaveLength(1);
+    expect(outcomes.filter((outcome) => !outcome.ok)).toHaveLength(19);
+
+    const { rows } = await pool.query(
+      'SELECT pro_generations_used FROM subscriptions WHERE business_id = $1',
+      [businessId],
+    );
+    expect(rows[0].pro_generations_used).toBe(2000);
+  });
+
+  it('does not release an old Pro reservation into a renewed annual period', async () => {
+    const oldStart = new Date('2025-01-01T00:00:00.000Z');
+    const oldEnd = new Date('2027-01-01T00:00:00.000Z');
+    await pool.query(
+      `UPDATE subscriptions
+       SET status = 'PRO_ACTIVE', starts_at = $2, expires_at = $3,
+           pro_generation_limit = 2000, pro_generations_used = 1999
+       WHERE business_id = $1`,
+      [businessId, oldStart, oldEnd],
+    );
+    const service = new QuotaService(new PostgresQuotaStore(db));
+    const reserved = await service.reserve(businessId);
+    if (!reserved.ok) throw new Error('expected Pro reservation');
+
+    const renewedStart = new Date('2026-01-01T00:00:00.000Z');
+    const renewedEnd = new Date('2027-12-31T00:00:00.000Z');
+    await pool.query(
+      `UPDATE subscriptions
+       SET starts_at = $2, expires_at = $3
+       WHERE business_id = $1`,
+      [businessId, renewedStart, renewedEnd],
+    );
+
+    // Migration 0003 owns the rollover invariant. A future payment webhook only has to advance
+    // the paid period; it cannot accidentally carry 2,000 used drafts into the renewed year.
+    const renewed = await pool.query(
+      'SELECT pro_generations_used FROM subscriptions WHERE business_id = $1',
+      [businessId],
+    );
+    expect(renewed.rows[0].pro_generations_used).toBe(0);
+
+    await service.release(reserved.reservation);
+
+    const { rows } = await pool.query(
+      'SELECT pro_generations_used FROM subscriptions WHERE business_id = $1',
+      [businessId],
+    );
+    expect(rows[0].pro_generations_used).toBe(0);
+  });
+
   /** AC-014: a provider failure returns the reservation. */
   it('releases the reservation when the operation throws', async () => {
     const service = new QuotaService(new PostgresQuotaStore(db));
@@ -113,5 +178,13 @@ describe('free quota under real concurrency', () => {
         businessId,
       ]),
     ).rejects.toThrow(/ck_free_used_within_limit/);
+  });
+
+  it('refuses to exceed the annual Pro limit at the constraint level', async () => {
+    await expect(
+      pool.query('UPDATE subscriptions SET pro_generations_used = 2001 WHERE business_id = $1', [
+        businessId,
+      ]),
+    ).rejects.toThrow(/ck_pro_used_within_limit/);
   });
 });

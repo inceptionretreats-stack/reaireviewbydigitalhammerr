@@ -123,17 +123,44 @@ describe('quota release', () => {
 });
 
 describe('entitlement modes', () => {
-  /** D-006: Pro is fair-use unlimited, so no counter is touched. */
-  it('does not consume quota for a Pro business', async () => {
+  it('allows the 2,000th Pro generation and denies the next one', async () => {
     const store = new MemoryQuotaStore();
-    store.seed(BIZ, { mode: 'PRO', used: 10, limit: 10 });
+    store.seed(BIZ, { mode: 'PRO', used: 1999, limit: 2000 });
     const service = new QuotaService(store);
 
-    const outcome = await service.reserve(BIZ);
+    const lastAllowed = await service.reserve(BIZ);
+    const denied = await service.reserve(BIZ);
 
-    expect(outcome.ok).toBe(true);
-    if (outcome.ok) expect(outcome.reservation.counted).toBe(false);
-    expect(store.usage(BIZ)).toBe(10);
+    expect(lastAllowed).toMatchObject({
+      ok: true,
+      reservation: { mode: 'PRO', counted: true, usedAfterReserve: 2000 },
+    });
+    expect(denied).toMatchObject({ ok: false, reason: 'PLAN_QUOTA_EXHAUSTED' });
+    expect(store.usage(BIZ)).toBe(2000);
+  });
+
+  it('admits only one concurrent Pro reservation when one annual draft remains', async () => {
+    const store = new MemoryQuotaStore();
+    store.seed(BIZ, { mode: 'PRO', used: 1999, limit: 2000 });
+    const service = new QuotaService(store);
+
+    const outcomes = await Promise.all([service.reserve(BIZ), service.reserve(BIZ)]);
+
+    expect(outcomes.filter((outcome) => outcome.ok)).toHaveLength(1);
+    expect(outcomes.filter((outcome) => !outcome.ok)).toHaveLength(1);
+    expect(store.usage(BIZ, 'PRO')).toBe(2000);
+  });
+
+  it('returns a Pro reservation when generation fails', async () => {
+    const store = new MemoryQuotaStore();
+    store.seed(BIZ, { mode: 'PRO', used: 87, limit: 2000 });
+    const service = new QuotaService(store);
+
+    await expect(
+      service.withReservation(BIZ, () => Promise.reject(new Error('provider down'))),
+    ).rejects.toThrow('provider down');
+
+    expect(store.usage(BIZ, 'PRO')).toBe(87);
   });
 
   it('blocks a suspended tenant', async () => {

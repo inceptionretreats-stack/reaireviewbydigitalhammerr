@@ -69,7 +69,7 @@ export function setMailTransport(next: MailTransport | undefined): void {
 export function passwordResetEmail(to: string, resetUrl: string): Email {
   return {
     to,
-    subject: 'Reset your AI Review password',
+    subject: 'Reset your Ai Review password',
     text: [
       'Someone asked to reset the password for this email address.',
       '',

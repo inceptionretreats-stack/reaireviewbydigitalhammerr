@@ -1,5 +1,6 @@
 import type { QuotaService } from '../quota/service';
 import type { Entitlement } from '../quota/types';
+import { DEFAULT_GUIDANCE, type PromptGuidance } from './guidance';
 import { checkVariation, DEFAULT_SIMILARITY_THRESHOLD } from './similarity';
 import {
   buildPrompt,
@@ -31,6 +32,8 @@ export interface PromptVersionConfig {
   maxOutputTokens: number;
   reasoningEffort: string;
   outputSchema: Record<string, unknown>;
+  /** The writing rules this version carries (guidance.ts). Optional so a config built before CHANGE-004 still compiles; the builder falls back to the defaults. */
+  guidance?: PromptGuidance;
 }
 
 export interface GenerateOptions {
@@ -48,6 +51,7 @@ export interface GeneratedDraft {
   promptVersionId: string;
   similarityScore: number;
   countedTowardQuota: boolean;
+  quotaType: 'FREE' | 'PRO';
   /** Provider calls actually made. Exceeds 1 when the quality gate retried. */
   providerCalls: number;
   inputTokens: number | null;
@@ -60,7 +64,12 @@ export type GenerationFailure =
   | { code: 'PLAN_QUOTA_EXHAUSTED'; entitlement: Entitlement }
   | { code: 'SUBSCRIPTION_NOT_ACTIVE'; entitlement: Entitlement }
   | { code: 'BUSINESS_NOT_ACTIVE'; entitlement: Entitlement }
-  | { code: 'AI_PROVIDER_UNAVAILABLE'; errorClass: string }
+  /**
+   * `message` is the adapter's own, already scrubbed of anything key-shaped (AC-030). It is for
+   * the server log and nothing else: a bad key or a model the provider does not know used to
+   * be indistinguishable from the provider being down, because nothing kept the reason.
+   */
+  | { code: 'AI_PROVIDER_UNAVAILABLE'; errorClass: string; message: string }
   | { code: 'AI_OUTPUT_REJECTED'; rejections: string[] };
 
 export type GenerationOutcome =
@@ -105,7 +114,11 @@ export class ReviewGenerator {
       await this.quota.commit(reservation.reservation);
       return {
         ok: true,
-        draft: { ...draft, countedTowardQuota: reservation.reservation.counted },
+        draft: {
+          ...draft,
+          countedTowardQuota: reservation.reservation.counted,
+          quotaType: reservation.reservation.mode,
+        },
       };
     } catch (error) {
       // AC-014 and the AI_OUTPUT_REJECTED path both return the reservation: the customer got
@@ -118,7 +131,11 @@ export class ReviewGenerator {
       if (error instanceof AiProviderError) {
         return {
           ok: false,
-          failure: { code: 'AI_PROVIDER_UNAVAILABLE', errorClass: error.errorClass },
+          failure: {
+            code: 'AI_PROVIDER_UNAVAILABLE',
+            errorClass: error.errorClass,
+            message: error.message,
+          },
         };
       }
       throw error;
@@ -137,7 +154,7 @@ export class ReviewGenerator {
    */
   private async produceAcceptableDraft(
     options: GenerateOptions,
-  ): Promise<Omit<GeneratedDraft, 'countedTowardQuota'>> {
+  ): Promise<Omit<GeneratedDraft, 'countedTowardQuota' | 'quotaType'>> {
     const threshold = options.similarityThreshold ?? DEFAULT_SIMILARITY_THRESHOLD;
     const maxAttempts = MAX_ATTEMPTS;
     const deadline = Date.now() + options.timeoutMs;
@@ -165,6 +182,7 @@ export class ReviewGenerator {
           ? options.request
           : withStrongerVariation(options.request, attempt, lastRejections),
         options.promptVersion.systemPrompt,
+        options.promptVersion.guidance ?? DEFAULT_GUIDANCE,
       );
 
       const result = await this.provider.generate({

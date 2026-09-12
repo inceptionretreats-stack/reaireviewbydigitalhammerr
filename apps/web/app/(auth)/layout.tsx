@@ -1,39 +1,105 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import styles from '@/components/auth/AuthShell.module.css';
 
-/**
- * Shell for the four unauthenticated screens (AUTH-01, AUTH-02, AUTH-03, and the reset screen
- * the pack never specifies — see OPEN-03).
- *
- * A route group rather than a path segment, so the URLs stay /login and /signup as the screen
- * spec writes them while still sharing this chrome.
- *
- * Deliberately narrow and centred: each of these screens has exactly one task, and the business
- * dashboard's sidebar would be navigation to places the visitor cannot yet reach.
- */
+/** Shared, responsive shell for every signed-out account screen. */
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-bg">
-      <header className="border-b border-line">
-        <div className="mx-auto flex w-full max-w-lg items-center px-5 py-4">
-          <Link
-            href="/"
-            className="rounded text-base font-semibold tracking-tight text-ink no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            AI Review <span className="font-normal text-ink-muted">by Digital Hammerr</span>
-          </Link>
-        </div>
-      </header>
+    <div className={styles.authPage}>
+      <main className={styles.authShell}>
+        <section className={styles.formPanel}>
+          <header className={styles.formHeader}>
+            <Link href="/" className={styles.brandLink} aria-label="Ai Review home">
+              <span className={styles.brand}>
+                <span className={styles.brandMark} aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span className={styles.brandCopy}>
+                  <strong>Ai Review</strong>
+                  <small>by Digital Hammerr</small>
+                </span>
+              </span>
+            </Link>
 
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-5 py-10">
-        {children}
+            <Link href="/" className={styles.homeLink}>
+              Back to website
+            </Link>
+          </header>
+
+          <div className={styles.formContent}>{children}</div>
+
+          <footer className={styles.formFooter}>
+            Ai writing help for genuine customer feedback. Customers always review and post for
+            themselves.
+          </footer>
+        </section>
+
+        <aside className={styles.mediaPanel} aria-label="Customer review story">
+          <div className={styles.mediaSticky}>
+            <div className={styles.mediaCanvas} data-auth-color-rail>
+              <Image
+                src="/marketing/customer-reviewing-auth.png"
+                alt="A customer sharing feedback on her phone after a café visit"
+                fill
+                preload
+                sizes="(max-width: 1050px) 100vw, 54vw"
+                className={styles.mediaImage}
+                data-motion-accent="auth-image"
+              />
+
+              <div className={styles.mediaCopy}>
+                <h2>Make every visit easier to put into words.</h2>
+                <p>A cleaner path from an in-person visit to thoughtful, authentic feedback.</p>
+              </div>
+
+              <div className={styles.mediaCard} data-motion-accent="auth-review-card">
+                <span className={styles.mediaCardIcon} aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+                    <path
+                      d="m6.5 12.5 3.2 3.2 7.8-8.2"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span>
+                  <strong>The customer stays in control</strong>
+                  <small>
+                    They can edit the draft, confirm their visit, and choose whether to post.
+                  </small>
+                </span>
+              </div>
+
+              <span
+                className={`${styles.tick} ${styles.tickBlue}`}
+                data-motion-accent="auth-tick"
+                aria-hidden="true"
+              />
+              <span
+                className={`${styles.tick} ${styles.tickRed}`}
+                data-motion-accent="auth-tick"
+                aria-hidden="true"
+              />
+              <span
+                className={`${styles.tick} ${styles.tickYellow}`}
+                data-motion-accent="auth-tick"
+                aria-hidden="true"
+              />
+              <span
+                className={`${styles.tick} ${styles.tickGreen}`}
+                data-motion-accent="auth-tick"
+                aria-hidden="true"
+              />
+            </div>
+          </div>
+        </aside>
       </main>
-
-      <footer className="border-t border-line">
-        <div className="mx-auto w-full max-w-lg px-5 py-4 text-xs text-ink-faint">
-          An AI writing assistant for genuine customer feedback.
-        </div>
-      </footer>
     </div>
   );
 }

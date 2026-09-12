@@ -28,6 +28,36 @@ const optionalSecret = z.preprocess(
   secret.optional(),
 );
 
+function isPrivateOrLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::' || host === '::1') {
+    return true;
+  }
+
+  const octets = host.split('.').map(Number);
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part))) return false;
+
+  const [first = -1, second = -1] = octets;
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function isOriginOnly(url: URL): boolean {
+  return (
+    url.username === '' &&
+    url.password === '' &&
+    url.pathname === '/' &&
+    url.search === '' &&
+    url.hash === ''
+  );
+}
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -76,7 +106,13 @@ export const envSchema = z
      * genuine review and was written by nothing.
      */
     OPENAI_API_KEY: optionalSecret,
-    OPENAI_DEFAULT_MODEL: nonEmpty,
+    /**
+     * Accepted for compatibility with 15_Environment_Variables.example; read by nothing. The
+     * live model is `ai_prompt_versions.model` (ADR-006) and the seed's bootstrap override is
+     * AI_DEFAULT_MODEL. This was `nonEmpty` — a deployment that left it out failed to boot over
+     * a value no code consults. Same for the three siblings below.
+     */
+    OPENAI_DEFAULT_MODEL: nonEmpty.optional(),
 
     /**
      * The Anthropic credential. Optional on the same terms as the OpenAI one, and checked by the
@@ -88,6 +124,14 @@ export const envSchema = z
      * without a deploy.
      */
     ANTHROPIC_API_KEY: optionalSecret,
+    /**
+     * The Google Gemini credential — a Google AI Studio key. Optional on the same terms, and the
+     * lowest in selectProvider's precedence. It is the one of the three with a genuine free
+     * tier, which is why it exists: an owner can run real drafts before there is a card on file.
+     * Free-tier content is used by Google to improve its products (their pricing page says so);
+     * that is a data posture the operator chooses knowingly, not one the product hides.
+     */
+    GEMINI_API_KEY: optionalSecret,
     OPENAI_FALLBACK_MODEL: nonEmpty.optional(),
     OPENAI_REASONING_EFFORT: nonEmpty.default('none'),
     AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(220),
@@ -98,6 +142,8 @@ export const envSchema = z
     RAZORPAY_KEY_SECRET: z.string().optional(),
     RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
     RAZORPAY_ANNUAL_PLAN_ID: z.string().optional(),
+    /** Orders API origin override for a rehearsal against a fake endpoint. Never set in production. */
+    RAZORPAY_BASE_URL: z.url().optional(),
 
     // Cloudflare — not required until E11.
     CLOUDFLARE_API_TOKEN: z.string().optional(),
@@ -123,21 +169,75 @@ export const envSchema = z
 
     // Bootstrap defaults; platform_settings takes over once seeded (ADMIN-04).
     FREE_AI_GENERATION_LIMIT: z.coerce.number().int().positive().default(10),
+    PRO_ANNUAL_GENERATION_LIMIT: z.coerce.number().int().positive().default(2000),
     PRO_ANNUAL_PRICE_PAISE: z.coerce.number().int().positive().default(99900),
     DEFAULT_TIMEZONE: nonEmpty.default('Asia/Kolkata'),
   })
   .superRefine((value, ctx) => {
+    const publicOrigin = new URL(value.APP_BASE_URL);
+    const apiBase = new URL(value.API_BASE_URL);
+
+    if (!['http:', 'https:'].includes(publicOrigin.protocol) || !isOriginOnly(publicOrigin)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['APP_BASE_URL'],
+        message: 'must be an HTTP(S) origin with no path, credentials, query, or fragment',
+      });
+    }
+
+    const cleanApiPath = apiBase.pathname.replace(/\/+$/, '');
+    if (
+      apiBase.origin !== publicOrigin.origin ||
+      cleanApiPath !== '/api/v1' ||
+      apiBase.username !== '' ||
+      apiBase.password !== '' ||
+      apiBase.search !== '' ||
+      apiBase.hash !== ''
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['API_BASE_URL'],
+        message: 'must use the APP_BASE_URL origin and the exact /api/v1 path',
+      });
+    }
+
     // Production must reach a real model, but it does not care which vendor. Requiring a
     // specific key would fail a correctly configured Anthropic deployment; requiring neither
     // would let a real customer be handed a canned stub draft that reads like a genuine review
     // and was written by nothing.
-    if (value.NODE_ENV === 'production' && !value.ANTHROPIC_API_KEY && !value.OPENAI_API_KEY) {
+    if (
+      value.NODE_ENV === 'production' &&
+      !value.ANTHROPIC_API_KEY &&
+      !value.OPENAI_API_KEY &&
+      !value.GEMINI_API_KEY
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['ANTHROPIC_API_KEY'],
         message:
-          'set ANTHROPIC_API_KEY or OPENAI_API_KEY in production — with neither, the stub provider would serve canned drafts to real customers',
+          'set ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY in production — with none, the stub provider would serve canned drafts to real customers',
       });
+    }
+
+    if (value.NODE_ENV === 'production') {
+      // Every printed QR permanently embeds this origin. A loopback address works in a browser on
+      // the server itself but sends a customer's phone to that phone, while plain HTTP is neither
+      // trustworthy nor accepted by many camera hand-off flows outside a private LAN.
+      if (isPrivateOrLoopbackHost(publicOrigin.hostname)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['APP_BASE_URL'],
+          message:
+            'must use a publicly reachable host in production; local or private QR addresses do not work for customers',
+        });
+      }
+      if (publicOrigin.protocol !== 'https:') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['APP_BASE_URL'],
+          message: 'must use HTTPS in production because it is embedded in every customer QR code',
+        });
+      }
     }
   });
 

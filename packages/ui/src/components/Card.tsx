@@ -42,7 +42,7 @@ export function Card({
   return (
     <Root
       className={cx(
-        'rounded-card border border-line bg-bg text-ink shadow-sm',
+        'ui-card rounded-card border border-line bg-bg text-ink shadow-sm',
         padded && 'p-4 sm:p-5',
         className,
       )}

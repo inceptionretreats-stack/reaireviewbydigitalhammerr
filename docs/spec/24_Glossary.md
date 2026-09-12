@@ -15,5 +15,6 @@
 - **Canonical URL:** `review.digitalhammerr.com/{slug}`.
 - **Custom Domain:** business-owned hostname mapped to the public Digital Hammerr tenant renderer.
 - **Free Quota:** 10 successful public AI generations for a Free business.
-- **Fair-use Unlimited:** paid marketing term allowing normal usage while retaining abuse controls.
+- **Pro Annual Allowance:** 2,000 successful public AI review drafts in one paid subscription year;
+  owner previews and failed provider calls do not count.
 - **Prompt Version:** admin-managed, auditable AI system configuration stored separately from application deployment.

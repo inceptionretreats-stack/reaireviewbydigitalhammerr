@@ -44,8 +44,8 @@ export interface RateLimitConfig {
   readonly ipPrefixWindowMs: number;
 
   /**
-   * Paid fair-use threshold, per business per hour. OBSERVE, so it alerts and never denies
-   * (D-006). The FAIR_USE_THROTTLED code in 23_API_Error_Codes.md only becomes reachable if
+   * Paid abuse threshold, per business per hour. OBSERVE, so it alerts and never denies.
+   * The FAIR_USE_THROTTLED code in 23_API_Error_Codes.md only becomes reachable if
    * an operator promotes this rule to ENFORCE for a specific abusing tenant.
    */
   readonly fairUseGenerationsPerHour: number;
@@ -257,7 +257,7 @@ export interface PublicGenerationSubject {
   /** HASH_PEPPER from packages/config. */
   readonly pepper: string;
   /**
-   * D-006: only a Pro business gets the fair-use observation dimension. A Free business is
+   * Only a Pro business gets the paid abuse-observation dimension. A Free business is
    * already bounded at 10 lifetime generations by the Postgres quota counter (AC-013), so a
    * second per-business window would measure nothing.
    */

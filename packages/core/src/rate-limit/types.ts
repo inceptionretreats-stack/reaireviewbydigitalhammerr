@@ -8,8 +8,8 @@
  *    (09_AI_Prompt_and_Generation_Spec.md "Abuse controls").
  *  - Per IP prefix: an *adaptive* limit, not a flat one — see policies.ts for why a flat
  *    per-IP limit is unusable in this market.
- *  - Paid fair-use: soft alerting at a configurable threshold, and no hidden hard cap
- *    advertised to normal users (D-006, same section).
+ *  - Paid abuse observation: soft alerting at a configurable hourly threshold, independent of
+ *    the advertised 2,000-draft annual plan allowance.
  *  - AC-032: the public generation endpoint is limited across MULTIPLE dimensions in one
  *    decision, and the decision must say which dimension tripped — otherwise the endpoint
  *    cannot return a meaningful Retry-After and support cannot diagnose a false positive.
@@ -27,8 +27,8 @@
 export type RateLimitErrorCode = 'PUBLIC_RATE_LIMITED' | 'AUTH_RATE_LIMITED' | 'FAIR_USE_THROTTLED';
 
 /**
- * OBSERVE dimensions count and report but never deny. This is how paid fair-use ships first:
- * "start with soft alerts ... do not advertise a hidden hard cap to normal users" (D-006).
+ * OBSERVE dimensions count and report but never deny. Paid annual entitlement is enforced by the
+ * durable quota store; this layer detects unusual short-term traffic.
  */
 export type RateLimitEnforcement = 'ENFORCE' | 'OBSERVE';
 
@@ -131,8 +131,8 @@ interface RateLimitDecisionBase {
   readonly check: string;
   readonly windows: readonly RateLimitWindow[];
   /**
-   * OBSERVE dimensions over their threshold. Fair-use alerting reads this; it is never a
-   * reason to deny, and it never reaches a response header (D-006).
+   * OBSERVE dimensions over their threshold. Abuse alerting reads this; it is never a reason to
+   * deny, and it never reaches a response header.
    */
   readonly softExceeded: readonly RateLimitWindow[];
   /** True when the primary store was unreachable and this verdict came from elsewhere. */

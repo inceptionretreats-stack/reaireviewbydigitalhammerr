@@ -12,15 +12,16 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { paymentStatus, subscriptionStatus } from './enums';
+import { entitlementSource, paymentStatus, subscriptionStatus } from './enums';
 import { businesses } from './business';
+import { users } from './identity';
 
 /**
  * Entitlement. Exactly two states matter commercially: Free and Pro (ADR-011, D-004, D-005).
  *
- * freeGenerationsUsed is the counter AC-013 turns on — a free business gets exactly 10
- * successful public generations, and a concurrent 11th must not slip through. It is consumed
- * by a single atomic conditional UPDATE (see packages/core), never read-modify-write.
+ * Free and Pro use separate counters because the Free allowance is lifetime while Pro renews
+ * annually. Keeping both on the subscription row lets each reservation use one atomic
+ * conditional UPDATE (see packages/core), never read-modify-write.
  */
 export const subscriptions = pgTable(
   'subscriptions',
@@ -36,19 +37,46 @@ export const subscriptions = pgTable(
     amountPaise: integer('amount_paise').notNull().default(99900),
     freeGenerationLimit: integer('free_generation_limit').notNull().default(10),
     freeGenerationsUsed: integer('free_generations_used').notNull().default(0),
+    proGenerationLimit: integer('pro_generation_limit').notNull().default(2000),
+    // Migration 0003 resets this when startsAt advances to a new paid period. Keeping the reset at
+    // the database boundary prevents a future webhook or admin path from carrying usage forward.
+    proGenerationsUsed: integer('pro_generations_used').notNull().default(0),
     fairUseMonthlySoftLimit: integer('fair_use_monthly_soft_limit'),
     startsAt: timestamp('starts_at', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     razorpayPlanId: varchar('razorpay_plan_id', { length: 100 }),
     razorpaySubscriptionId: varchar('razorpay_subscription_id', { length: 100 }),
     autoRenew: boolean('auto_renew').notNull().default(false),
+    /** Who or what put this row on Pro. ADMIN grants carry the granting admin and their note. */
+    entitlementSource: entitlementSource('entitlement_source').notNull().default('NONE'),
+    // set null, not restrict: the audit log is the permanent record of who granted what, and
+    // an admin account leaving must not pin every row it ever touched.
+    entitlementGrantedBy: uuid('entitlement_granted_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    entitlementNote: varchar('entitlement_note', { length: 500 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   () => [
     check('ck_free_used_non_negative', sql`free_generations_used >= 0`),
-    // The quota consumer relies on this: it can never over-consume past the limit.
     check('ck_free_used_within_limit', sql`free_generations_used <= free_generation_limit`),
+    check('ck_pro_limit_positive', sql`pro_generation_limit > 0`),
+    check('ck_pro_used_non_negative', sql`pro_generations_used >= 0`),
+    // The quota consumer relies on these bounds: neither plan can over-consume its allowance.
+    check('ck_pro_used_within_limit', sql`pro_generations_used <= pro_generation_limit`),
+    check(
+      'ck_subscription_period_pair',
+      sql`(starts_at IS NULL AND expires_at IS NULL) OR (starts_at IS NOT NULL AND expires_at IS NOT NULL)`,
+    ),
+    check(
+      'ck_subscription_period_order',
+      sql`starts_at IS NULL OR expires_at IS NULL OR starts_at < expires_at`,
+    ),
+    check(
+      'ck_paid_status_has_period',
+      sql`status NOT IN ('PRO_ACTIVE', 'PAST_DUE') OR (starts_at IS NOT NULL AND expires_at IS NOT NULL)`,
+    ),
   ],
 );
 

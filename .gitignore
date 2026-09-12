@@ -43,3 +43,10 @@ tmp/
 e2e-results/
 playwright-report/
 test-results/
+
+# Local stack state and logs from `pnpm dev:up`.
+.dev/
+
+
+# Vercel CLI project link and pulled environment files.
+.vercel/

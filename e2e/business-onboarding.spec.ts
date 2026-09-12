@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { closeDb } from './support/db';
 
 /**
@@ -28,6 +28,18 @@ const BUSINESS = {
   slug: `e2e-kitchen-${RUN}`,
 };
 
+async function expectOnboardingChrome(page: Page, step: number): Promise<void> {
+  await expect(page.locator('.onboarding-shell')).toBeVisible();
+  await expect(page.locator('.onboarding-panel')).toBeVisible();
+  await expect(page.getByText(new RegExp(`Step\\s*${step}\\s*of\\s*5`, 'i')).first()).toBeVisible();
+  await expect(page.locator('[aria-current="step"]')).toHaveCount(1);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
+}
+
 test.afterAll(async () => {
   await closeDb();
 });
@@ -50,6 +62,7 @@ test('a new business signs up, completes setup and publishes', async ({ page }) 
 
   // --- ONB-01: identity and the public address -----------------------------------------------
   await page.goto('/onboarding/business');
+  await expectOnboardingChrome(page, 1);
   await page.getByLabel(/business name/i).fill(BUSINESS.name);
 
   const category = page.getByLabel(/category/i);
@@ -68,6 +81,7 @@ test('a new business signs up, completes setup and publishes', async ({ page }) 
     .first()
     .click();
   await expect(page).toHaveURL(/review-link/, { timeout: 30_000 });
+  await expectOnboardingChrome(page, 2);
 
   // --- ONB-02: the Google destination --------------------------------------------------------
   const reviewUrl = page.getByLabel(/google review|review link|review url/i);
@@ -81,21 +95,26 @@ test('a new business signs up, completes setup and publishes', async ({ page }) 
   await reviewUrl.fill('https://g.page/r/E2ETestKitchen/review');
   await page.getByRole('button', { name: /^continue$/i }).click();
   await expect(page).toHaveURL(/\/links/, { timeout: 30_000 });
+  await expectOnboardingChrome(page, 3);
 
   // --- ONB-03: optional contact links --------------------------------------------------------
   // Skipping must genuinely skip: publish does not require these, and an earlier defect made the
   // resume link send owners back here forever because nothing was written.
   await page.getByRole('button', { name: /skip/i }).click();
   await expect(page).toHaveURL(/\/ai/, { timeout: 30_000 });
+  await expectOnboardingChrome(page, 4);
 
   // --- ONB-04: AI context --------------------------------------------------------------------
   const aiBody = (await page.locator('body').innerText()).toLowerCase();
   // D-025 and AC-010: nothing may present merchant terms as words required in every review.
   expect(aiBody).not.toMatch(/mandatory keyword|required keyword|must appear in every review/);
   expect(aiBody).toMatch(/hint|may not appear|context/);
+  // CHANGE-003: a new business is Hinglish unless the owner says otherwise.
+  await expect(page.getByLabel(/draft language/i)).toHaveValue('hinglish');
 
   await page.getByRole('button', { name: /^continue$/i }).click();
   await expect(page).toHaveURL(/\/finish/, { timeout: 30_000 });
+  await expectOnboardingChrome(page, 5);
 
   // --- ONB-05: publish -----------------------------------------------------------------------
   await page.getByRole('button', { name: /publish/i }).click();
@@ -113,13 +132,30 @@ test('a new business signs up, completes setup and publishes', async ({ page }) 
 
   // The owner should be able to SEE the code they just created, not only download it. This is the
   // artefact the whole product turns on, and it used to be visible nowhere in the owner's UI.
-  const finishQr = page.getByRole('img', { name: /qr code/i });
+  const finishCard = page.locator('figure[aria-label^="QR card"]').first();
+  const finishQr = finishCard.getByRole('img', { name: /qr code/i });
   await expect(finishQr).toBeVisible({ timeout: 30_000 });
   await expect(finishQr).toHaveAttribute('src', /^data:image\/svg\+xml;base64,/);
+  await expect(finishCard.locator('[data-qr-card-part]')).toHaveCount(3);
+  expect(
+    await finishCard.evaluate((element) =>
+      (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
+    ),
+  ).toBe(`${BUSINESS.name} Ai Review by Digital Hammerr`);
 
   // ONB-05-02: the canonical route works immediately, not after a cache expires.
   const publicPage = await page.request.get(`/${BUSINESS.slug}`);
   expect(publicPage.status()).toBe(200);
+
+  // CHANGE-003, end to end for a business that did not exist a minute ago: the default language
+  // this owner never touched reaches the generator. One free generation of the ten; the route
+  // tolerates a caller with no anonymous cookie.
+  const generated = await page.request.post('/api/v1/public/review/generate', {
+    data: { slug: BUSINESS.slug },
+  });
+  expect(generated.status()).toBe(200);
+  const generatedBody = (await generated.json()) as { review_text: string };
+  expect(generatedBody.review_text).toMatch(/\b(?:tha|thi|aur|hai|raha|bahut|kaafi|accha|acha)\b/i);
 
   // ONB-05-01: publishing creates the first QR source, so the owner leaves setup with something
   // printable rather than a to-do.
@@ -155,12 +191,16 @@ test('a new business signs up, completes setup and publishes', async ({ page }) 
   // exactly the event that retires this guidance.
   await page.goto('/app');
   await expect(page.getByText(/one thing left/i)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('img', { name: /qr code/i })).toBeVisible();
+  const dashboardCard = page.locator('figure[aria-label^="QR card"]').first();
+  await expect(dashboardCard.getByRole('img', { name: /qr code/i })).toBeVisible();
+  await expect(dashboardCard.locator('[data-qr-card-part]')).toHaveCount(3);
 
   // The QR screen shows each source as the symbol itself, so an owner with several standees can
   // tell which row is which without downloading every one of them.
   await page.goto('/app/qr');
   await expect(page.getByRole('img', { name: new RegExp(`QR code ${first.code}`) })).toBeVisible();
+  const sourceCard = page.locator(`figure[aria-label*="${first.code}"]`).first();
+  await expect(sourceCard.locator('[data-qr-card-part]')).toHaveCount(3);
 
   // And the printed code actually resolves for a customer.
   const scan = await page.request.get(`/r/${first.code}`);

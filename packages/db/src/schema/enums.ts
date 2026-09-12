@@ -53,6 +53,17 @@ export const domainStatus = pgEnum('domain_status', [
 export const aiPromptStatus = pgEnum('ai_prompt_status', ['DRAFT', 'ACTIVE', 'ARCHIVED']);
 
 /**
+ * The language a business's AI review drafts are written in (CHANGE-003).
+ *
+ * `hinglish` is everyday spoken Hindi in Roman script, mixed with English the way people in
+ * India write Google reviews. The default is Hinglish, not English: the product's market is
+ * Indian local businesses, and D-011's "English only in V1" was superseded on 11 September 2026.
+ * The same two literals are declared in @ai-review/contracts and @ai-review/core, because
+ * neither may import this package's runtime — a test pins that the three lists agree.
+ */
+export const draftLanguage = pgEnum('draft_language', ['en', 'hinglish']);
+
+/**
  * Public profile section types (D-014, D-015).
  *
  * AMENDMENT — 06_Database_Schema.sql typed this as a free `varchar(40)`. It is an enum
@@ -79,6 +90,12 @@ export const linkType = pgEnum('link_type', [
  * AMENDMENT — 06_Database_Schema.sql left `payments.status` a bare `varchar(40)` while every
  * comparable field is an enum. Values follow Razorpay's payment lifecycle.
  */
+/**
+ * How a Pro entitlement came to be. 19_Admin_Panel_Spec: "Manual entitlement change must be
+ * visually distinct from paid entitlement" — which is only possible if the row remembers.
+ */
+export const entitlementSource = pgEnum('entitlement_source', ['NONE', 'PAYMENT', 'ADMIN']);
+
 export const paymentStatus = pgEnum('payment_status', [
   'CREATED',
   'AUTHORIZED',

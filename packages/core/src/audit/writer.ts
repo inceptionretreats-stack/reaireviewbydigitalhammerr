@@ -1,4 +1,5 @@
-import { adminAuditLogs, type Database } from '@ai-review/db';
+import { adminAuditLogs } from '@ai-review/db';
+import type { Executor } from '../db-executor';
 
 /**
  * Audit trail (ADMIN-01-02, ADMIN-02-03, RBAC rule 5).
@@ -42,7 +43,7 @@ export class AuditReasonRequiredError extends Error {
 }
 
 export class AuditWriter {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Executor) {}
 
   async record(entry: AuditEntry): Promise<void> {
     if (HIGH_RISK_ACTIONS.has(entry.action) && !entry.reason?.trim()) {

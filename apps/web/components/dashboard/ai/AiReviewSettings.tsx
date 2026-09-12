@@ -7,12 +7,20 @@ import {
   Field,
   InlineError,
   Modal,
+  Select,
   TagInput,
   Textarea,
   ToastProvider,
   useToast,
 } from '@ai-review/ui';
 import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import {
+  DRAFT_LANGUAGE_HINT,
+  DRAFT_LANGUAGE_LABEL,
+  DRAFT_LANGUAGE_OPTIONS,
+  isDraftLanguage,
+  type DraftLanguage,
+} from '@/lib/draft-language';
 import { CONTEXT_HELPER, DRAFT_FRAMING_NOTE, PREVIEW_FREE_NOTE } from './copy';
 import { sendJson } from './send-json';
 import { DRAFT_QUOTE } from './styles';
@@ -59,6 +67,7 @@ export interface AiReviewSettingsProps {
   initialSummary: string;
   initialServices: readonly string[];
   initialContextTerms: readonly string[];
+  initialDraftLanguage: DraftLanguage;
   /**
    * `businesses.description` — the profile text "Reset to profile details" copies into the summary.
    * Empty when the owner has not written one, which the reset dialog says out loud.
@@ -80,6 +89,7 @@ function ContextForm({
   initialSummary,
   initialServices,
   initialContextTerms,
+  initialDraftLanguage,
   profileDescription,
 }: AiReviewSettingsProps) {
   const toast = useToast();
@@ -87,11 +97,12 @@ function ContextForm({
   const [summary, setSummary] = useState(initialSummary);
   const [services, setServices] = useState<readonly string[]>(initialServices);
   const [contextTerms, setContextTerms] = useState<readonly string[]>(initialContextTerms);
+  const [draftLanguage, setDraftLanguage] = useState<DraftLanguage>(initialDraftLanguage);
 
   // What is stored, as far as this screen knows. Compared against the live fields to answer
   // "dirty or saved", and moved forward only by a save that actually succeeded.
   const [savedSignature, setSavedSignature] = useState(() =>
-    contextSignature(initialSummary, initialServices, initialContextTerms),
+    contextSignature(initialSummary, initialServices, initialContextTerms, initialDraftLanguage),
   );
   const [everSaved, setEverSaved] = useState(false);
 
@@ -100,7 +111,7 @@ function ContextForm({
   const [preview, setPreview] = useState<PreviewState>({ status: 'idle' });
   const [resetOpen, setResetOpen] = useState(false);
 
-  const signature = contextSignature(summary, services, contextTerms);
+  const signature = contextSignature(summary, services, contextTerms, draftLanguage);
   const dirty = signature !== savedSignature;
 
   const save = async (): Promise<boolean> => {
@@ -113,6 +124,7 @@ function ContextForm({
       ...(summary.trim() === '' ? {} : { summary: summary.trim() }),
       services,
       context_terms: contextTerms,
+      draft_language: draftLanguage,
     });
 
     setSaving(false);
@@ -129,7 +141,7 @@ function ContextForm({
 
   const saveOnly = async (): Promise<void> => {
     if (await save()) {
-      toast.show({ tone: 'success', title: 'AI context saved' });
+      toast.show({ tone: 'success', title: 'Ai context saved' });
     }
   };
 
@@ -174,7 +186,7 @@ function ContextForm({
       // it is explicitly false the owner is told, because a draft a customer would never be shown
       // is not a fair sample of the product.
       compliancePassed: result.payload.compliance_passed !== false,
-      signature: contextSignature(summary, services, contextTerms),
+      signature: contextSignature(summary, services, contextTerms, draftLanguage),
     });
   };
 
@@ -193,7 +205,7 @@ function ContextForm({
   const previewLoading = preview.status === 'loading';
   const previewStale =
     preview.status === 'ready' &&
-    preview.signature !== contextSignature(summary, services, contextTerms);
+    preview.signature !== contextSignature(summary, services, contextTerms, draftLanguage);
   const resetWouldChange =
     summary !== profileDescription || services.length > 0 || contextTerms.length > 0;
 
@@ -273,6 +285,31 @@ function ContextForm({
                 onChange={setContextTerms}
                 disabled={saving}
                 placeholder="Family friendly"
+              />
+            )}
+          </Field>
+
+          {/*
+            CHANGE-003. Which language the draft is written in. Part of the dirty signature, so a
+            language-only change is a change the Save button acknowledges. "Reset to profile
+            details" leaves it alone: the dialog lists exactly what it resets, and language is
+            not among them.
+          */}
+          <Field
+            label={DRAFT_LANGUAGE_LABEL}
+            hint={DRAFT_LANGUAGE_HINT}
+            error={fieldFailure('draft_language')}
+          >
+            {(control) => (
+              <Select
+                {...control}
+                name="draft_language"
+                options={DRAFT_LANGUAGE_OPTIONS}
+                value={draftLanguage}
+                onChange={(event) => {
+                  if (isDraftLanguage(event.target.value)) setDraftLanguage(event.target.value);
+                }}
+                disabled={saving}
               />
             )}
           </Field>
@@ -437,6 +474,7 @@ function contextSignature(
   summary: string,
   services: readonly string[],
   contextTerms: readonly string[],
+  draftLanguage: DraftLanguage,
 ): string {
-  return JSON.stringify([summary.trim(), services, contextTerms]);
+  return JSON.stringify([summary.trim(), services, contextTerms, draftLanguage]);
 }

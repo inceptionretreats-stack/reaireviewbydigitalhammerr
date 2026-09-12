@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { businesses, subscriptions, users } from '@ai-review/db';
-import { normalizePhone, privacyHash, validatePasswordStrength } from '@ai-review/core';
+import {
+  normalizePhone,
+  PlatformSettingsService,
+  privacyHash,
+  validatePasswordStrength,
+} from '@ai-review/core';
 import { signupRequest } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
@@ -58,6 +63,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const passwordHash = await passwordHasher().hash(password);
   const database = db();
+  const commercial = await new PlatformSettingsService(database).values();
 
   let userId: string;
   try {
@@ -91,13 +97,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (!business) throw new Error('business insert returned no row');
 
       // Created here rather than lazily so that entitlement is never absent for a live tenant.
-      // The free limit comes from config only as a bootstrap; ADMIN-04 makes the database
-      // authoritative once platform_settings is seeded.
+      // The numbers come from platform_settings (ADMIN-04), read once above, so a change an
+      // admin makes applies to the next signup without a deploy. The environment's values are
+      // no longer consulted here; the settings service carries the spec defaults itself.
       await tx.insert(subscriptions).values({
         businessId: business.id,
         status: 'FREE',
-        freeGenerationLimit: env().FREE_AI_GENERATION_LIMIT,
-        amountPaise: env().PRO_ANNUAL_PRICE_PAISE,
+        freeGenerationLimit: commercial.free_generation_limit,
+        proGenerationLimit: commercial.pro_generation_limit,
+        amountPaise: commercial.annual_price_paise,
       });
 
       return user.id;

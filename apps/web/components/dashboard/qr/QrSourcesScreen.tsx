@@ -12,6 +12,7 @@ import {
   useToast,
   type TableColumn,
 } from '@ai-review/ui';
+import { QrStandeePreview } from '@/components/qr/QrStandeePreview';
 import { SECONDARY_LINK } from '../link-styles';
 import { DisableQrDialog } from './DisableQrDialog';
 import { QrSourceDialog } from './QrSourceDialog';
@@ -51,6 +52,8 @@ import {
 
 export interface QrSourcesScreenProps {
   initialSources: readonly QrSource[];
+  /** Public-facing identity printed above every QR. */
+  businessName: string;
   /** `businesses.timezone` (AMENDMENT-004) — every date on this screen is formatted in it. */
   timezone: string;
   /**
@@ -113,6 +116,7 @@ type DialogState =
 
 function QrSources({
   initialSources,
+  businessName,
   timezone,
   canManage,
   isPubliclyLive,
@@ -127,6 +131,7 @@ function QrSources({
   const toast = useToast();
 
   const counts = countSources(sources);
+  const featuredSource = sources[0];
 
   const create = useCallback(
     async (input: { sourceLabel: string; internalNote: string }): Promise<QrMutationOutcome> => {
@@ -237,12 +242,12 @@ function QrSources({
               scanner's sake, so a dark background showing through the quiet zone would defeat the
               very margin it depends on.
             */}
-            <img
-              src={row.previewSrc}
-              alt={`QR code ${row.code}`}
-              width={72}
-              height={72}
-              className="size-[72px] shrink-0 rounded-control bg-white p-1"
+            <QrStandeePreview
+              businessName={businessName}
+              qrSrc={row.previewSrc}
+              sourceCode={row.code}
+              size="compact"
+              className="shrink-0"
             />
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="font-semibold text-ink">{row.label}</span>
@@ -332,14 +337,14 @@ function QrSources({
             download={`qr-${row.code}.svg`}
             className={SECONDARY_LINK}
           >
-            Download SVG<span className="sr-only"> for {row.label}</span>
+            Print SVG<span className="sr-only"> for {row.label}</span>
           </a>
           <a
             href={`${QR_ENDPOINT}/${row.id}/download?format=png`}
             download={`qr-${row.code}.png`}
             className={SECONDARY_LINK}
           >
-            Download PNG<span className="sr-only"> for {row.label}</span>
+            Print PNG<span className="sr-only"> for {row.label}</span>
           </a>
 
           {canManage &&
@@ -380,13 +385,58 @@ function QrSources({
         // QR-01 lists the destination as screen content, and this is the screen it belongs on —
         // once, as a statement of fact about every row (D-026), rather than as a column repeating
         // the same words or a control offering a choice V1 does not have.
-        footer="Every source here sends scans to your AI review page. That is fixed in V1."
+        footer="Every source here sends scans to your Ai review page. That is fixed in V1."
         actions={
           canManage ? (
             <Button onClick={() => setDialog({ kind: 'create' })}>Create QR</Button>
           ) : undefined
         }
       >
+        {featuredSource && (
+          <section
+            className="relative mb-5 grid items-center gap-5 overflow-hidden rounded-card border border-brand-blue/30 bg-surface p-4 shadow-[0_16px_44px_rgb(32_33_36/0.08)] sm:grid-cols-[180px_1fr] sm:p-5"
+            aria-labelledby="branded-card-title"
+          >
+            <span className="absolute inset-x-0 top-0 flex h-1" aria-hidden="true">
+              <i className="flex-1 bg-brand-blue" />
+              <i className="flex-1 bg-brand-red" />
+              <i className="flex-1 bg-brand-yellow" />
+              <i className="flex-1 bg-brand-green" />
+            </span>
+            <div className="mx-auto w-[168px] sm:w-[180px]">
+              <QrStandeePreview businessName={businessName} qrSrc={featuredSource.previewSrc} />
+            </div>
+            <div className="min-w-0">
+              <p className="m-0 text-xs font-bold tracking-[0.14em] text-accent uppercase">
+                Print-ready artwork
+              </p>
+              <h3 id="branded-card-title" className="m-0 mt-1 text-xl font-bold text-ink">
+                Your clean counter card
+              </h3>
+              <p className="m-0 mt-2 max-w-xl text-sm leading-6 text-ink-muted">
+                The artwork keeps only your business name, the scannable code and “By Digital
+                Hammerr” at the bottom. Previewing {featuredSource.label}.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a
+                  href={`${QR_ENDPOINT}/${featuredSource.id}/download?format=svg`}
+                  download={`qr-${featuredSource.code}.svg`}
+                  className={SECONDARY_LINK}
+                >
+                  Download print SVG
+                </a>
+                <a
+                  href={`${QR_ENDPOINT}/${featuredSource.id}/download?format=png`}
+                  download={`qr-${featuredSource.code}.png`}
+                  className={SECONDARY_LINK}
+                >
+                  Download print PNG
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
+
         {!canManage && (
           <div className="mb-4 rounded-card border border-line bg-surface p-3">
             <p className="m-0 text-sm font-semibold text-ink">Changes are unavailable right now</p>

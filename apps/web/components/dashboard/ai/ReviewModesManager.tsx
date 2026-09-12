@@ -445,7 +445,7 @@ function ModesPanel({ initialModes, canManage, statusNote }: ReviewModesManagerP
                   canManage ? (
                     <>
                       A mode is a small set of context hints — a cuisine, a service line, a room —
-                      that a draft leans on. Saving your AI context creates a{' '}
+                      that a draft leans on. Saving your Ai context creates a{' '}
                       <strong>Balanced</strong> mode for you, or you can create one now.
                     </>
                   ) : (
@@ -466,7 +466,7 @@ function ModesPanel({ initialModes, canManage, statusNote }: ReviewModesManagerP
         </p>
         <p className="mt-3 text-sm">
           <Link href="/app/ai-review" className={TEXT_LINK}>
-            Edit your AI context
+            Edit your Ai context
           </Link>
         </p>
       </Card>

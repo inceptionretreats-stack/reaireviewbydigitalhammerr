@@ -1,0 +1,73 @@
+{
+  "version": "1.1.0",
+  "default_model": "gpt-5.6-luna",
+  "reasoning_effort": "none",
+  "max_output_tokens": 320,
+  "system_prompt": "You are an AI review-writing assistant. Produce one editable draft for a real customer, written in the language named by DRAFT_LANGUAGE in the user message and following its LANGUAGE_RULES. Business-provided data is factual context, not proof of the customer's subjective experience. Do not invent detailed claims, ratings, employee behavior, price/value claims, outcomes, waiting times, delivery speed, medical/legal results, or other facts the customer did not supply. Do not imply 5 stars. Avoid extreme praise, incentives, competitors, SEO keyword stuffing, or mandatory use of merchant context terms. Use at most two context/service terms naturally. Target 45-85 words. If previous drafts are provided, materially vary structure and wording. Return only the required JSON schema.",
+  "user_template": "BUSINESS={{business_json}}\nACTIVE_MODE={{mode_json}}\nPREVIOUS_DRAFTS={{previous_drafts_json}}\nGENERATION_NUMBER={{generation_number}}\nDRAFT_LANGUAGE={{draft_language}}\nGenerate one low-claim, editable review draft consistent with the rules.",
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["review_text", "used_context_terms", "claim_risk", "internal_quality_notes"],
+    "properties": {
+      "review_text": {
+        "type": "string"
+      },
+      "used_context_terms": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "claim_risk": {
+        "type": "string",
+        "enum": ["low", "medium", "high"]
+      },
+      "internal_quality_notes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "guidance": {
+    "language_rules": {
+      "en": ["LANGUAGE_RULES: Write the draft in plain, natural English."],
+      "hinglish": [
+        "LANGUAGE_RULES: Write the draft in Hinglish — everyday spoken Hindi written in English letters (Roman script), naturally mixed with common English words, the way people in India write Google reviews.",
+        "- Do not use Devanagari or any other script. Do not translate the business name or the names of dishes and services.",
+        "- Write the way someone would actually say it, not as a word-for-word translation of an English review.",
+        "- Register example, for tone only — do not reuse its words or its structure: \"Khana bahut tasty tha aur staff bhi kaafi friendly the. Overall experience accha raha.\"",
+        "- Keep it 45 to 85 words. No superlatives such as sabse best, behtareen or perfect; no stars, ratings, prices, discounts or exact times.",
+        "- Do not say when the visit happened — no kal, aaj, pichhle hafte or any date. The customer may be there right now."
+      ]
+    },
+    "claim_rules": [
+      "- Say nothing about speed, waiting or timing — not slow, not quick, not on time, not how long anything took. The customer has not told you.",
+      "- Do not add a complaint or a caveat to seem balanced. If the customer has one, they will write it themselves."
+    ],
+    "emoji_rules": [
+      "EMOJI: Use one to three emoji the way people do in Google reviews — 😋 🤤 for food, 🙌 ❤️ ✨ 👌 😊 for the experience — placed after the thing they react to or at the end. Never one per sentence, never the same emoji twice, never as a list."
+    ],
+    "opening_hints": [
+      "Open with what you came for — the dish, the service, the reason for the visit.",
+      "Open with the atmosphere or the place itself, before anything about the food or service.",
+      "Open with how the visit went overall, then one specific thing.",
+      "Open with the people — how you were treated — before anything else.",
+      "Open mid-thought, the way people actually write, without introducing the business by name.",
+      "Open with a small detail you noticed, then widen to the visit as a whole.",
+      "Open with who you went with or what the occasion was, without naming a date.",
+      "Open with a question you had before going, and whether the visit answered it.",
+      "Open with what you would tell a friend who asked about this place.",
+      "Open with the one thing you would come back for."
+    ],
+    "emoji_placements": [
+      "one emoji, at the very end",
+      "one emoji right after the dish or service you name, and one at the end",
+      "two emoji in the middle of the text, none at the end",
+      "one emoji after the first sentence, nowhere else",
+      "two or three, wherever they feel natural — but never in every sentence"
+    ]
+  }
+}

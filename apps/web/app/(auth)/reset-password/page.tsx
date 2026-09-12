@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm';
 
 export const metadata: Metadata = {
-  title: 'Choose a new password | AI Review',
+  title: 'Choose a new password | Ai Review',
   description: 'Set a new password using the link from your email.',
   // The URL carries a live single-use credential, so it must never be indexed or referred out.
   robots: { index: false, follow: false },

@@ -31,7 +31,9 @@ function devOrigins(): string[] {
   const base = process.env['APP_BASE_URL'];
   if (!base) return [];
   try {
-    return [new URL(base).host];
+    // Next expects bare hostnames here. Including the port makes tunneled/LAN dev origins miss the
+    // allowlist even though APP_BASE_URL is otherwise correct.
+    return [new URL(base).hostname];
   } catch {
     return [];
   }

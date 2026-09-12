@@ -48,8 +48,8 @@ export const PREVIEW_HOURLY_WINDOW_MS = HOUR_MS;
  * ("paid abuse/fair-use protection triggered", 429) is the closest true one: the subject is a
  * tenant and the concern is provider spend. PUBLIC_RATE_LIMITED is documented as the *anonymous*
  * generation/feedback limit and AUTH_RATE_LIMITED as the login window, so either would misdescribe
- * this caller. The "soft alerts, no hidden hard cap" half of D-006 is about the customer
- * generations a business pays for, not about the owner's own preview button.
+ * this caller. The paid annual allowance applies to public customer drafts, not the owner's own
+ * preview button, so previews need this separate hard rate limit.
  */
 export function previewCheck(businessId: ResolvedTenant): RateLimitCheck {
   return {

@@ -74,7 +74,7 @@ const AVAILABILITY_DEBOUNCE_MS = 450;
  */
 const DESCRIPTION_HINT =
   `Optional, up to ${DESCRIPTION_MAX} characters. ` +
-  'A line or two about what you do — the AI uses it as background.';
+  'A line or two about what you do — the Ai uses it as background.';
 
 /**
  * India-focused starting list.
@@ -547,7 +547,7 @@ export function BusinessStep({ initial, slugClaimed, rules, publicUrlPrefix }: B
           label="Category"
           required
           error={fieldErrors.category}
-          hint="Helps the AI describe the kind of place you are. Pick the closest match."
+          hint="Helps the Ai describe the kind of place you are. Pick the closest match."
         >
           {(control) => (
             <Select

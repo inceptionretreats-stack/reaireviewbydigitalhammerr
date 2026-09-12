@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { assets, businessLinks, businesses, reviewDestinations } from '@ai-review/db';
-import { SlugService, TenantGuard } from '@ai-review/core';
+import { SlugService, TenantGuard, validateGoogleReviewUrl } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { getSession } from '@/lib/session';
@@ -30,7 +30,7 @@ import { isSectionType } from '@/components/dashboard/profile/sections';
  */
 
 export const metadata: Metadata = {
-  title: 'Business profile | AI Review',
+  title: 'Business profile | Ai Review',
   description: 'Edit the public page customers land on, and the order of its buttons.',
 };
 
@@ -87,17 +87,16 @@ export default async function Page() {
       // breaks them that way: two sections sharing a sort_order must not swap places between renders.
       .orderBy(asc(businessLinks.sortOrder), asc(businessLinks.createdAt)),
 
-    // Read on exactly the terms `lib/public-business.ts` reads it on — primary *and* enabled. This
-    // value decides whether the preview draws a Review Us button and whether the row reports "Shows
-    // on your page", so a weaker filter here would promise a button no visitor gets (AC-020).
+    // Read the primary row whether enabled or not. The public preview still uses only an enabled
+    // value, but the location editor must be able to show and repair a destination that was disabled
+    // by an older admin/import path.
     database
-      .select({ url: reviewDestinations.url })
+      .select({ url: reviewDestinations.url, enabled: reviewDestinations.isEnabled })
       .from(reviewDestinations)
       .where(
         and(
           eq(reviewDestinations.businessId, tenant.businessId),
           eq(reviewDestinations.isPrimary, true),
-          eq(reviewDestinations.isEnabled, true),
         ),
       )
       .limit(1),
@@ -109,6 +108,11 @@ export default async function Page() {
   if (!identity) redirect('/app');
 
   const status = describeBusinessStatus(identity.status);
+  const destination = destinations[0] ?? null;
+  const validatedDestination = destination ? validateGoogleReviewUrl(destination.url) : null;
+  const activeReviewUrl = destination?.enabled ? destination.url : null;
+  const trustedOpenUrl =
+    destination?.enabled && validatedDestination?.ok ? validatedDestination.url : null;
 
   const sections: StoredSection[] = [];
   for (const link of links) {
@@ -143,7 +147,13 @@ export default async function Page() {
         slug,
       }}
       sections={sections}
-      reviewUrl={destinations[0]?.url ?? null}
+      reviewUrl={activeReviewUrl}
+      reviewLocation={{
+        url: destination?.url ?? null,
+        openUrl: trustedOpenUrl,
+        kind: validatedDestination?.ok ? validatedDestination.kind : null,
+        enabled: destination?.enabled ?? false,
+      }}
       publicUrl={slug === null ? null : new URL(`/${slug}`, env().APP_BASE_URL).toString()}
       isLive={status.isPubliclyLive}
       // Flow J: a suspended or closed tenant sees why editing is paused rather than a form whose

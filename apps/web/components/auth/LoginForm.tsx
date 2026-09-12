@@ -41,8 +41,8 @@ export function LoginForm() {
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-bold tracking-tight text-ink">Sign in</h1>
-        <p className="text-sm text-ink-muted">Manage your review page, QR codes and analytics.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Welcome back</h1>
+        <p className="text-sm text-ink-muted">Sign in to manage your review experience.</p>
       </div>
 
       {state.status === 'error' && (
@@ -77,23 +77,21 @@ export function LoginForm() {
         )}
       </Field>
 
-      <Checkbox name="remember_me" disabled={submitting} label="Keep me signed in" />
+      <div className="auth-utility-row">
+        <Checkbox name="remember_me" disabled={submitting} label="Keep me signed in" />
+        <a href="/forgot-password">Forgot password?</a>
+      </div>
 
       <Button type="submit" size="lg" fullWidth loading={submitting} loadingLabel="Signing you in">
         Sign in
       </Button>
 
-      <div className="flex flex-col gap-2 text-center text-sm text-ink-muted">
-        <a href="/forgot-password" className="text-accent">
-          Forgot your password?
+      <p className="auth-switch text-sm text-ink-muted">
+        New to Ai Review?{' '}
+        <a href="/signup" className="text-accent">
+          Create an account
         </a>
-        <span>
-          New to AI Review?{' '}
-          <a href="/signup" className="text-accent">
-            Create an account
-          </a>
-        </span>
-      </div>
+      </p>
     </form>
   );
 }

@@ -1,0 +1,156 @@
+import {
+  ActionLink,
+  MarketingCallToAction,
+  MarketingIcon,
+  MarketingShell,
+  marketingStyles as styles,
+} from './MarketingSite';
+
+const FREE_FEATURES = [
+  'Ten Ai drafts per business',
+  'Your branded QR and public business page',
+  'Private feedback and journey analytics',
+];
+
+const PRO_FEATURES = [
+  '2,000 Ai review drafts per year',
+  'Everything included in Free',
+  'One clear price, billed annually',
+];
+
+const INCLUDED = [
+  {
+    accent: 'red',
+    icon: 'edit' as const,
+    title: 'Always editable',
+    body: 'Customers keep the final word.',
+  },
+  {
+    accent: 'green',
+    icon: 'shield' as const,
+    title: 'No rating gate',
+    body: 'Everyone sees the same path.',
+  },
+  {
+    accent: 'yellow',
+    icon: 'feedback' as const,
+    title: 'Private feedback',
+    body: 'Open to every customer.',
+  },
+  {
+    accent: 'blue',
+    icon: 'qr' as const,
+    title: 'Print-ready QR',
+    body: 'Branded for your business.',
+  },
+];
+
+function FeatureChecks({ items }: { items: string[] }) {
+  return (
+    <ul className={styles.planFeatures}>
+      {items.map((item) => (
+        <li key={item}>
+          <span>
+            <MarketingIcon name="check" size={16} />
+          </span>
+          {item}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function PricingPlanCards() {
+  return (
+    <div className={styles.pricingSection} aria-label="Pricing plans">
+      <article className={`${styles.planCard} ${styles.freePlan}`} data-accent="yellow">
+        <span className={styles.planAccent} aria-hidden="true" />
+        <div className={styles.planName}>
+          <span>
+            <MarketingIcon name="draft" size={25} />
+          </span>
+          <div>
+            <h3>Free</h3>
+            <p>Try the complete review loop.</p>
+          </div>
+        </div>
+        <p className={styles.price}>₹0</p>
+        <FeatureChecks items={FREE_FEATURES} />
+        <ActionLink href="/signup" secondary>
+          Create free account
+        </ActionLink>
+      </article>
+
+      <article className={`${styles.planCard} ${styles.proPlan}`} data-accent="green">
+        <span className={styles.planAccent} aria-hidden="true" />
+        <div className={styles.planName}>
+          <span>
+            <MarketingIcon name="phone" size={25} />
+          </span>
+          <div>
+            <h3>Pro</h3>
+            <p>For businesses ready to keep every visit moving.</p>
+          </div>
+        </div>
+        <p className={styles.price}>
+          ₹999 <span>/ year</span>
+        </p>
+        <FeatureChecks items={PRO_FEATURES} />
+        <ActionLink href="/signup">Create account</ActionLink>
+      </article>
+    </div>
+  );
+}
+
+export function PricingMarketingPage() {
+  return (
+    <MarketingShell>
+      <section className={`${styles.pageHeading} ${styles.pricingHeading}`}>
+        <div>
+          <h1>Start free. Grow when it makes sense.</h1>
+          <p>No card to begin, no complicated comparison and nothing hidden behind a demo.</p>
+        </div>
+        <ActionLink href="/signup">Create your account</ActionLink>
+      </section>
+
+      <PricingPlanCards />
+
+      <section className={styles.includedSection}>
+        <div className={styles.includedIntro}>
+          <h2>Good product boundaries are included in every plan.</h2>
+          <p>
+            Upgrading adds capacity. It never changes who controls the review or who can share
+            private feedback.
+          </p>
+        </div>
+        <div className={styles.includedList}>
+          {INCLUDED.map((item) => (
+            <article key={item.title} data-accent={item.accent}>
+              <span>
+                <MarketingIcon name={item.icon} size={23} />
+              </span>
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.pricingAnswer}>
+        <div>
+          <h2>Can I try the customer experience before paying?</h2>
+          <p>
+            Yes. Free includes the complete mobile-first journey and ten drafts, so you can set up
+            the experience before deciding whether you need Pro.
+          </p>
+        </div>
+        <ActionLink href="/signup">Start with Free</ActionLink>
+      </section>
+
+      <MarketingCallToAction
+        title="Start with the complete experience, for free."
+        body="Create your account today. Upgrade only when the extra capacity is useful."
+      />
+    </MarketingShell>
+  );
+}

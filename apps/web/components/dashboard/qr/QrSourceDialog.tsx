@@ -233,7 +233,7 @@ export function QrSourceDialog({ open, mode, source, onClose, onSubmit }: QrSour
         <div className="rounded-card bg-surface p-3 text-sm text-ink-muted">
           {/* "Destination behavior fixed to AI review V1" from QR-01's field list, as a statement
               rather than a control that does nothing. */}
-          <span className="font-medium text-ink">Destination:</span> your AI review page. Every QR
+          <span className="font-medium text-ink">Destination:</span> your Ai review page. Every QR
           code goes there, and that cannot be changed in this version.
         </div>
 

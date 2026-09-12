@@ -50,7 +50,7 @@ const STEP_COPY: Record<FunnelEvent, FunnelStepCopy> = {
     description: 'The review page finished loading, whether reached by QR code or by link.',
   },
   ai_generate_success: {
-    label: 'AI draft created',
+    label: 'Ai draft created',
     description: 'A usable draft came back for the customer to read and edit.',
   },
   review_copy: {

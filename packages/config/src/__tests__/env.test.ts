@@ -22,6 +22,7 @@ describe('loadEnv', () => {
 
     expect(env.SESSION_COOKIE_NAME).toBe('dh_session');
     expect(env.FREE_AI_GENERATION_LIMIT).toBe(10);
+    expect(env.PRO_ANNUAL_GENERATION_LIMIT).toBe(2000);
     expect(env.PRO_ANNUAL_PRICE_PAISE).toBe(99900);
     expect(env.DEFAULT_TIMEZONE).toBe('Asia/Kolkata');
     expect(env.AI_MAX_OUTPUT_TOKENS).toBe(220);
@@ -65,6 +66,49 @@ describe('loadEnv', () => {
     expect(loadEnv(withoutKey).OPENAI_API_KEY).toBeUndefined();
   });
 
+  it('allows localhost in development but refuses to mint localhost QR codes in production', () => {
+    const local = {
+      ...valid,
+      NODE_ENV: 'development',
+      APP_BASE_URL: 'http://localhost:3000',
+      API_BASE_URL: 'http://localhost:3000/api/v1',
+    } as const;
+
+    expect(() => loadEnv(local)).not.toThrow();
+
+    try {
+      loadEnv({ ...local, NODE_ENV: 'production' });
+      expect.unreachable('production must not generate customer QR codes for localhost');
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError);
+      expect((error as EnvValidationError).issues).toEqual([
+        expect.stringContaining('local or private QR addresses do not work for customers'),
+        expect.stringContaining('HTTPS'),
+      ]);
+    }
+  });
+
+  it('requires one canonical app origin and its matching API path', () => {
+    for (const patch of [
+      { APP_BASE_URL: 'https://review.digitalhammerr.com/customer' },
+      { API_BASE_URL: 'https://api.digitalhammerr.com/api/v1' },
+      { API_BASE_URL: 'https://review.digitalhammerr.com/api/v2' },
+    ]) {
+      expect(() => loadEnv({ ...valid, ...patch })).toThrow(EnvValidationError);
+    }
+  });
+
+  it('rejects a private production QR origin even when it uses HTTPS', () => {
+    expect(() =>
+      loadEnv({
+        ...valid,
+        NODE_ENV: 'production',
+        APP_BASE_URL: 'https://192.168.1.6',
+        API_BASE_URL: 'https://192.168.1.6/api/v1',
+      }),
+    ).toThrow(/local or private QR addresses/);
+  });
+
   /**
    * The regression that prompted the rule. .env.example ships `OPENAI_API_KEY=`, which arrives as
    * an empty string, and .optional() alone still ran that through the length check — so the file
@@ -78,7 +122,7 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ ...valid, OPENAI_API_KEY: 'too-short' })).toThrow(EnvValidationError);
   });
 
-  it('refuses to boot production without an OpenAI key', () => {
+  it('refuses to boot production without any provider key', () => {
     const { OPENAI_API_KEY: _omitted, ...withoutKey } = valid;
 
     try {
@@ -87,8 +131,28 @@ describe('loadEnv', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(EnvValidationError);
       expect((error as EnvValidationError).issues).toEqual([
-        expect.stringContaining('OPENAI_API_KEY'),
+        expect.stringContaining('GEMINI_API_KEY'),
       ]);
     }
+  });
+
+  /**
+   * OPENAI_DEFAULT_MODEL is read by nothing — the live model is ai_prompt_versions.model — yet
+   * it used to be required, so a deployment that omitted it failed to boot over a no-op.
+   */
+  it('boots without the legacy OPENAI_DEFAULT_MODEL', () => {
+    const { OPENAI_DEFAULT_MODEL: _omitted, ...withoutModel } = valid;
+    expect(loadEnv(withoutModel).OPENAI_DEFAULT_MODEL).toBeUndefined();
+  });
+
+  it('accepts production with only a Gemini key', () => {
+    const { OPENAI_API_KEY: _omitted, ...withoutKey } = valid;
+    const env = loadEnv({
+      ...withoutKey,
+      NODE_ENV: 'production',
+      GEMINI_API_KEY: 'AIza'.padEnd(39, 'x'),
+    });
+    expect(env.GEMINI_API_KEY).toBe('AIza'.padEnd(39, 'x'));
+    expect(env.OPENAI_API_KEY).toBeUndefined();
   });
 });

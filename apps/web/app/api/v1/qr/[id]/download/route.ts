@@ -1,28 +1,23 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq } from 'drizzle-orm';
-import { qrCodes } from '@ai-review/db';
+import { businesses, qrCodes } from '@ai-review/db';
 import { buildQrUrl } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
-import { renderQrPng, renderQrSvg } from '@/lib/qr-image';
+import { renderQrCardPng, renderQrCardSvg, type QrCardBranding } from '@/lib/qr-card';
 import { contentDisposition, parseFormat, type QrFormat } from './filename';
 
 /**
  * GET /api/v1/qr/{id}/download?format=svg|png — the Download SVG / Download PNG actions of QR-01.
  *
- * Both formats render synchronously. 02_System_Architecture.md permits PNG export to be
- * asynchronous, and the reason to allow that is the usual assumption that rasterising needs a
- * canvas. It does not here: `qrcode` rasterises through pngjs, which is pure JavaScript, so a PNG
- * costs one bounded encode of a server-fixed image and adds no native dependency, no object-storage
- * round trip and no job queue. Deferring it would mean QR-01's "Download PNG" button handing back a
- * job id and a polling state, which is a worse screen for no gain at this scale. The escape hatch
- * stays open if the render ever becomes a load problem — move it to the worker and write to object
- * storage, which 02_System_Architecture.md already names as the home for "exported QR assets".
+ * Both formats render synchronously. The SVG is assembled from bounded vector artwork and the
+ * shared QR symbol; Sharp rasterises that same document for PNG, so the two downloads cannot drift
+ * into different layouts.
  *
- * Node runtime is declared explicitly because pngjs needs Buffer and zlib. It is the Next default
- * today; stating it means a future global edge default cannot silently break PNG at runtime.
+ * Node runtime is explicit because SVG composition uses Buffer and PNG export uses Sharp's native
+ * runtime. Stating it prevents a future global edge default from silently breaking downloads.
  */
 export const runtime = 'nodejs';
 
@@ -56,8 +51,13 @@ export async function GET(
   if (!UUID_PATTERN.test(id)) return notFound();
 
   const [source] = await db()
-    .select({ code: qrCodes.code, sourceLabel: qrCodes.sourceLabel })
+    .select({
+      code: qrCodes.code,
+      sourceLabel: qrCodes.sourceLabel,
+      businessName: businesses.name,
+    })
     .from(qrCodes)
+    .innerJoin(businesses, eq(businesses.id, qrCodes.businessId))
     // Ownership is part of the WHERE clause, not a check on the returned row. An id in a URL is
     // exactly the IDOR shape AC-003 tests for, and a QR code is a locator rather than an
     // authorization token (RBAC rule 3) — so the query cannot read another tenant's row at all,
@@ -84,7 +84,9 @@ export async function GET(
 
   let rendered: RenderedImage;
   try {
-    rendered = format === 'svg' ? await renderSvg(payload) : await renderPng(payload);
+    const branding: QrCardBranding = { businessName: source.businessName };
+    rendered =
+      format === 'svg' ? await renderSvg(payload, branding) : await renderPng(payload, branding);
   } catch (error) {
     // The payload is a short ASCII URL that always fits inside a version-6 symbol, so a failure
     // here is an environment problem rather than bad input. Logged in full, reported generically:
@@ -96,13 +98,13 @@ export async function GET(
   return imageResponse(rendered, source.sourceLabel, source.code);
 }
 
-async function renderSvg(payload: string): Promise<RenderedImage> {
-  const svg = await renderQrSvg(payload);
+async function renderSvg(payload: string, branding: QrCardBranding): Promise<RenderedImage> {
+  const svg = await renderQrCardSvg(payload, branding);
   return { body: svg, contentType: 'image/svg+xml; charset=utf-8', format: 'svg' };
 }
 
-async function renderPng(payload: string): Promise<RenderedImage> {
-  const png = await renderQrPng(payload);
+async function renderPng(payload: string, branding: QrCardBranding): Promise<RenderedImage> {
+  const png = await renderQrCardPng(payload, branding);
   return { body: toResponseBody(png), contentType: 'image/png', format: 'png' };
 }
 
@@ -126,14 +128,12 @@ function imageResponse(rendered: RenderedImage, sourceLabel: string, code: strin
       'Content-Type': rendered.contentType,
       'Content-Disposition': contentDisposition(sourceLabel, code, rendered.format),
       // attachment plus nosniff, because an SVG served inline from our own origin is a script
-      // execution context. Nothing here interpolates tenant input into the document — the label
-      // travels in the header, not the image — but a file-download endpoint should not be the one
-      // place whose safety depends on that staying true.
+      // execution context. Tenant copy is XML-escaped, but the browser should still treat this
+      // endpoint only as a file download.
       'X-Content-Type-Options': 'nosniff',
-      // Private and short. The artwork is stable for the life of the row because the code is
-      // immutable (QR-01-01), but the encoded host comes from APP_BASE_URL, a deploy-time input —
-      // long enough to absorb a double-click, short enough never to outlive a base-URL change.
-      'Cache-Control': 'private, max-age=300',
+      // The symbol is immutable, but the business name is intentionally live branding. A renamed
+      // business should not keep receiving yesterday's standee from a browser cache.
+      'Cache-Control': 'private, no-store',
     },
   });
 }

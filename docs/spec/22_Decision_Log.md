@@ -2,12 +2,12 @@
 
 | ID | Decision | Status |
 |---|---|---|
-| D-001 | Product name is AI Review by Digital Hammerr | Frozen |
+| D-001 | Product display name is Ai Review by Digital Hammerr | Frozen — casing updated 10 Sep 2026 |
 | D-002 | Target local businesses first | Frozen |
 | D-003 | Self-service plus Digital Hammerr-assisted account creation | Frozen |
 | D-004 | Free plan includes 10 AI generations | Frozen |
 | D-005 | Only paid plan is ₹999/year and includes all V1 features | Frozen |
-| D-006 | Paid AI usage is marketed fair-use unlimited | Frozen |
+| D-006 | Paid AI usage is marketed fair-use unlimited | Superseded by D-030 |
 | D-007 | Dynamic QR lands directly on AI review experience | Frozen |
 | D-008 | Customer is not asked questionnaire questions in V1 | Frozen |
 | D-009 | Customer star rating occurs only on Google/external platform | Frozen |
@@ -31,3 +31,5 @@
 | D-027 | Analytics includes QR->generate->copy->Google-open funnel | Frozen |
 | D-028 | Do not claim Google review submission without verifiable external evidence | Frozen |
 | D-029 | Copy requires customer confirmation that draft reflects genuine experience | Architecture compliance gate |
+| D-030 | Pro includes at most 2,000 successful public AI review drafts per paid subscription year; previews and provider failures do not count | Frozen — approved 10 Sep 2026 |
+| D-031 | User-facing copy renders the acronym as `Ai`; technical identifiers and third-party names such as OpenAI keep their established spelling | Frozen — approved 10 Sep 2026 |

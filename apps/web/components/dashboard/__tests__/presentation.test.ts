@@ -151,14 +151,13 @@ describe('describeBusinessStatus', () => {
 });
 
 describe('describePlan', () => {
-  it('lets the free quota govern only where it actually does (D-004, AC-013)', () => {
-    // free_generations_used keeps counting after an upgrade, so presenting it as a ceiling on a
-    // paid plan would report a limit the tenant has already bought its way past.
-    expect(describePlan('FREE').freeQuotaGoverns).toBe(true);
-    expect(describePlan('CHECKOUT_PENDING').freeQuotaGoverns).toBe(true);
-    expect(describePlan('EXPIRED').freeQuotaGoverns).toBe(true);
-    expect(describePlan('CANCELLED').freeQuotaGoverns).toBe(true);
-    expect(describePlan('PRO_ACTIVE').freeQuotaGoverns).toBe(false);
-    expect(describePlan('PAST_DUE').freeQuotaGoverns).toBe(false);
+  it('selects the independent lifetime or annual quota for each plan state', () => {
+    // Free usage remains intact across an upgrade; paid states show the separate annual counter.
+    expect(describePlan('FREE').quotaKind).toBe('FREE');
+    expect(describePlan('CHECKOUT_PENDING').quotaKind).toBe('FREE');
+    expect(describePlan('EXPIRED').quotaKind).toBe('FREE');
+    expect(describePlan('CANCELLED').quotaKind).toBe('FREE');
+    expect(describePlan('PRO_ACTIVE').quotaKind).toBe('PRO');
+    expect(describePlan('PAST_DUE').quotaKind).toBe('PRO');
   });
 });

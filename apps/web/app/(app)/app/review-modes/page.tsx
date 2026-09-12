@@ -31,7 +31,7 @@ import { getSession } from '@/lib/session';
  */
 
 export const metadata: Metadata = {
-  title: 'Review modes | AI Review',
+  title: 'Review modes | Ai Review',
   description: 'Choose which topics your customers’ drafts lean on.',
 };
 

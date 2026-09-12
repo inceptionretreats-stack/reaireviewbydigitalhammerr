@@ -97,7 +97,7 @@ describe('readFailure', () => {
 });
 
 describe('previewFromPayload', () => {
-  const SIGNATURE = contextSignature('A salon.', ['Haircut'], ['Family friendly']);
+  const SIGNATURE = contextSignature('A salon.', ['Haircut'], ['Family friendly'], 'hinglish');
 
   it('reports a draft with the compliance flag the endpoint sent', () => {
     expect(
@@ -151,28 +151,45 @@ describe('previewFromPayload', () => {
 
 describe('contextSignature and previewIsStale', () => {
   it('ignores surrounding whitespace in the summary, as the save does', () => {
-    expect(contextSignature('  A salon.  ', [], [])).toBe(contextSignature('A salon.', [], []));
-  });
-
-  it('distinguishes term order, term splits and term content', () => {
-    expect(contextSignature('', ['a', 'b'], [])).not.toBe(contextSignature('', ['b', 'a'], []));
-    expect(contextSignature('', ['ab'], [])).not.toBe(contextSignature('', ['a', 'b'], []));
-    // Services and context terms are separate fields and must not be interchangeable.
-    expect(contextSignature('', ['a'], [])).not.toBe(contextSignature('', [], ['a']));
-  });
-
-  it('marks a ready preview stale once the context it was written from changes', () => {
-    const before = contextSignature('A salon.', ['Haircut'], []);
-    const preview = previewFromPayload({ review_text: 'Draft.' }, before);
-
-    expect(previewIsStale(preview, before)).toBe(false);
-    expect(previewIsStale(preview, contextSignature('A salon.', ['Haircut', 'Beard'], []))).toBe(
-      true,
+    expect(contextSignature('  A salon.  ', [], [], 'en')).toBe(
+      contextSignature('A salon.', [], [], 'en'),
     );
   });
 
+  it('distinguishes term order, term splits and term content', () => {
+    expect(contextSignature('', ['a', 'b'], [], 'en')).not.toBe(
+      contextSignature('', ['b', 'a'], [], 'en'),
+    );
+    expect(contextSignature('', ['ab'], [], 'en')).not.toBe(
+      contextSignature('', ['a', 'b'], [], 'en'),
+    );
+    // Services and context terms are separate fields and must not be interchangeable.
+    expect(contextSignature('', ['a'], [], 'en')).not.toBe(contextSignature('', [], ['a'], 'en'));
+  });
+
+  /**
+   * CHANGE-003. A preview written in the other language is the most misleading stale preview
+   * there is, and on the dashboard this same signature is what enables Save — without the
+   * language in it, switching language alone could never be saved.
+   */
+  it('treats a change of draft language as a change of context', () => {
+    expect(contextSignature('A salon.', [], [], 'hinglish')).not.toBe(
+      contextSignature('A salon.', [], [], 'en'),
+    );
+  });
+
+  it('marks a ready preview stale once the context it was written from changes', () => {
+    const before = contextSignature('A salon.', ['Haircut'], [], 'hinglish');
+    const preview = previewFromPayload({ review_text: 'Draft.' }, before);
+
+    expect(previewIsStale(preview, before)).toBe(false);
+    expect(
+      previewIsStale(preview, contextSignature('A salon.', ['Haircut', 'Beard'], [], 'hinglish')),
+    ).toBe(true);
+  });
+
   it('never claims staleness for a state that is not showing a draft', () => {
-    const signature = contextSignature('x', [], []);
+    const signature = contextSignature('x', [], [], 'hinglish');
     const states: PreviewState[] = [
       { status: 'idle' },
       { status: 'loading' },
@@ -259,7 +276,7 @@ describe('defaultModeCopy', () => {
     expect(copy.title).not.toBe(DEFAULT_MODE_NAME);
     expect(copy.note).not.toBeNull();
     expect(copy.note).not.toContain('when you save');
-    expect(copy.note).toContain('AI settings');
+    expect(copy.note).toContain('Ai settings');
   });
 
   /** D-009/AC-006 and AI-02: a mode shifts emphasis, never sentiment, and never asks for a rating. */

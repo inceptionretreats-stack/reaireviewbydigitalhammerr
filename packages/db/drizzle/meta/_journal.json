@@ -15,6 +15,34 @@
       "when": 1788764741062,
       "tag": "0001_owner_fk_cascade",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789036660953,
+      "tag": "0002_pro_annual_quota",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789037597874,
+      "tag": "0003_pro_quota_period_reset",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789105722669,
+      "tag": "0004_draft_language",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789132552207,
+      "tag": "0005_entitlement_source_and_guidance",
+      "breakpoints": true
     }
   ]
 }

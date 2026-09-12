@@ -53,7 +53,7 @@ const CARDS: readonly KpiDefinition[] = [
   },
   {
     event: 'ai_generate_success',
-    label: 'AI drafts created',
+    label: 'Ai drafts created',
     hint: 'Every draft returned for a customer to read and edit, including repeat attempts.',
   },
   {
@@ -93,7 +93,7 @@ export function KpiRow({ totals, uniqueVisitorSessions }: KpiRowProps) {
 
         {failures > 0 && (
           <KpiCard
-            label="Failed AI attempts"
+            label="Failed Ai attempts"
             value={formatCount(failures)}
             hint="Customers who asked for a draft and did not get one. They could still open Google directly from your page."
           />

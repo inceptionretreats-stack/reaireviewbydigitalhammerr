@@ -28,7 +28,14 @@ export function Select({ options, placeholder, className, ...rest }: SelectProps
   return (
     <select
       {...rest}
-      className={cx(CONTROL_SURFACE, TOUCH_TARGET, CONTROL_INVALID, FOCUS_RING, className)}
+      className={cx(
+        'ui-select',
+        CONTROL_SURFACE,
+        TOUCH_TARGET,
+        CONTROL_INVALID,
+        FOCUS_RING,
+        className,
+      )}
     >
       {placeholder !== undefined && (
         <option value="" disabled>

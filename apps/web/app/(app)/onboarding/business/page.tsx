@@ -17,7 +17,7 @@ import { env } from '@/lib/env';
 import { getSession } from '@/lib/session';
 
 export const metadata: Metadata = {
-  title: 'Your business | AI Review',
+  title: 'Your business | Ai Review',
   description: 'Your name, category, city and the web address customers will see.',
 };
 

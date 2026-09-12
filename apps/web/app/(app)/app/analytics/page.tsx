@@ -24,7 +24,7 @@ import { AnalyticsSkeleton } from '@/components/dashboard/analytics/AnalyticsSke
  */
 
 export const metadata: Metadata = {
-  title: 'Analytics | AI Review',
+  title: 'Analytics | Ai Review',
   description: 'Scans, drafts, copies and Google review page openings for your business.',
 };
 

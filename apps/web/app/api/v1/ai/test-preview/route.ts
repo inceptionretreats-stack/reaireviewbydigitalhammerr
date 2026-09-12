@@ -25,6 +25,13 @@ import { previewCheck } from './preview-limit';
  * so a preview that quietly skipped the AC-011/AC-012 gates would misrepresent the product to the
  * person deciding whether to publish it.
  */
+/**
+ * The generator waits on the model for up to AI_REQUEST_TIMEOUT_MS and retries once on a 503, so
+ * on a serverless host the function must be allowed to outlive a default 10 s budget. Ignored
+ * by `next start`; read by Vercel.
+ */
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
@@ -57,8 +64,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       reviewMode: context.reviewMode,
       previousDrafts: [],
       generationNumber: 1,
+      draftLanguage: context.draftLanguage,
+      // A fresh seed per preview, so ten previews in a row show the owner ten openings rather
+      // than the model's single favourite.
+      variationSeed: crypto.randomUUID(),
     },
     context.promptVersion.systemPrompt,
+    context.promptVersion.guidance,
   );
 
   try {

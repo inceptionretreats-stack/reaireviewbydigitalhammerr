@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { ReviewGenerator, type PromptVersionConfig } from '../ai/generator';
-import { buildPrompt, checkOutputCompliance, countUsedContextTerms } from '../ai/prompt-builder';
-import { STUB_DRAFTS, StubAiProvider } from '../ai/provider';
+import {
+  buildPrompt,
+  checkOutputCompliance,
+  countUsedContextTerms,
+  DEFAULT_DRAFT_LANGUAGE,
+  DRAFT_LANGUAGES,
+  draftLanguageLine,
+  EMOJI_PLACEMENTS,
+  emojiPlacementFor,
+  OPENING_HINTS,
+  openingHintFor,
+  readDraftLanguage,
+  type DraftLanguage,
+} from '../ai/prompt-builder';
+import { HINGLISH_MARKER, STUB_DRAFTS, STUB_DRAFTS_HINGLISH, StubAiProvider } from '../ai/provider';
+import { DEFAULT_SIMILARITY_THRESHOLD, similarity } from '../ai/similarity';
 import { MemoryQuotaStore } from '../quota/memory-store';
 import { QuotaService } from '../quota/service';
 
@@ -42,14 +56,26 @@ function makeGenerator(behaviour: 'ok' | 'fail' | 'repetitive' = 'ok', used = 0)
   return { store, provider, generator: new ReviewGenerator(provider, new QuotaService(store)) };
 }
 
-function options(previousDrafts: string[] = [], generationNumber = 1) {
+function options(
+  previousDrafts: string[] = [],
+  generationNumber = 1,
+  draftLanguage: DraftLanguage = 'en',
+) {
   return {
     businessId: BIZ,
-    request: { business, reviewMode: null, previousDrafts, generationNumber },
+    request: { business, reviewMode: null, previousDrafts, generationNumber, draftLanguage },
     promptVersion: PROMPT_VERSION,
     timeoutMs: 8000,
   };
 }
+
+const englishRequest = (previousDrafts: string[], generationNumber: number) => ({
+  business,
+  reviewMode: null,
+  previousDrafts,
+  generationNumber,
+  draftLanguage: 'en' as const,
+});
 
 describe('review generation', () => {
   it('returns one editable draft (AC-007)', async () => {
@@ -130,7 +156,7 @@ describe('regeneration', () => {
    */
   it('keeps producing fresh drafts across a session, with a new provider each request', async () => {
     const store = new MemoryQuotaStore();
-    store.seed(BIZ, { mode: 'PRO', used: 0, limit: 10 });
+    store.seed(BIZ, { mode: 'PRO', used: 0, limit: 2000 });
 
     const drafts: string[] = [];
 
@@ -162,17 +188,24 @@ describe('regeneration', () => {
     expect(store.usage(BIZ)).toBe(1);
   });
 
-  /** D-006: Pro is fair-use unlimited, so the counter is untouched. */
-  it('does not consume quota for a Pro business', async () => {
+  it('counts a successful Pro draft against its annual allowance', async () => {
     const store = new MemoryQuotaStore();
-    store.seed(BIZ, { mode: 'PRO', used: 10, limit: 10 });
+    store.seed(BIZ, { mode: 'PRO', used: 1999, limit: 2000 });
     const generator = new ReviewGenerator(new StubAiProvider(), new QuotaService(store));
 
     const outcome = await generator.generate(options());
 
     expect(outcome.ok).toBe(true);
-    if (outcome.ok) expect(outcome.draft.countedTowardQuota).toBe(false);
-    expect(store.usage(BIZ)).toBe(10);
+    if (outcome.ok) {
+      expect(outcome.draft.countedTowardQuota).toBe(true);
+      expect(outcome.draft.quotaType).toBe('PRO');
+    }
+    expect(store.usage(BIZ, 'PRO')).toBe(2000);
+
+    expect(await generator.generate(options())).toMatchObject({
+      ok: false,
+      failure: { code: 'PLAN_QUOTA_EXHAUSTED' },
+    });
   });
 });
 
@@ -232,15 +265,7 @@ describe('output compliance gates', () => {
 
 describe('prompt construction', () => {
   it('caps previous drafts at the most recent three', () => {
-    const prompt = buildPrompt(
-      {
-        business,
-        reviewMode: null,
-        previousDrafts: ['one', 'two', 'three', 'four'],
-        generationNumber: 5,
-      },
-      'SYSTEM',
-    );
+    const prompt = buildPrompt(englishRequest(['one', 'two', 'three', 'four'], 5), 'SYSTEM');
 
     expect(prompt.system).toBe('SYSTEM');
     expect(prompt.user).toContain('Demo South Cafe');
@@ -250,14 +275,8 @@ describe('prompt construction', () => {
   });
 
   it('adds a stronger variation instruction only when regenerating', () => {
-    const first = buildPrompt(
-      { business, reviewMode: null, previousDrafts: [], generationNumber: 1 },
-      'SYSTEM',
-    );
-    const again = buildPrompt(
-      { business, reviewMode: null, previousDrafts: ['prior draft'], generationNumber: 2 },
-      'SYSTEM',
-    );
+    const first = buildPrompt(englishRequest([], 1), 'SYSTEM');
+    const again = buildPrompt(englishRequest(['prior draft'], 2), 'SYSTEM');
 
     expect(first.user).not.toMatch(/regeneration/i);
     expect(again.user).toMatch(/regeneration/i);
@@ -332,5 +351,249 @@ describe('generation time budget', () => {
     });
 
     expect(outcome).toMatchObject({ ok: false });
+  });
+});
+
+/**
+ * CHANGE-003. The language a business writes in is a request field, not a prompt-version
+ * property: one platform prompt serves every tenant, and the user message names the language.
+ */
+describe('draft language', () => {
+  it('defaults to Hinglish and knows exactly two languages', () => {
+    expect(DEFAULT_DRAFT_LANGUAGE).toBe('hinglish');
+    expect([...DRAFT_LANGUAGES]).toEqual(['en', 'hinglish']);
+  });
+
+  it('names the language in the user prompt and appends its rules', () => {
+    const hinglish = buildPrompt(
+      {
+        business,
+        reviewMode: null,
+        previousDrafts: [],
+        generationNumber: 1,
+        draftLanguage: 'hinglish',
+      },
+      'SYSTEM',
+    );
+    const english = buildPrompt(englishRequest([], 1), 'SYSTEM');
+
+    expect(hinglish.user).toMatch(/^DRAFT_LANGUAGE=hinglish$/m);
+    expect(hinglish.user).toMatch(/Hinglish/);
+    expect(hinglish.user).toMatch(/Devanagari/);
+    expect(english.user).toMatch(/^DRAFT_LANGUAGE=en$/m);
+    expect(english.user).not.toMatch(/Hinglish|Devanagari/);
+    // The system prompt is still the stored one, untouched: the language travels in the user
+    // message so the platform prompt stays a single versioned row (ADR-006).
+    expect(hinglish.system).toBe('SYSTEM');
+  });
+
+  /**
+   * Seven of ten real first drafts opened with the same sentence. The hint is what varies the
+   * opening between customers; it is seeded rather than random so one request's retries agree
+   * and this test can say which hint a seed gets.
+   */
+  it('rotates the opening by seed, and says nothing about openings without one', () => {
+    const seeds = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'];
+    const chosen = new Set(seeds.map((seed) => openingHintFor(seed)));
+    expect(chosen.size).toBeGreaterThan(1);
+    for (const hint of chosen) expect(OPENING_HINTS).toContain(hint);
+    expect(openingHintFor('same-seed')).toBe(openingHintFor('same-seed'));
+
+    const seeded = buildPrompt({ ...englishRequest([], 1), variationSeed: 'session-1' }, 'S');
+    expect(seeded.user).toMatch(/^OPENING: /m);
+    expect(seeded.user).toContain(openingHintFor('session-1', 1));
+    expect(seeded.user).toMatch(/Do not begin with the business name/);
+    expect(seeded.user).toMatch(/^EMOJI_PLACEMENT: /m);
+
+    const unseeded = buildPrompt(englishRequest([], 1), 'S');
+    expect(unseeded.user).not.toMatch(/^OPENING: /m);
+    expect(unseeded.user).not.toMatch(/^EMOJI_PLACEMENT: /m);
+  });
+
+  /**
+   * Four "New review" taps in one session produced four drafts opening the same way, because
+   * the hint followed the session and nothing else. It advances per generation now.
+   */
+  it('gives consecutive regenerations in one session different openings', () => {
+    const seed = 'one-customer';
+    const openings = [1, 2, 3, 4, 5].map((n) => openingHintFor(seed, n));
+    for (let i = 1; i < openings.length; i += 1) {
+      expect(openings[i]).not.toBe(openings[i - 1]);
+    }
+    expect(new Set(openings).size).toBe(openings.length);
+    // Placement moves too, and on its own stride.
+    const placements = [1, 2, 3].map((n) => emojiPlacementFor(seed, n));
+    expect(new Set(placements).size).toBeGreaterThan(1);
+    for (const p of placements) expect(EMOJI_PLACEMENTS).toContain(p);
+  });
+
+  it('asks for emoji the way people use them, in both languages', () => {
+    const en = buildPrompt(englishRequest([], 1), 'S');
+    const hi = buildPrompt(
+      {
+        business,
+        reviewMode: null,
+        previousDrafts: [],
+        generationNumber: 1,
+        draftLanguage: 'hinglish',
+      },
+      'S',
+    );
+    for (const prompt of [en, hi]) {
+      expect(prompt.user).toMatch(/^EMOJI: Use one to three emoji/m);
+      expect(prompt.user).toMatch(/never the same emoji twice/);
+    }
+  });
+
+  it('tells a Hinglish draft not to invent when the visit was', () => {
+    const prompt = buildPrompt(
+      {
+        business,
+        reviewMode: null,
+        previousDrafts: [],
+        generationNumber: 1,
+        draftLanguage: 'hinglish',
+      },
+      'S',
+    );
+    expect(prompt.user).toMatch(/no kal, aaj, pichhle hafte/);
+  });
+
+  it('reads the language back only from its own line, never from an embedded draft', () => {
+    expect(readDraftLanguage(draftLanguageLine('hinglish'))).toBe('hinglish');
+    expect(readDraftLanguage(draftLanguageLine('en'))).toBe('en');
+    // A prompt from before CHANGE-003 has no line, and was English.
+    expect(readDraftLanguage('BUSINESS={}')).toBe('en');
+    // A previous draft that happens to contain the marker text does not count — it is inside
+    // the PREVIOUS_DRAFTS JSON, not on a line of its own.
+    const smuggled = buildPrompt(
+      englishRequest(['I typed DRAFT_LANGUAGE=hinglish into my review for some reason'], 2),
+      'SYSTEM',
+    );
+    expect(readDraftLanguage(smuggled.user)).toBe('en');
+  });
+
+  it('makes the stub answer in the language the prompt asks for', async () => {
+    const hinglish = await new StubAiProvider().generate({
+      prompt: buildPrompt(
+        {
+          business,
+          reviewMode: null,
+          previousDrafts: [],
+          generationNumber: 1,
+          draftLanguage: 'hinglish',
+        },
+        'SYSTEM',
+      ),
+      model: 'stub',
+      maxOutputTokens: 220,
+      reasoningEffort: '',
+      timeoutMs: 1000,
+      outputSchema: {},
+    });
+    const english = await new StubAiProvider().generate({
+      prompt: buildPrompt(englishRequest([], 1), 'SYSTEM'),
+      model: 'stub',
+      maxOutputTokens: 220,
+      reasoningEffort: '',
+      timeoutMs: 1000,
+      outputSchema: {},
+    });
+
+    expect(STUB_DRAFTS_HINGLISH).toContain(hinglish.output.review_text);
+    expect(STUB_DRAFTS).toContain(english.output.review_text);
+
+    const repetitive = await new StubAiProvider('repetitive').generate({
+      prompt: buildPrompt(
+        {
+          business,
+          reviewMode: null,
+          previousDrafts: [],
+          generationNumber: 1,
+          draftLanguage: 'hinglish',
+        },
+        'SYSTEM',
+      ),
+      model: 'stub',
+      maxOutputTokens: 220,
+      reasoningEffort: '',
+      timeoutMs: 1000,
+      outputSchema: {},
+    });
+    expect(repetitive.output.review_text).toBe(STUB_DRAFTS_HINGLISH[0]);
+  });
+
+  /**
+   * The Hinglish pool must hold up under the same gates and the same session shape as the
+   * English one — otherwise the stub-driven E2E flow, which now runs in Hinglish, dead-ends
+   * exactly the way the third generation once did.
+   */
+  it('ships a Hinglish pool that passes every gate and stays mutually distinct', () => {
+    expect(STUB_DRAFTS_HINGLISH).toHaveLength(8);
+    for (const draft of STUB_DRAFTS_HINGLISH) {
+      expect(draft.length).toBeGreaterThanOrEqual(80);
+      expect(draft).toMatch(HINGLISH_MARKER);
+      expect(draft).not.toMatch(/\d|star/i);
+      expect(checkOutputCompliance(draft), draft).toEqual({ passed: true, rejections: [] });
+    }
+    for (let i = 0; i < STUB_DRAFTS_HINGLISH.length; i += 1) {
+      for (let j = i + 1; j < STUB_DRAFTS_HINGLISH.length; j += 1) {
+        const score = similarity(STUB_DRAFTS_HINGLISH[i]!, STUB_DRAFTS_HINGLISH[j]!);
+        expect(score, `drafts ${i} and ${j} score ${score}`).toBeLessThan(
+          DEFAULT_SIMILARITY_THRESHOLD,
+        );
+      }
+    }
+  });
+
+  it('keeps producing fresh Hinglish drafts across a session with a new provider each request', async () => {
+    const store = new MemoryQuotaStore();
+    store.seed(BIZ, { mode: 'PRO', used: 0, limit: 2000 });
+    const drafts: string[] = [];
+
+    for (let generation = 1; generation <= 5; generation += 1) {
+      const generator = new ReviewGenerator(new StubAiProvider(), new QuotaService(store));
+      const outcome = await generator.generate(options([...drafts], generation, 'hinglish'));
+      expect(outcome.ok, `generation ${generation} should succeed`).toBe(true);
+      if (!outcome.ok) return;
+      expect(outcome.draft.reviewText).toMatch(HINGLISH_MARKER);
+      drafts.push(outcome.draft.reviewText);
+    }
+    for (let i = 1; i < drafts.length; i += 1) {
+      const window = drafts.slice(Math.max(0, i - 3), i);
+      expect(window).not.toContain(drafts[i]);
+    }
+  });
+
+  /**
+   * The gates were written against English vocabulary. Each Roman-Hindi form below is the way
+   * the same claim comes out of a real Hinglish draft; ordinary praise must still pass.
+   */
+  const pad = (text: string) =>
+    `${text} Baaki sab theek tha aur staff ne dhyan se baat suni. Dobara aane ka mann hai.`;
+
+  it.each([
+    ['Paanch star deta hoon is jagah ko.', 'STATES_A_RATING'],
+    ['Maine 5 sitare diye hain.', 'STATES_A_RATING'],
+    ['Meri taraf se 4 ki rating.', 'STATES_A_RATING'],
+    ['Muft mein dessert mila, isliye likh raha hoon.', 'MENTIONS_INCENTIVE'],
+    ['Review ke badle mein discount ka offer tha.', 'MENTIONS_INCENTIVE'],
+    ['Khana 10 minute mein aa gaya.', 'UNSUPPORTED_SPECIFIC_CLAIM'],
+    ['Do ghante ke andar kaam ho gaya.', 'UNSUPPORTED_SPECIFIC_CLAIM'],
+    ['Pure 2000 rupaye bachaye maine.', 'UNSUPPORTED_SPECIFIC_CLAIM'],
+    ['Yeh jagah 40% sasti hai.', 'UNSUPPORTED_SPECIFIC_CLAIM'],
+    ['Sheher ki sabse accha jagah hai yeh.', 'EXTREME_PRAISE'],
+    ['Behtareen service thi.', 'EXTREME_PRAISE'],
+  ])('rejects "%s" as %s', (text, rejection) => {
+    expect(checkOutputCompliance(pad(text)).rejections).toContain(rejection);
+  });
+
+  it.each([
+    'Khana bahut accha tha aur staff kaafi friendly the.',
+    'Hum do log the aur dono ko jagah pasand aayi.',
+    'Yahan ka ambience ekdum shaant hai.',
+    'Weekend par kaafi bheed hoti hai, phir bhi service theek rahi.',
+  ])('passes ordinary Hinglish praise: "%s"', (text) => {
+    expect(checkOutputCompliance(pad(text)).passed).toBe(true);
   });
 });

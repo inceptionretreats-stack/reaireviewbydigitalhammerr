@@ -16,6 +16,7 @@ import {
   cx,
 } from '@ai-review/ui';
 import { useFormSubmit } from '@/components/auth/use-form-submit';
+import { QrStandeePreview } from '@/components/qr/QrStandeePreview';
 import { WizardShell } from './WizardShell';
 import { stepById, type BusinessLifecycle } from './steps';
 import {
@@ -398,9 +399,9 @@ export function FinishStep({
       </Card>
 
       <Card
-        title="AI review preview"
+        title="Ai review preview"
         description="A sample of the draft your customers start from."
-        footer="Your customer can edit every word, and confirms the draft reflects their genuine experience before they copy it. Copying opens the Google review page in a new tab, and the rest is theirs to do."
+        footer="Your customer can edit every word, and confirms the draft reflects their genuine experience before they copy it. They then open the Google review page in a new tab, and the rest is theirs to do."
       >
         <div className="flex flex-col gap-3">
           {/*
@@ -439,8 +440,8 @@ export function FinishStep({
         title="Your QR code"
         description={
           live
-            ? 'One code, printed once. You can change where it goes at any time without reprinting.'
-            : 'Publishing creates your first QR code, and the downloads appear here.'
+            ? 'One clean card, printed once. You can change where it goes at any time without reprinting.'
+            : 'Publishing creates your first print-ready QR card, and the downloads appear here.'
         }
         footer={
           qrCode
@@ -448,7 +449,12 @@ export function FinishStep({
             : undefined
         }
       >
-        <QrPanel live={live} qrCode={qrCode} pendingCode={publication?.qrCode ?? null} />
+        <QrPanel
+          live={live}
+          businessName={businessName}
+          qrCode={qrCode}
+          pendingCode={publication?.qrCode ?? null}
+        />
       </Card>
 
       {/*
@@ -535,17 +541,19 @@ function ContextHints({
  */
 function QrPanel({
   live,
+  businessName,
   qrCode,
   pendingCode,
 }: {
   live: boolean;
+  businessName: string;
   qrCode: FinishQrCode | null;
   pendingCode: string | null;
 }) {
   if (!live) {
     return (
       <p className="m-0 text-sm text-ink-muted">
-        It will be a dynamic code called Main QR, downloadable as SVG for printing or PNG for
+        It will be a dynamic card called Main QR, downloadable as SVG for printing or PNG for
         sharing.
       </p>
     );
@@ -567,18 +575,13 @@ function QrPanel({
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-      {/*
-        A white plate under the symbol in every theme. The code is pure black on opaque white for
-        the scanner's sake (see PRINT_COLORS), so letting a dark background show through the quiet
-        zone would break exactly what that margin is for.
-      */}
-      <img
-        src={qrCode.previewSrc}
-        alt={`QR code ${qrCode.code}, which opens your review page`}
-        width={176}
-        height={176}
-        className="mx-auto block size-44 shrink-0 rounded-card bg-white p-2 sm:mx-0"
-      />
+      <div className="mx-auto w-44 shrink-0 sm:mx-0">
+        <QrStandeePreview
+          businessName={businessName}
+          qrSrc={qrCode.previewSrc}
+          sourceCode={qrCode.code}
+        />
+      </div>
 
       <div className="flex min-w-0 flex-col gap-3">
         <p className="m-0 text-sm text-ink-muted">
@@ -605,14 +608,14 @@ function QrPanel({
             download={`qr-${qrCode.code}.svg`}
             className={cx(ACTION_BASE, ACTION_PRIMARY, TOUCH_TARGET, FOCUS_RING)}
           >
-            Download SVG
+            Download print SVG
           </a>
           <a
             href={`/api/v1/qr/${qrCode.id}/download?format=png`}
             download={`qr-${qrCode.code}.png`}
             className={cx(ACTION_BASE, ACTION_SECONDARY, TOUCH_TARGET, FOCUS_RING)}
           >
-            Download PNG
+            Download print PNG
           </a>
         </div>
 

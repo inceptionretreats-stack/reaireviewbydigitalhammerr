@@ -95,7 +95,7 @@ export function defaultModeCopy({ activeModeName, hasAnyMode }: ModeState): Defa
     title: 'None switched on',
     note:
       'Your review modes are all switched off or archived, so drafts use your business details on ' +
-      'their own. Switch one on in AI settings whenever you like.',
+      'their own. Switch one on in Ai settings whenever you like.',
   };
 }
 
@@ -143,8 +143,11 @@ export function contextSignature(
   summary: string,
   services: readonly string[],
   contextTerms: readonly string[],
+  draftLanguage: string,
 ): string {
-  return JSON.stringify([summary.trim(), services, contextTerms]);
+  // The language is part of what a draft was generated from: switching it and looking at a
+  // preview written in the other one is the most misleading stale preview there is.
+  return JSON.stringify([summary.trim(), services, contextTerms, draftLanguage]);
 }
 
 /** True when a ready preview was generated from context the owner has since edited. */

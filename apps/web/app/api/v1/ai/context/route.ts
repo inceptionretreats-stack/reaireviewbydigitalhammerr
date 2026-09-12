@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { aiBusinessContexts, businesses, reviewModes } from '@ai-review/db';
-import { aiContextRequest } from '@ai-review/contracts';
+import { aiContextRequest, DEFAULT_DRAFT_LANGUAGE } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
@@ -31,6 +31,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       summary: aiBusinessContexts.summary,
       services: aiBusinessContexts.services,
       contextTerms: aiBusinessContexts.contextTerms,
+      draftLanguage: aiBusinessContexts.draftLanguage,
     })
     .from(aiBusinessContexts)
     .where(eq(aiBusinessContexts.businessId, auth.context.businessId))
@@ -45,6 +46,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     summary: context?.summary ?? null,
     services: context?.services ?? [],
     context_terms: context?.contextTerms ?? [],
+    draft_language: context?.draftLanguage ?? DEFAULT_DRAFT_LANGUAGE,
     modes,
   });
 }
@@ -69,7 +71,12 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const { summary, services, context_terms: contextTerms } = parsed.data;
+  const {
+    summary,
+    services,
+    context_terms: contextTerms,
+    draft_language: draftLanguage,
+  } = parsed.data;
   const { businessId, session } = auth.context;
   const database = db();
 
@@ -81,6 +88,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
         summary: summary ?? null,
         services,
         contextTerms,
+        draftLanguage,
         updatedBy: session.userId,
       })
       .onConflictDoUpdate({
@@ -89,6 +97,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
           summary: summary ?? null,
           services,
           contextTerms,
+          draftLanguage,
           updatedBy: session.userId,
           updatedAt: new Date(),
         },

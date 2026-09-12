@@ -1,0 +1,630 @@
+.authPage {
+  --color-bg: #ffffff;
+  --color-surface: #f8f9fa;
+  --color-surface-sunk: #f1f3f4;
+  --color-line: #dadce0;
+  --color-line-strong: #80868b;
+  --color-ink: #111827;
+  --color-ink-muted: #5f6776;
+  --color-ink-faint: #727b89;
+  --color-accent: #1967d2;
+  --color-accent-hover: #174ea6;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #e8f0fe;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fce8e6;
+  --color-success: #137333;
+  --color-success-soft: #e6f4ea;
+  min-height: 100dvh;
+  background: #ffffff;
+  color: var(--color-ink);
+  color-scheme: light;
+}
+
+.authShell {
+  display: grid;
+  min-height: 100dvh;
+  grid-template-areas: 'media form';
+  grid-template-columns: minmax(0, 1.08fr) minmax(32rem, 0.92fr);
+}
+
+.formPanel {
+  display: flex;
+  min-width: 0;
+  min-height: 100dvh;
+  padding: clamp(32px, 5vw, 72px);
+  flex-direction: column;
+  grid-area: form;
+  background: #ffffff;
+}
+
+.formHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.brandLink {
+  display: inline-flex;
+  color: #111827;
+  text-decoration: none;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brandMark {
+  display: flex;
+  width: 34px;
+  height: 31px;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.brandMark i {
+  display: block;
+  width: 6px;
+  border-radius: 5px 5px 2px 2px;
+  box-shadow: 0 3px 8px rgb(17 24 39 / 10%);
+}
+
+.brandMark i:nth-child(1) {
+  height: 16px;
+  background: #4285f4;
+}
+
+.brandMark i:nth-child(2) {
+  height: 23px;
+  background: #ea4335;
+}
+
+.brandMark i:nth-child(3) {
+  height: 28px;
+  background: #fbbc05;
+}
+
+.brandMark i:nth-child(4) {
+  height: 31px;
+  background: #34a853;
+}
+
+.brandCopy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.04;
+}
+
+.brandCopy strong {
+  font-size: 20px;
+  font-weight: 840;
+  letter-spacing: -0.04em;
+}
+
+.brandCopy small {
+  margin-top: 5px;
+  color: #5f6776;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.homeLink {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 0 13px;
+  align-items: center;
+  border: 1px solid #d7dde7;
+  border-radius: 11px;
+  color: #465063;
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.formContent {
+  width: min(100%, 540px);
+  margin: auto;
+  padding: 56px 0;
+}
+
+.formContent :global(form) {
+  gap: 21px;
+}
+
+.formContent :global(h1) {
+  margin: 0;
+  color: #111827;
+  font-size: clamp(36px, 4vw, 52px);
+  font-weight: 860;
+  letter-spacing: -0.055em;
+  line-height: 1.02;
+}
+
+.formContent :global(h1 + p) {
+  margin-top: 11px;
+  color: #667085;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.formContent :global(label) {
+  color: #172033;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.formContent :global(input:not([type='checkbox'])) {
+  min-height: 56px;
+  padding-inline: 16px;
+  border-color: #c9d2df;
+  border-radius: 13px;
+  background: #ffffff;
+  box-shadow: 0 5px 15px rgb(17 24 39 / 3%);
+  color: #111827;
+  font-size: 15px;
+}
+
+.formContent :global(input:not([type='checkbox']):hover) {
+  border-color: #98a6ba;
+}
+
+.formContent :global(input:not([type='checkbox']):focus-visible) {
+  border-color: #1967d2;
+  box-shadow: 0 0 0 4px rgb(66 133 244 / 13%);
+  outline: 2px solid #1967d2;
+  outline-offset: 2px;
+}
+
+.formContent :global(button[type='submit']) {
+  min-height: 58px;
+  border-radius: 13px;
+  box-shadow: 0 13px 28px rgb(25 103 210 / 22%);
+  font-size: 15px;
+  font-weight: 820;
+}
+
+.formContent :global(a) {
+  color: #174ea6;
+  font-weight: 730;
+  text-underline-offset: 3px;
+}
+
+.formContent :global([role='alert']) {
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid #f2b8b5;
+  border-radius: 12px;
+  background: #fce8e6;
+  color: #a50e0e;
+}
+
+.formContent :global(.auth-utility-row) {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.formContent :global(.auth-utility-row > div) {
+  flex: 1;
+}
+
+.formContent :global(.auth-utility-row > a) {
+  flex: none;
+  font-size: 13px;
+}
+
+.formContent :global(.auth-switch) {
+  position: relative;
+  margin-top: 4px;
+  padding-top: 22px;
+  text-align: center;
+}
+
+.formContent :global(.auth-switch::before) {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #d9dee7 18% 82%, transparent);
+  content: '';
+}
+
+.formFooter {
+  color: #5f6776;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mediaPanel {
+  position: relative;
+  grid-area: media;
+  background: #f3f6f4;
+}
+
+.mediaSticky {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+}
+
+.mediaCanvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #f3f6f4;
+}
+
+.mediaCanvas::before {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 68%) 0,
+    rgb(255 255 255 / 30%) 36%,
+    transparent 68%
+  );
+  pointer-events: none;
+  content: '';
+}
+
+.mediaCanvas::after {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 9px;
+  background: linear-gradient(
+    180deg,
+    #4285f4 0 25%,
+    #ea4335 25% 50%,
+    #fbbc05 50% 75%,
+    #34a853 75% 100%
+  );
+  content: '';
+}
+
+.mediaImage {
+  object-fit: cover;
+  object-position: 50% 44%;
+  animation: auth-image-drift 12s ease-in-out infinite alternate;
+}
+
+.mediaCopy {
+  position: absolute;
+  z-index: 3;
+  top: clamp(50px, 8vh, 90px);
+  left: clamp(35px, 6vw, 80px);
+  width: min(330px, 42%);
+  color: #0b1f33;
+  text-shadow: 0 2px 24px rgb(255 255 255 / 95%);
+}
+
+.mediaCopy h2 {
+  margin: 0;
+  font-size: clamp(43px, 4.5vw, 67px);
+  font-weight: 870;
+  letter-spacing: -0.06em;
+  line-height: 0.99;
+}
+
+.mediaCopy p {
+  margin: 20px 0 0;
+  color: #4f5968;
+  font-size: clamp(15px, 1.4vw, 20px);
+  font-weight: 580;
+  line-height: 1.42;
+  text-shadow: 0 2px 20px #ffffff;
+}
+
+.mediaCard {
+  position: absolute;
+  z-index: 4;
+  right: clamp(24px, 5vw, 70px);
+  bottom: clamp(28px, 6vh, 72px);
+  display: flex;
+  width: min(315px, 43%);
+  padding: 18px;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 17px;
+  background: rgb(255 255 255 / 93%);
+  box-shadow: 0 18px 44px rgb(17 24 39 / 18%);
+  gap: 12px;
+  animation: auth-card-float 5s ease-in-out infinite;
+}
+
+.mediaCardIcon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.mediaCard strong {
+  display: block;
+  color: #152033;
+  font-size: 13px;
+}
+
+.mediaCard small {
+  display: block;
+  margin-top: 4px;
+  color: #657083;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.tick {
+  position: absolute;
+  z-index: 4;
+  width: 22px;
+  height: 6px;
+  border-radius: 9px;
+  animation: auth-tick 3s ease-in-out infinite;
+}
+
+.tickBlue {
+  top: 18%;
+  left: 42%;
+  background: #4285f4;
+  transform: rotate(-55deg);
+}
+
+.tickRed {
+  top: 27%;
+  left: 38%;
+  background: #ea4335;
+  transform: rotate(28deg);
+  animation-delay: 650ms;
+}
+
+.tickYellow {
+  bottom: 32%;
+  left: 17%;
+  background: #fbbc05;
+  transform: rotate(48deg);
+  animation-delay: 1.1s;
+}
+
+.tickGreen {
+  top: 36%;
+  right: 12%;
+  background: #34a853;
+  transform: rotate(-33deg);
+  animation-delay: 1.6s;
+}
+
+@keyframes auth-image-drift {
+  from {
+    transform: scale(1.01) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.045) translate3d(-0.6%, -0.4%, 0);
+  }
+}
+
+@keyframes auth-card-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0.3deg);
+  }
+  50% {
+    transform: translateY(-9px) rotate(-0.4deg);
+  }
+}
+
+@keyframes auth-tick {
+  0%,
+  100% {
+    opacity: 0.45;
+    scale: 0.8;
+  }
+  50% {
+    opacity: 1;
+    scale: 1.06;
+  }
+}
+
+@media (max-width: 1050px) {
+  .authShell {
+    min-height: auto;
+    grid-template-areas:
+      'form'
+      'media';
+    grid-template-columns: 1fr;
+  }
+
+  .formPanel {
+    min-height: min(100dvh, 880px);
+    padding: 28px clamp(20px, 7vw, 64px) 34px;
+  }
+
+  .formContent {
+    padding: 58px 0;
+  }
+
+  .mediaPanel {
+    min-height: 240px;
+  }
+
+  .mediaSticky {
+    position: relative;
+    height: 240px;
+  }
+
+  .mediaCanvas::before {
+    background: linear-gradient(
+      90deg,
+      rgb(255 255 255 / 72%) 0,
+      rgb(255 255 255 / 30%) 47%,
+      transparent 75%
+    );
+  }
+
+  .mediaCanvas::after {
+    top: 0;
+    right: 0;
+    bottom: auto;
+    left: 0;
+    width: auto;
+    height: 5px;
+    background: linear-gradient(
+      90deg,
+      #4285f4 0 25%,
+      #ea4335 25% 50%,
+      #fbbc05 50% 75%,
+      #34a853 75% 100%
+    );
+  }
+
+  .mediaImage {
+    object-position: 50% 43%;
+  }
+
+  .mediaCopy {
+    top: 35px;
+    left: 28px;
+    width: 300px;
+  }
+
+  .mediaCopy h2 {
+    font-size: 36px;
+  }
+
+  .mediaCopy p {
+    display: none;
+  }
+
+  .mediaCard {
+    right: 25px;
+    bottom: 21px;
+    width: 270px;
+    padding: 13px;
+  }
+}
+
+@media (max-width: 560px) {
+  .formPanel {
+    min-height: auto;
+    padding: 22px 18px 30px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brandMark {
+    width: 28px;
+    height: 27px;
+    gap: 2px;
+  }
+
+  .brandMark i {
+    width: 5px;
+  }
+
+  .brandMark i:nth-child(1) {
+    height: 14px;
+  }
+
+  .brandMark i:nth-child(2) {
+    height: 20px;
+  }
+
+  .brandMark i:nth-child(3) {
+    height: 24px;
+  }
+
+  .brandMark i:nth-child(4) {
+    height: 27px;
+  }
+
+  .brandCopy strong {
+    font-size: 16px;
+  }
+
+  .brandCopy small {
+    font-size: 10px;
+  }
+
+  .homeLink {
+    padding-inline: 10px;
+    font-size: 11px;
+  }
+
+  .formContent {
+    padding: 46px 0 42px;
+  }
+
+  .formContent :global(h1) {
+    font-size: 36px;
+  }
+
+  .formContent :global(h1 + p) {
+    font-size: 15px;
+  }
+
+  .formContent :global(.auth-utility-row) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .mediaPanel {
+    min-height: 270px;
+  }
+
+  .mediaSticky {
+    height: 270px;
+  }
+
+  .mediaCopy {
+    top: 28px;
+    left: 20px;
+    width: 205px;
+  }
+
+  .mediaCopy h2 {
+    font-size: 30px;
+  }
+
+  .mediaCard {
+    right: 16px;
+    bottom: 15px;
+    width: 230px;
+  }
+
+  .mediaCardIcon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .mediaCard strong {
+    font-size: 12px;
+  }
+
+  .mediaCard small {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mediaImage,
+  .mediaCard,
+  .tick {
+    animation: none;
+  }
+}

@@ -23,7 +23,7 @@
  */
 
 export const CONTEXT_HELPER =
-  'Add services or topics that help AI understand your business. These are context hints and may ' +
+  'Add services or topics that help Ai understand your business. These are context hints and may ' +
   'not appear in every review.';
 
 export const MODE_EMPHASIS_NOTE =

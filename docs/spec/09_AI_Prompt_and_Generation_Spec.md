@@ -115,7 +115,9 @@ A mode must never mean "positive only", "5 star" or "negative suppress".
 - Per anonymous session: recommended <= 10 generations/hour/business.
 - Per IP prefix: adaptive rate limit.
 - Per Free business: hard 10 successful public generations total.
-- Paid fair-use: start with soft alerts at a configurable monthly threshold; do not advertise a hidden hard cap to normal users.
+- Per Pro business: hard 2,000 successful public generations per paid subscription year.
+- Paid abuse observation: keep soft alerts at a configurable short-window threshold, independently
+  of the clearly advertised annual plan allowance.
 - Detect bot-like rapid generation without copy/navigation behavior.
 
 ## Evaluation set before launch

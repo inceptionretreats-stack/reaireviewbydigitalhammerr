@@ -47,7 +47,12 @@ export const IMAGE_WIDTH_PX = 1024;
  */
 export const PRINT_COLORS = { dark: '#000000', light: '#ffffff' } as const;
 
-/** The printable vector, byte-for-byte what `GET /api/v1/qr/{id}/download?format=svg` returns. */
+/**
+ * The machine-readable vector nested unchanged inside the branded download artwork.
+ *
+ * Keeping this primitive separate lets compact dashboard and onboarding previews stay square while
+ * `qr-card.ts` adds print branding outside the quiet zone.
+ */
 export async function renderQrSvg(payload: string): Promise<string> {
   // `width` is honoured alongside the viewBox, so the file still scales losslessly but opens at a
   // sensible size instead of 41 pixels across when the owner double-clicks it.

@@ -76,7 +76,7 @@ export function Button({
       aria-busy={loading || undefined}
       onClick={handleClick}
       className={cx(
-        'inline-flex items-center justify-center gap-2 rounded-control border font-semibold',
+        'ui-button inline-flex items-center justify-center gap-2 rounded-control border font-semibold',
         'transition-colors disabled:cursor-not-allowed disabled:opacity-55',
         loading && 'cursor-progress',
         VARIANT[variant],

@@ -29,7 +29,7 @@ import { loadAccountSettings } from '@/components/dashboard/settings/account';
  */
 
 export const metadata: Metadata = {
-  title: 'Settings | AI Review',
+  title: 'Settings | Ai Review',
   description: 'Your name, email, mobile, password and where you are signed in.',
 };
 

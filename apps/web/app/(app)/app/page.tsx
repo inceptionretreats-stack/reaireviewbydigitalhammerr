@@ -18,7 +18,7 @@ import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
  */
 
 export const metadata: Metadata = {
-  title: 'Dashboard | AI Review',
+  title: 'Dashboard | Ai Review',
   description: 'Your public page, QR sources and plan at a glance.',
 };
 

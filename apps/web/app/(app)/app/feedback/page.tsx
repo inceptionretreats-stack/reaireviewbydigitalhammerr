@@ -17,7 +17,7 @@ import { FeedbackInboxSkeleton } from '@/components/dashboard/feedback/FeedbackI
  */
 
 export const metadata: Metadata = {
-  title: 'Private feedback | AI Review',
+  title: 'Private feedback | Ai Review',
   description: 'Messages your customers sent straight to your business.',
 };
 

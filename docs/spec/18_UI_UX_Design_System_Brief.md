@@ -1,7 +1,7 @@
 # UI/UX Design System Brief
 
 ## Brand
-Product name: **AI Review by Digital Hammerr**.
+Product name: **Ai Review by Digital Hammerr**.
 The design should feel modern, trustworthy, fast and business-grade - not childish, gimmicky or overloaded with AI/robot graphics.
 
 ## Two UI worlds
@@ -39,7 +39,7 @@ The design should feel modern, trustworthy, fast and business-grade - not childi
 - Forced app login.
 
 ## Business dashboard nav
-Dashboard / AI Review / Review Modes / QR Codes / Business Profile / Customers / Review Requests / Private Feedback / Analytics / Custom Domain / Subscription / Settings / Support.
+Dashboard / Ai Review / Review Modes / QR Codes / Business Profile / Customers / Review Requests / Private Feedback / Analytics / Custom Domain / Subscription / Settings / Support.
 
 ## Components
 - Buttons: primary, secondary, destructive, text.

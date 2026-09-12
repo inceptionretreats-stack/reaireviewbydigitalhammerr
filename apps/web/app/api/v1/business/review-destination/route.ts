@@ -4,7 +4,8 @@ import { businesses, reviewDestinations } from '@ai-review/db';
 import { describeReviewUrlRejection, validateGoogleReviewUrl } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
+import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
+import { readReviewDestinationBody } from './body';
 
 /**
  * GET/PUT /api/v1/business/review-destination — ONB-02, and the edit path AC-017 requires.
@@ -44,6 +45,12 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
 
+  // This endpoint is shared by onboarding, so DRAFT is allowed. SUSPENDED and CLOSED are not:
+  // changing the destination while the rest of the public configuration is frozen would make a
+  // suspension cosmetic and would disagree with every other PROFILE-01 mutation.
+  const frozen = refuseFrozenTenant(auth.context);
+  if (frozen) return frozen;
+
   let raw: unknown;
   try {
     raw = (await request.json()) as unknown;
@@ -51,7 +58,14 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     return apiError('VALIDATION_FAILED', 'Malformed request body.');
   }
 
-  const url = typeof raw === 'object' && raw !== null && 'url' in raw ? String(raw.url) : '';
+  const body = readReviewDestinationBody(raw);
+  if (!body.ok) {
+    return apiError('VALIDATION_FAILED', body.message, {
+      details: { fields: body.fields },
+    });
+  }
+
+  const { url } = body;
 
   // Validated in core rather than by a Zod url() check: ONB-02-02 restricts this to Google hosts,
   // and this field is where every customer is sent after copying a draft. A merchant typo here
@@ -68,17 +82,27 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
   await database.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ id: reviewDestinations.id })
+      .select({
+        id: reviewDestinations.id,
+        url: reviewDestinations.url,
+        isEnabled: reviewDestinations.isEnabled,
+      })
       .from(reviewDestinations)
       .where(
         and(eq(reviewDestinations.businessId, businessId), eq(reviewDestinations.isPrimary, true)),
       )
       .limit(1);
 
+    // A no-op PUT is still idempotent, but it should not churn config_version and invalidate the
+    // public configuration when the destination is already exactly right.
+    if (existing?.url === validation.url && existing.isEnabled) return;
+
     if (existing) {
       await tx
         .update(reviewDestinations)
-        .set({ url: validation.url, updatedAt: new Date() })
+        // A disabled primary row is repairable from this screen. Updating only its URL would return
+        // success while `loadPublicConfig` continued filtering it out of every QR journey.
+        .set({ url: validation.url, isEnabled: true, updatedAt: new Date() })
         .where(eq(reviewDestinations.id, existing.id));
     } else {
       await tx.insert(reviewDestinations).values({
@@ -100,5 +124,17 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       .where(eq(businesses.id, businessId));
   });
 
-  return NextResponse.json({ url: validation.url, host: validation.host });
+  return NextResponse.json({
+    url: validation.url,
+    host: validation.host,
+    kind: validation.kind,
+  });
+}
+
+/** Allows setup on DRAFT while applying Flow J to every other lifecycle state. */
+function refuseFrozenTenant(context: AuthenticatedContext): NextResponse | null {
+  if (context.status === 'SUSPENDED' || context.status === 'CLOSED') {
+    return apiError('BUSINESS_NOT_ACTIVE', 'This business is not active.');
+  }
+  return null;
 }

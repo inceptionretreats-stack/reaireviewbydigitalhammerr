@@ -25,28 +25,20 @@ export class QuotaService {
       return { ok: false, reason: 'SUBSCRIPTION_NOT_ACTIVE', entitlement };
     }
 
-    // Pro is fair-use unlimited (D-006). No counter is touched; abuse is handled by rate
-    // limits and soft alerting, never by a silent hard cap.
-    if (entitlement.mode === 'PRO') {
-      return {
-        ok: true,
-        reservation: {
-          businessId,
-          mode: 'PRO',
-          counted: false,
-          usedAfterReserve: entitlement.freeGenerationsUsed,
-        },
-      };
-    }
-
-    const usedAfterReserve = await this.store.tryConsume(businessId);
-    if (usedAfterReserve === null) {
+    const consumption = await this.store.tryConsume(businessId, entitlement.mode);
+    if (consumption === null) {
       return { ok: false, reason: 'PLAN_QUOTA_EXHAUSTED', entitlement };
     }
 
     return {
       ok: true,
-      reservation: { businessId, mode: 'FREE', counted: true, usedAfterReserve },
+      reservation: {
+        businessId,
+        mode: entitlement.mode,
+        periodStartsAt: consumption.periodStartsAt,
+        counted: true,
+        usedAfterReserve: consumption.usedAfterReserve,
+      },
     };
   }
 
@@ -62,7 +54,7 @@ export class QuotaService {
   /** AC-014: the provider failed, so the customer must not lose a generation. */
   async release(reservation: QuotaReservation): Promise<void> {
     if (!reservation.counted) return;
-    await this.store.release(reservation.businessId);
+    await this.store.release(reservation);
   }
 
   /**
@@ -97,6 +89,10 @@ function emptyEntitlement(): Entitlement {
     mode: 'BLOCKED',
     freeGenerationsUsed: 0,
     freeGenerationLimit: 0,
+    proGenerationsUsed: 0,
+    proGenerationLimit: 0,
+    periodStartsAt: null,
+    periodEndsAt: null,
     fairUseMonthlySoftLimit: null,
   };
 }

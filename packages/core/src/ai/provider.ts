@@ -1,4 +1,4 @@
-import type { BuiltPrompt } from './prompt-builder';
+import { readDraftLanguage, type BuiltPrompt } from './prompt-builder';
 
 /**
  * Provider adapter (E4-04, ADR-006, ADR-007).
@@ -108,17 +108,22 @@ export class StubAiProvider implements AiProvider {
    * honest imitation available to a fixed pool.
    */
   private draftFor(params: GenerationParams): string {
+    const seen = params.prompt.user;
+    // The pool follows the language the prompt asks for, so a Hinglish business gets Hinglish
+    // from the stub too. Without this the no-key demo would quietly show English for a setting
+    // that claims otherwise, and no end-to-end test could tell the setting did anything.
+    const pool = readDraftLanguage(seen) === 'hinglish' ? STUB_DRAFTS_HINGLISH : STUB_DRAFTS;
+
     // 'repetitive' must always return the same text: it exists so the variation gate can be
     // tested for real, and picking a fresh draft would defeat exactly that.
-    if (this.behaviour === 'repetitive') return STUB_DRAFTS[0]!;
+    if (this.behaviour === 'repetitive') return pool[0]!;
 
-    const seen = params.prompt.user;
-    const unused = STUB_DRAFTS.find((draft) => !seen.includes(draft));
+    const unused = pool.find((draft) => !seen.includes(draft));
     if (unused) return unused;
 
     // Pool exhausted — more prior drafts than the pool holds. Fall back to a prompt-derived
     // index so the answer still varies with the request rather than with call order.
-    return STUB_DRAFTS[hashToIndex(seen, STUB_DRAFTS.length)]!;
+    return pool[hashToIndex(seen, pool.length)]!;
   }
 }
 
@@ -136,6 +141,29 @@ export const STUB_DRAFTS = [
   'A straightforward visit with no surprises. I was told what to expect at the start and that is roughly how it went, which is all I really wanted.',
   'Went in expecting to wait around and did not have to. Simple to deal with, easy to find, and I would not hesitate to come back if I need to.',
 ];
+
+/**
+ * The Hinglish pool (CHANGE-003) — the same eight-draft shape, in the register the owner asked
+ * for: everyday Hindi in Roman script mixed with English. Each passes every compliance gate,
+ * carries no digit or "star", and every pair sits below the similarity threshold; the unit
+ * suite pins all of that so an edit here cannot quietly break the stub-driven E2E flow.
+ */
+export const STUB_DRAFTS_HINGLISH = [
+  'Pichhle hafte yahan gaya tha aur experience accha raha 😊. Staff ne meri baatein dhyan se suni aur jo pucha uska seedha jawab mila. Dobara aana chahunga 🙌',
+  'Bina appointment ke drop in kiya tha, phir bhi kaam aaram se ho gaya. Jagah saaf thi aur log bhi kaafi friendly the. Overall visit se main santusht hoon.',
+  'Dopahar mein visit kiya. Sab kuch pehle se samjha diya gaya tha, isliye koi confusion nahi hui ✨. Simple aur seedha experience raha, koi jhanjhat nahi.',
+  'Ek neighbour ki recommendation par yahan aaya tha. Jo bataya gaya tha waisa hi hua, aur staff ka behaviour bhi acha laga. Zaroorat padi to phir aaunga.',
+  'Weekday subah gaya tha aur zyada wait nahi karna pada. Meri queries patiently sun kar jawab diya gaya, aur main jo jaanna chahta tha wo clear ho gaya.',
+  'Kaafi time se yahan ke baare mein likhna tha. Shuru se aakhir tak sab smooth raha aur koi shikayat nahi hai. Aise hi kaam karte rahein ❤️',
+  'Yahan ka mahaul shaant aur saaf tha. Jo poocha, uska theek se jawab mila aur kisi cheez ke liye zor nahi diya gaya. Accha laga, phir kabhi aaunga.',
+  'Socha tha wait karna padega, par aisa hua nahi. Deal karna easy tha, jagah dhoondhna bhi aasaan, aur zaroorat par wapas aane mein koi hichkichahat nahi.',
+];
+
+/**
+ * Words that mark a draft as Hinglish rather than English. Used by tests — including E2E, which
+ * copies the pattern literally because Playwright must not import this package.
+ */
+export const HINGLISH_MARKER = /\b(?:tha|thi|aur|hai|raha|bahut|kaafi|accha|acha)\b/i;
 
 /** FNV-1a, for a stable index from a string. Not security-sensitive. */
 function hashToIndex(value: string, buckets: number): number {

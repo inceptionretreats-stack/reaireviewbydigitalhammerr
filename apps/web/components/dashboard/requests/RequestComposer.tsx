@@ -368,7 +368,7 @@ export function RequestComposer({
       <Card
         title="Prepare a message"
         titleAs="h2"
-        description="One customer at a time. You send it yourself — AI Review never sends a message for you."
+        description="One customer at a time. You send it yourself — Ai Review never sends a message for you."
       >
         <div className="flex flex-col gap-5">
           <Field

@@ -44,31 +44,38 @@
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   --color-bg: #ffffff;
-  --color-surface: #f6f7f9;
-  --color-surface-sunk: #e9ecf1;
-  --color-line: #d8dce3;
-  --color-line-strong: #767f8c;
-  --color-ink: #14181f;
-  --color-ink-muted: #4d5765;
-  --color-ink-faint: #6b7480;
+  --color-surface: #f8f9fa;
+  --color-surface-sunk: #f1f3f4;
+  --color-line: #dadce0;
+  --color-line-strong: #80868b;
+  --color-ink: #202124;
+  --color-ink-muted: #5f6368;
+  --color-ink-faint: #70757a;
 
-  --color-accent: #1a56db;
-  --color-accent-hover: #1748b8;
+  /* Google-inspired brand accents. Bright values stay decorative; controls use AA-safe blue. */
+  --color-brand-blue: #4285f4;
+  --color-brand-red: #ea4335;
+  --color-brand-yellow: #fbbc05;
+  --color-brand-green: #34a853;
+  --color-brand-night: #0b1f33;
+
+  --color-accent: #1967d2;
+  --color-accent-hover: #185abc;
   --color-on-accent: #ffffff;
-  --color-accent-soft: #e8effc;
+  --color-accent-soft: #e8f0fe;
 
-  --color-danger: #b3261e;
-  --color-danger-hover: #8f1e17;
+  --color-danger: #d93025;
+  --color-danger-hover: #a50e0e;
   --color-on-danger: #ffffff;
-  --color-danger-soft: #fdeceb;
+  --color-danger-soft: #fce8e6;
 
-  --color-success: #0b5f3b;
-  --color-success-soft: #e7f6ee;
+  --color-success: #188038;
+  --color-success-soft: #e6f4ea;
 
-  --color-warning: #8a5300;
-  --color-warning-soft: #fdf1de;
+  --color-warning: #8a4b00;
+  --color-warning-soft: #fef7e0;
 
-  --color-neutral-soft: #eef0f4;
+  --color-neutral-soft: #f1f3f4;
 
   /* Semantic radii rather than an override of Tailwind's t-shirt scale, so both remain usable. */
   --radius-control: 10px;
@@ -88,32 +95,32 @@
   :root {
     color-scheme: dark;
 
-    --color-bg: #10131a;
-    --color-surface: #1a1f29;
-    --color-surface-sunk: #121722;
-    --color-line: #333b49;
-    --color-line-strong: #8b95a5;
-    --color-ink: #f2f4f8;
-    --color-ink-muted: #a9b2c0;
-    --color-ink-faint: #939cab;
+    --color-bg: #111317;
+    --color-surface: #202124;
+    --color-surface-sunk: #17191d;
+    --color-line: #3c4043;
+    --color-line-strong: #9aa0a6;
+    --color-ink: #f8f9fa;
+    --color-ink-muted: #bdc1c6;
+    --color-ink-faint: #9aa0a6;
 
-    --color-accent: #7aa2f7;
-    --color-accent-hover: #9ab8f9;
-    --color-on-accent: #0b0e14;
-    --color-accent-soft: #1b2740;
+    --color-accent: #8ab4f8;
+    --color-accent-hover: #aecbfa;
+    --color-on-accent: #0b1f33;
+    --color-accent-soft: #1b304f;
 
-    --color-danger: #f2857c;
-    --color-danger-hover: #f6a49e;
-    --color-on-danger: #1c0705;
-    --color-danger-soft: #3a1512;
+    --color-danger: #f28b82;
+    --color-danger-hover: #f6aea7;
+    --color-on-danger: #3c0905;
+    --color-danger-soft: #3c1715;
 
-    --color-success: #6fd39f;
-    --color-success-soft: #10301f;
+    --color-success: #81c995;
+    --color-success-soft: #12351f;
 
-    --color-warning: #f0b757;
-    --color-warning-soft: #3a2a10;
+    --color-warning: #fdd663;
+    --color-warning-soft: #3c2e0c;
 
-    --color-neutral-soft: #232a36;
+    --color-neutral-soft: #2d3035;
   }
 }
 

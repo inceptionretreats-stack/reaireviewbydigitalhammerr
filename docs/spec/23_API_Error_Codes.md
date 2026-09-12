@@ -17,8 +17,8 @@ All errors use:
 | SLUG_UNAVAILABLE | 409 | Business slug already reserved |
 | BUSINESS_NOT_ACTIVE | 409 | Business cannot perform active-only operation |
 | REVIEW_DESTINATION_INVALID | 422 | Invalid/unsupported review URL |
-| PLAN_QUOTA_EXHAUSTED | 402 | Free AI quota exhausted |
-| FAIR_USE_THROTTLED | 429 | Paid abuse/fair-use protection triggered |
+| PLAN_QUOTA_EXHAUSTED | 402 | Free lifetime or Pro annual AI-draft allowance exhausted |
+| FAIR_USE_THROTTLED | 429 | Short-window paid abuse protection triggered |
 | PUBLIC_RATE_LIMITED | 429 | Anonymous generation/feedback rate limit |
 | AI_PROVIDER_UNAVAILABLE | 503 | AI provider temporary failure |
 | AI_OUTPUT_REJECTED | 503 | AI quality/safety gate failed after retry |

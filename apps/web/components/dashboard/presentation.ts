@@ -51,7 +51,7 @@ const BUSINESS_STATUS: Record<BusinessStatus, BusinessStatusPresentation> = {
   SUSPENDED: {
     badge: 'DISABLED',
     label: 'Suspended',
-    note: 'Your public page is unavailable and AI generation is paused. Contact support.',
+    note: 'Your public page is unavailable and Ai generation is paused. Contact support.',
     isPubliclyLive: false,
   },
   CLOSED: {
@@ -71,33 +71,28 @@ export interface PlanPresentation {
   badge: PlanStatus;
   label: string;
   note: string;
-  /**
-   * Whether the ten free generations are still the governing limit (D-004, AC-013).
-   *
-   * `subscriptions.free_generations_used` keeps counting up as a historical figure, so on a paid
-   * plan showing it as a limit would report a ceiling the tenant no longer has.
-   */
-  freeQuotaGoverns: boolean;
+  /** Selects the independent lifetime Free or annual Pro counter shown to the owner. */
+  quotaKind: 'FREE' | 'PRO';
 }
 
 const PLAN: Record<SubscriptionStatus, PlanPresentation> = {
   FREE: {
     badge: 'FREE',
     label: 'Free',
-    note: 'Ten AI generations are included. Upgrade for unlimited use within fair use.',
-    freeQuotaGoverns: true,
+    note: 'Ten Ai review drafts are included. Pro adds 2,000 drafts per subscription year.',
+    quotaKind: 'FREE',
   },
   CHECKOUT_PENDING: {
     badge: 'FREE',
     label: 'Payment in progress',
     note: 'We are waiting for your payment to be confirmed. The free allowance still applies.',
-    freeQuotaGoverns: true,
+    quotaKind: 'FREE',
   },
   PRO_ACTIVE: {
     badge: 'PRO',
     label: 'Pro',
-    note: 'All V1 features are included (D-005).',
-    freeQuotaGoverns: false,
+    note: 'Your plan includes up to 2,000 Ai review drafts in each subscription year.',
+    quotaKind: 'PRO',
   },
   // PAST_DUE keeps the entitlement while a renewal is chased, so the free counter is not the
   // limit yet. That is a commercial choice, not something Flow J spells out.
@@ -105,7 +100,7 @@ const PLAN: Record<SubscriptionStatus, PlanPresentation> = {
     badge: 'PRO',
     label: 'Pro — payment overdue',
     note: 'Your renewal has not gone through. Renew to avoid losing Pro features.',
-    freeQuotaGoverns: false,
+    quotaKind: 'PRO',
   },
   // Flow J: an expired plan keeps the account and profile, and falls back to whatever remains of
   // the free allowance — which for a tenant that upgraded early may be all ten.
@@ -113,13 +108,13 @@ const PLAN: Record<SubscriptionStatus, PlanPresentation> = {
     badge: 'FREE',
     label: 'Expired',
     note: 'Your Pro year has ended. Any unused free allowance still applies.',
-    freeQuotaGoverns: true,
+    quotaKind: 'FREE',
   },
   CANCELLED: {
     badge: 'FREE',
     label: 'Cancelled',
     note: 'Your subscription was cancelled. Any unused free allowance still applies.',
-    freeQuotaGoverns: true,
+    quotaKind: 'FREE',
   },
 };
 

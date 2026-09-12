@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import jsQR from 'jsqr';
+import sharp from 'sharp';
 import { closeDb } from './support/db';
 
 /**
@@ -58,6 +60,59 @@ test.describe('business dashboard', () => {
         page.getByRole('heading', { name: screen.heading }).first(),
         `${screen.id} (${screen.path}) heading`,
       ).toBeVisible({ timeout: 20_000 });
+      await expect(page.locator('.app-shell')).toBeVisible();
+      await expect(page.locator('.app-main')).toBeVisible();
+      await expect(
+        page
+          .getByRole('navigation', { name: 'Dashboard sections' })
+          .locator('a[aria-current="page"]'),
+      ).toHaveCount(1);
+    }
+  });
+
+  test('the signed-in shell stays usable on desktop and phone widths', async ({ page }) => {
+    test.setTimeout(120_000);
+    await signIn(page);
+
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+
+      for (const path of ['/app', '/app/qr', '/app/settings']) {
+        await page.goto(path);
+        await expect(page.locator('.app-sidebar')).toBeVisible();
+        await expect(page.locator('.app-topbar')).toBeVisible();
+        await expect(page.locator('.app-main')).toBeVisible();
+
+        const geometry = await page.evaluate(() => ({
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth: document.documentElement.clientWidth,
+          mainTop: document.querySelector<HTMLElement>('.app-main')?.getBoundingClientRect().top,
+          navHeight: document.querySelector<HTMLElement>('.dashboard-nav')?.getBoundingClientRect()
+            .height,
+        }));
+
+        expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+        expect(geometry.mainTop).toBeDefined();
+        expect(geometry.navHeight).toBeDefined();
+        if (viewport.width === 390) {
+          expect(geometry.mainTop!).toBeLessThan(260);
+          expect(geometry.navHeight!).toBeLessThan(70);
+
+          if (path === '/app') {
+            const menu = page.getByRole('button', { name: 'Menu' });
+            await expect(menu).toHaveAttribute('aria-expanded', 'false');
+            await menu.click();
+            await expect(menu).toHaveAttribute('aria-expanded', 'true');
+            await expect(page.getByRole('link', { name: 'QR Codes' })).toBeVisible();
+            await page.keyboard.press('Escape');
+            await expect(menu).toHaveAttribute('aria-expanded', 'false');
+            await expect(menu).toBeFocused();
+          }
+        }
+      }
     }
   });
 
@@ -104,12 +159,30 @@ test.describe('business dashboard', () => {
     }
   });
 
-  test('QR-01 offers a downloadable SVG that encodes the opaque code', async ({ page }) => {
+  test('QR-01 offers minimal print SVG and PNG downloads for the opaque code', async ({ page }) => {
     await signIn(page);
     await page.goto('/app/qr');
 
+    const brandedPreview = page.locator('figure[aria-label^="QR card"]').first();
+    await expect(brandedPreview.getByText('Demo South Cafe')).toBeVisible();
+    await expect(brandedPreview.getByText('Digital Hammerr')).toBeVisible();
+    await expect(brandedPreview.getByRole('img', { name: /qr code/i })).toBeVisible();
+    await expect(brandedPreview.locator('[data-qr-card-part]')).toHaveCount(3);
+    expect(
+      await brandedPreview.evaluate((element) =>
+        (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
+      ),
+    ).toBe('Demo South Cafe Ai Review by Digital Hammerr');
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+
     const list = await page.request.get('/api/v1/qr');
-    const body = (await list.json()) as { sources: Array<{ id: string; code: string }> };
+    const body = (await list.json()) as {
+      sources: Array<{ id: string; code: string; resolve_url: string }>;
+    };
     const source = body.sources[0];
     expect(source).toBeDefined();
 
@@ -120,7 +193,46 @@ test.describe('business dashboard', () => {
     // ADR-002: the printed payload is the platform's opaque route, never the Google URL.
     const markup = await svg.text();
     expect(markup).toContain('<svg');
+    expect(markup).toContain('viewBox="0 0 900 1350"');
+    expect(markup).toContain('Demo South Cafe');
+    expect(markup).toContain('Ai Review by Digital Hammerr');
+    // Outlined glyphs, never text: the PNG twin is rasterised on a host with no fonts.
+    expect(markup).not.toMatch(/<text\b/);
+    expect(markup).toContain('data-brand-part="name"');
+    expect(markup.match(/<image\b/g)).toHaveLength(1);
+    expect(markup).not.toMatch(/YOUR EXPERIENCE MATTERS|Scan for your review draft|SCAN TO BEGIN/);
+    expect(markup).not.toMatch(/data-role="business-(?:logo|initials)"/);
+    for (const brandColor of ['#4285f4', '#ea4335', '#fbbc05', '#34a853']) {
+      expect(markup).toContain(brandColor);
+    }
+    expect(markup).not.toContain('#c7472b');
+    expect(markup).not.toMatch(/#(?:6d35d6|45239a|7b47df|9b76ec)/i);
     expect(markup).not.toContain('google.com');
+
+    const png = await page.request.get(`/api/v1/qr/${source!.id}/download?format=png`);
+    expect(png.status()).toBe(200);
+    expect(png.headers()['content-type']).toContain('image/png');
+    const pngBytes = await png.body();
+    expect(pngBytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    expect(pngBytes.readUInt32BE(16)).toBe(900);
+    expect(pngBytes.readUInt32BE(20)).toBe(1350);
+
+    const pixels = await sharp(pngBytes).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const decoded = jsQR(
+      new Uint8ClampedArray(pixels.data),
+      pixels.info.width,
+      pixels.info.height,
+      { inversionAttempts: 'dontInvert' },
+    );
+    expect(decoded?.data).toBe(source!.resolve_url);
+
+    const configuredBase = process.env.APP_BASE_URL;
+    expect(configuredBase, 'APP_BASE_URL must be loaded for QR payload verification').toBeTruthy();
+    expect(decoded?.data).toBe(new URL(`/r/${source!.code}`, configuredBase).href);
+    if (!decoded) throw new Error('Downloaded PNG did not contain a decodable QR code.');
+
+    const scan = await page.request.get(decoded.data);
+    expect(scan.status()).toBe(200);
   });
 
   test('signing out ends the session', async ({ page }) => {

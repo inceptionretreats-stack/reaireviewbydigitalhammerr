@@ -31,9 +31,26 @@ describe('selectProvider', () => {
     expect(selectProvider({ anthropic: 'sk-ant-a', openai: 'sk-b' }).name).toBe('anthropic');
   });
 
-  it('falls back to the stub only when neither key is set', () => {
+  it('uses Gemini when only its key is configured', () => {
+    expect(selectProvider({ gemini: 'AIzaSy-configured-key' }).name).toBe('gemini');
+  });
+
+  /**
+   * Gemini is the free tier. An owner who adds a paid key later has upgraded, and the paid key
+   * must win without them remembering to remove the free one.
+   */
+  it('lets either paid key beat the free Gemini key', () => {
+    expect(selectProvider({ gemini: 'AIza-free', openai: 'sk-paid' }).name).toBe('openai');
+    expect(selectProvider({ gemini: 'AIza-free', anthropic: 'sk-ant-paid' }).name).toBe(
+      'anthropic',
+    );
+  });
+
+  it('falls back to the stub only when no key is set', () => {
     expect(selectProvider({}).name).toBe('stub');
-    expect(selectProvider({ anthropic: undefined, openai: undefined }).name).toBe('stub');
+    expect(
+      selectProvider({ anthropic: undefined, openai: undefined, gemini: undefined }).name,
+    ).toBe('stub');
   });
 
   /**
@@ -42,6 +59,6 @@ describe('selectProvider', () => {
    * is the last thing standing between that value and a live customer.
    */
   it('treats an empty key as absent rather than as a credential', () => {
-    expect(selectProvider({ anthropic: '', openai: '' }).name).toBe('stub');
+    expect(selectProvider({ anthropic: '', openai: '', gemini: '' }).name).toBe('stub');
   });
 });

@@ -27,7 +27,7 @@ import { ReviewLinkStep, type ReviewLinkCheck } from '@/components/onboarding/Re
  */
 
 export const metadata: Metadata = {
-  title: 'Your Google review link | AI Review',
+  title: 'Your Google review link | Ai Review',
   description: 'Set the Google page customers are sent to after copying their review.',
 };
 

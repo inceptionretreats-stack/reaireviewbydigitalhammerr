@@ -22,6 +22,7 @@ import {
   type Database,
 } from '@ai-review/db';
 import {
+  parseGuidance,
   PasswordHasher,
   generateQrCode,
   normalizePhone,
@@ -59,6 +60,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** The delivered spec pack is the contract; both documents are read from it, never inlined. */
 export const SPEC_DIR = join(HERE, '..', 'docs', 'spec');
+/**
+ * Prompt versions after 1.0.0 live here, not in docs/spec: the spec pack is frozen, and 1.0.0's
+ * text says "English draft", which CHANGE-003 supersedes. Each file has the shape of
+ * 10_AI_Prompt_Templates.json; the seed test pins 1.1.0 to 1.0.0 verbatim except one sentence.
+ */
+export const PROMPT_VERSIONS_DIR = join(HERE, 'prompt-versions');
+export const CURRENT_PROMPT_VERSION = '1.1.0';
 
 /**
  * Namespace for every seeded UUID. Changing it re-keys the whole demo tenant: the next run
@@ -166,6 +174,8 @@ const promptTemplateSchema = z.object({
   max_output_tokens: z.number().int().positive(),
   system_prompt: z.string().min(1),
   output_schema: z.record(z.string(), z.unknown()),
+  /** The writing rules (CHANGE-004). Absent on the frozen 1.0.0; parseGuidance fills defaults. */
+  guidance: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type SeedDocument = z.infer<typeof seedDocumentSchema>;
@@ -179,23 +189,35 @@ export function parseSeedDocument(raw: unknown): SeedDocument {
   return result.data;
 }
 
-export function parsePromptTemplate(raw: unknown): PromptTemplateDocument {
+export function parsePromptTemplate(
+  raw: unknown,
+  sourceName = '10_AI_Prompt_Templates.json',
+): PromptTemplateDocument {
   const result = promptTemplateSchema.safeParse(raw);
   if (!result.success) {
-    throw new SeedDataError(
-      `10_AI_Prompt_Templates.json is not usable:\n${formatIssues(result.error)}`,
-    );
+    throw new SeedDataError(`${sourceName} is not usable:\n${formatIssues(result.error)}`);
   }
   return result.data;
 }
 
-export function loadSpecDocuments(specDir: string = SPEC_DIR): {
+export function loadSpecDocuments(
+  specDir: string = SPEC_DIR,
+  promptVersionsDir: string = PROMPT_VERSIONS_DIR,
+): {
   seed: SeedDocument;
+  /** The frozen 1.0.0 template. Seeded ARCHIVED — history, and the row old generations reference. */
   prompt: PromptTemplateDocument;
+  /** The version that actually runs. */
+  currentPrompt: PromptTemplateDocument;
 } {
+  const currentFile = `${CURRENT_PROMPT_VERSION}.json`;
   return {
     seed: parseSeedDocument(readJson(join(specDir, '20_Test_Data_Seed.json'))),
     prompt: parsePromptTemplate(readJson(join(specDir, '10_AI_Prompt_Templates.json'))),
+    currentPrompt: parsePromptTemplate(
+      readJson(join(promptVersionsDir, currentFile)),
+      `scripts/prompt-versions/${currentFile}`,
+    ),
   };
 }
 
@@ -338,12 +360,25 @@ export interface SeedPlan {
   modes: (typeof reviewModes.$inferInsert)[];
   qrCodes: (typeof qrCodes.$inferInsert)[];
   contacts: (typeof customers.$inferInsert)[];
+  /** True when SEED_ADMIN_PASSWORD was set, so a reseed may overwrite the admin's password. */
+  adminPasswordProvided: boolean;
+  /** The ACTIVE prompt version. */
   promptVersion: typeof aiPromptVersions.$inferInsert;
+  /**
+   * Earlier versions, seeded ARCHIVED. Never deleted: ai_generations.prompt_version_id points
+   * at whichever version wrote each draft, and that history is what ADR-006's rollback reads.
+   */
+  archivedPromptVersions: (typeof aiPromptVersions.$inferInsert)[];
 }
 
 export interface SeedPlanInput {
+  /** Whether an admin password was explicitly supplied (SEED_ADMIN_PASSWORD). Default false. */
+  adminPasswordProvided?: boolean;
   seed: SeedDocument;
+  /** The frozen 1.0.0 template — archived. */
   prompt: PromptTemplateDocument;
+  /** The version to activate. */
+  currentPrompt: PromptTemplateDocument;
   ownerPasswordHash: string;
   adminPasswordHash: string;
   now: Date;
@@ -364,7 +399,7 @@ export interface SeedPlanResult {
  * here, so the interesting behaviour is testable without a database.
  */
 export function buildSeedPlan(input: SeedPlanInput): SeedPlanResult {
-  const { seed, prompt, now } = input;
+  const { seed, prompt, currentPrompt, now } = input;
   const warnings: string[] = [];
   const doc = seed.business;
 
@@ -442,6 +477,8 @@ export function buildSeedPlan(input: SeedPlanInput): SeedPlanResult {
     status: 'FREE',
     freeGenerationLimit: 10,
     freeGenerationsUsed: 0,
+    proGenerationLimit: 2000,
+    proGenerationsUsed: 0,
     updatedAt: now,
   };
 
@@ -473,6 +510,9 @@ export function buildSeedPlan(input: SeedPlanInput): SeedPlanResult {
     // "required term" to express here.
     services: doc.ai_context.services,
     contextTerms: doc.ai_context.context_terms,
+    // CHANGE-003. Stated rather than left to the column default, so the demo tenant's language
+    // is a decision in the seed and not an accident of the schema.
+    draftLanguage: 'hinglish',
     updatedBy: ownerId,
     updatedAt: now,
   };
@@ -525,32 +565,44 @@ export function buildSeedPlan(input: SeedPlanInput): SeedPlanResult {
     };
   });
 
-  const promptVersion: typeof aiPromptVersions.$inferInsert = {
-    id: seedId(`prompt-version:${prompt.version}`),
-    version: prompt.version,
-    status: 'ACTIVE',
-    // AI_DEFAULT_MODEL wins over the template's default_model.
-    //
-    // 10_AI_Prompt_Templates.json names `gpt-5.6-luna`, which is a model that does not exist —
-    // it is spec fiction, and the DB row is what the generator actually reads (ADR-006), so
-    // seeding it verbatim guarantees a 400 from any real provider. docs/spec/ is a frozen
-    // contract and must not be edited to fix that, so the override lives here instead. It also
-    // makes the model a per-environment choice, which is what ADR-006 wants anyway.
-    model: process.env['AI_DEFAULT_MODEL']?.trim() || prompt.default_model,
-    // Blank when the model takes no reasoning-effort field. The Anthropic adapter ignores this
-    // outright; the OpenAI one sends it only when non-empty, and sending 'none' to a model that
-    // does not accept it is a 400 on every request.
-    reasoningEffort: process.env['AI_REASONING_EFFORT_OVERRIDE'] ?? prompt.reasoning_effort,
-    systemPrompt: prompt.system_prompt,
-    outputSchema: prompt.output_schema,
-    // Carried from the template rather than defaulted. The 220-token cap is a cost control,
-    // not a style preference: output tokens cost 5x input, and this cap is what keeps AI at
-    // ~4.6% of revenue (SPEC_AMENDMENTS.md, "AI unit economics").
-    maxOutputTokens: prompt.max_output_tokens,
-    rolloutPercent: 100,
+  /**
+   * One row shape for every prompt version, live or archived.
+   *
+   * AI_DEFAULT_MODEL wins over the template's default_model: the DB row is what the generator
+   * reads (ADR-006), so the model is a per-environment choice. The template default,
+   * `gpt-5.6-luna`, is a real OpenAI model — verified against the live catalogue on
+   * 11 September 2026 at $0.20/$1.20 per million tokens, the price the unit economics in
+   * SPEC_AMENDMENTS.md were built on. (An earlier revision of this comment called it fiction;
+   * it was wrong.)
+   *
+   * Reasoning effort is blank when the model takes no such field. The Anthropic adapter ignores
+   * it outright; the OpenAI one sends it only when non-empty, and sending 'none' to a model that
+   * does not accept it is a 400 on every request.
+   *
+   * max_output_tokens is carried from the template rather than defaulted. It is a cost control:
+   * output tokens cost 6x input on Luna, and the cap bounds the worst case per draft.
+   */
+  const promptVersionRow = (
+    template: PromptTemplateDocument,
+    status: 'ACTIVE' | 'ARCHIVED',
+  ): typeof aiPromptVersions.$inferInsert => ({
+    id: seedId(`prompt-version:${template.version}`),
+    version: template.version,
+    status,
+    model: process.env['AI_DEFAULT_MODEL']?.trim() || template.default_model,
+    reasoningEffort: process.env['AI_REASONING_EFFORT_OVERRIDE'] ?? template.reasoning_effort,
+    systemPrompt: template.system_prompt,
+    outputSchema: template.output_schema,
+    guidance: parseGuidance(template.guidance),
+    maxOutputTokens: template.max_output_tokens,
+    rolloutPercent: status === 'ACTIVE' ? 100 : 0,
     createdBy: adminId,
-    activatedAt: now,
-  };
+    activatedAt: status === 'ACTIVE' ? now : null,
+  });
+
+  // CHANGE-003: 1.1.0 runs, and the frozen 1.0.0 is kept as history rather than edited.
+  const promptVersion = promptVersionRow(currentPrompt, 'ACTIVE');
+  const archivedPromptVersions = [promptVersionRow(prompt, 'ARCHIVED')];
 
   return {
     plan: {
@@ -567,6 +619,8 @@ export function buildSeedPlan(input: SeedPlanInput): SeedPlanResult {
       qrCodes: qrRows,
       contacts,
       promptVersion,
+      archivedPromptVersions,
+      adminPasswordProvided: input.adminPasswordProvided ?? false,
     },
     warnings,
   };
@@ -678,17 +732,21 @@ async function applySeedPlan(tx: SeedTransaction, plan: SeedPlan): Promise<strin
   const notes: string[] = [];
 
   for (const user of [plan.owner, plan.admin]) {
+    // The owner's password is restored on every run — documented demo credentials are the
+    // point of a seed. The admin's is not, unless SEED_ADMIN_PASSWORD asked for one: the seed's
+    // own admin password is deliberately unusable, and rewriting a password that
+    // `pnpm admin:create` set would lock the operator out on every reseed. That happened.
+    const keepExistingPassword = user === plan.admin && !plan.adminPasswordProvided;
     await tx
       .insert(users)
       .values(user)
       .onConflictDoUpdate({
         target: users.id,
-        // A re-run restores the documented demo credentials, which is the point of a seed.
         // `email` is absent from the set: it is this row's identity, and rewriting it would
         // silently rename an existing account instead of creating one.
         set: {
           fullName: user.fullName,
-          passwordHash: user.passwordHash,
+          ...(keepExistingPassword ? {} : { passwordHash: user.passwordHash }),
           role: user.role,
           emailVerifiedAt: user.emailVerifiedAt,
           updatedAt: user.updatedAt,
@@ -733,6 +791,8 @@ async function applySeedPlan(tx: SeedTransaction, plan: SeedPlan): Promise<strin
         // Reset on purpose: re-running the seed returns the demo tenant to a full free quota,
         // which is what makes the Free-tier flow repeatable during development.
         freeGenerationsUsed: 0,
+        proGenerationLimit: plan.subscription.proGenerationLimit,
+        proGenerationsUsed: 0,
         updatedAt: plan.subscription.updatedAt,
       },
     });
@@ -784,6 +844,7 @@ async function applySeedPlan(tx: SeedTransaction, plan: SeedPlan): Promise<strin
         summary: plan.aiContext.summary,
         services: plan.aiContext.services,
         contextTerms: plan.aiContext.contextTerms,
+        draftLanguage: plan.aiContext.draftLanguage,
         updatedAt: plan.aiContext.updatedAt,
       },
     });
@@ -844,6 +905,29 @@ async function applySeedPlan(tx: SeedTransaction, plan: SeedPlan): Promise<strin
    * works and replacing its prompt is not a seed script's decision — so the seeded version
    * lands as DRAFT and says so, rather than aborting on the unique index.
    */
+  // Retire our own earlier versions first, inside the same transaction, so the partial unique
+  // index on ACTIVE is free for the current one by the time it is written. `activatedAt` is
+  // deliberately not in the update set: the date a version went live is history, and history
+  // is what an archived row is for.
+  for (const archived of plan.archivedPromptVersions) {
+    await tx
+      .insert(aiPromptVersions)
+      .values(archived)
+      .onConflictDoUpdate({
+        target: aiPromptVersions.id,
+        set: {
+          status: 'ARCHIVED',
+          model: archived.model,
+          reasoningEffort: archived.reasoningEffort,
+          systemPrompt: archived.systemPrompt,
+          outputSchema: archived.outputSchema,
+          guidance: archived.guidance,
+          maxOutputTokens: archived.maxOutputTokens,
+          rolloutPercent: archived.rolloutPercent,
+        },
+      });
+  }
+
   const [liveVersion] = await tx
     .select({ id: aiPromptVersions.id, version: aiPromptVersions.version })
     .from(aiPromptVersions)
@@ -870,6 +954,7 @@ async function applySeedPlan(tx: SeedTransaction, plan: SeedPlan): Promise<strin
         reasoningEffort: promptRow.reasoningEffort,
         systemPrompt: promptRow.systemPrompt,
         outputSchema: promptRow.outputSchema,
+        guidance: promptRow.guidance,
         maxOutputTokens: promptRow.maxOutputTokens,
         rolloutPercent: promptRow.rolloutPercent,
         activatedAt: promptRow.activatedAt,
@@ -917,7 +1002,7 @@ export async function run(
     return 2;
   }
 
-  const { seed, prompt } = loadSpecDocuments();
+  const { seed, prompt, currentPrompt } = loadSpecDocuments();
 
   const ownerPassword = env.SEED_OWNER_PASSWORD ?? DEMO_OWNER_PASSWORD;
   const strength = validatePasswordStrength(ownerPassword);
@@ -961,6 +1046,8 @@ export async function run(
   const { plan, warnings } = buildSeedPlan({
     seed,
     prompt,
+    currentPrompt,
+    adminPasswordProvided: adminPassword !== undefined,
     ownerPasswordHash: await hasher.hash(ownerPassword),
     adminPasswordHash,
     now: new Date(),

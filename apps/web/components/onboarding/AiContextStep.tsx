@@ -1,8 +1,15 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { Button, Card, Field, InlineError, TagInput, Textarea } from '@ai-review/ui';
+import { Button, Card, Field, InlineError, Select, TagInput, Textarea } from '@ai-review/ui';
 import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import {
+  DRAFT_LANGUAGE_HINT,
+  DRAFT_LANGUAGE_LABEL,
+  DRAFT_LANGUAGE_OPTIONS,
+  isDraftLanguage,
+  type DraftLanguage,
+} from '@/lib/draft-language';
 import {
   SUMMARY_MAX,
   contextSignature,
@@ -21,7 +28,8 @@ import { WizardShell } from './WizardShell';
  *
  * The screen spec lists four fields (business summary, services/products, context terms, default
  * mode name), two actions (Generate preview, Continue) and four states (default, preview loading,
- * preview ready, AI error). Fields are rendered in the spec's order.
+ * preview ready, AI error). Fields are rendered in the spec's order, with one addition after the
+ * context terms: the draft language (CHANGE-003), which the spec's English-only V1 never needed.
  *
  * Everything this screen *decides* lives in ./ai-context — envelope parsing, the preview state
  * machine, the stale-preview signature, the counter's announcement thresholds and what the mode
@@ -58,13 +66,14 @@ import { WizardShell } from './WizardShell';
  * compliance change disguised as an edit.
  */
 const CONTEXT_HELPER =
-  'Add services or topics that help AI understand your business. These are context hints and may ' +
+  'Add services or topics that help Ai understand your business. These are context hints and may ' +
   'not appear in every review.';
 
 export interface AiContextStepProps {
   initialSummary: string;
   initialServices: readonly string[];
   initialContextTerms: readonly string[];
+  initialDraftLanguage: DraftLanguage;
   /** Active review mode name, or null when no unarchived mode is switched on. */
   activeModeName: string | null;
   /**
@@ -79,12 +88,14 @@ export function AiContextStep({
   initialSummary,
   initialServices,
   initialContextTerms,
+  initialDraftLanguage,
   activeModeName,
   hasAnyMode,
 }: AiContextStepProps) {
   const [summary, setSummary] = useState(initialSummary);
   const [services, setServices] = useState<readonly string[]>(initialServices);
   const [contextTerms, setContextTerms] = useState<readonly string[]>(initialContextTerms);
+  const [draftLanguage, setDraftLanguage] = useState<DraftLanguage>(initialDraftLanguage);
   const [saveFailure, setSaveFailure] = useState<SubmitFailure | null>(null);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<PreviewState>({ status: 'idle' });
@@ -99,6 +110,7 @@ export function AiContextStep({
       ...(summary.trim() === '' ? {} : { summary: summary.trim() }),
       services,
       context_terms: contextTerms,
+      draft_language: draftLanguage,
     });
 
     setSaving(false);
@@ -108,7 +120,7 @@ export function AiContextStep({
       return false;
     }
     return true;
-  }, [summary, services, contextTerms]);
+  }, [summary, services, contextTerms, draftLanguage]);
 
   const generatePreview = useCallback(async () => {
     setPreview({ status: 'loading' });
@@ -132,16 +144,19 @@ export function AiContextStep({
       return;
     }
 
-    const signature = contextSignature(summary, services, contextTerms);
+    const signature = contextSignature(summary, services, contextTerms, draftLanguage);
     setPreview(previewFromPayload(result.payload, signature));
-  }, [save, summary, services, contextTerms]);
+  }, [save, summary, services, contextTerms, draftLanguage]);
 
   const fieldFailure = (name: string): string | null =>
     saveFailure !== null && saveFailure.fields.includes(name) ? saveFailure.message : null;
 
   const summaryRemaining = SUMMARY_MAX - summary.length;
   const previewLoading = preview.status === 'loading';
-  const previewStale = previewIsStale(preview, contextSignature(summary, services, contextTerms));
+  const previewStale = previewIsStale(
+    preview,
+    contextSignature(summary, services, contextTerms, draftLanguage),
+  );
   const modeCopy = defaultModeCopy({ activeModeName, hasAnyMode });
 
   return (
@@ -236,6 +251,31 @@ export function AiContextStep({
         </Field>
 
         {/*
+          CHANGE-003. The language the draft is written in. A native select rather than radios:
+          the UI kit has none, and two options do not earn a new control. Defaults to Hinglish
+          for a new business — the market is India, and the customer keeps the final say over
+          every word regardless.
+        */}
+        <Field
+          label={DRAFT_LANGUAGE_LABEL}
+          hint={DRAFT_LANGUAGE_HINT}
+          error={fieldFailure('draft_language')}
+        >
+          {(control) => (
+            <Select
+              {...control}
+              name="draft_language"
+              options={DRAFT_LANGUAGE_OPTIONS}
+              value={draftLanguage}
+              onChange={(event) => {
+                if (isDraftLanguage(event.target.value)) setDraftLanguage(event.target.value);
+              }}
+              disabled={saving}
+            />
+          )}
+        </Field>
+
+        {/*
           "Default mode name" is a field in the screen spec, but PUT /ai/context has no field for
           it: the handler creates a Balanced mode itself on first save, and `aiContextRequest`
           would strip a name sent alongside. An editable input whose value is silently discarded is
@@ -258,7 +298,7 @@ export function AiContextStep({
           </p>
           <p className="mt-2 text-sm text-ink-muted">
             A mode changes which topics a draft leans on. It never changes how positive a draft is,
-            and it never asks anyone for a rating. Rename it or add more modes in AI settings once
+            and it never asks anyone for a rating. Rename it or add more modes in Ai settings once
             you are set up.
           </p>
         </Card>

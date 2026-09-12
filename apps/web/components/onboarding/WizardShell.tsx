@@ -66,32 +66,35 @@ export function WizardShell({
   }, [onSaveAndExit, router]);
 
   return (
-    <div className="flex flex-col gap-7">
+    <div className="onboarding-panel">
       <ProgressRail currentIndex={index} />
 
-      <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-semibold tracking-wider text-ink-faint uppercase">
+      <div className="onboarding-heading">
+        <p className="onboarding-step-count">
           Step {index + 1} of {ONBOARDING_STEPS.length}
         </p>
-        <h1 className="text-2xl font-bold tracking-tight text-ink">{heading}</h1>
-        {description && <p className="text-sm text-ink-muted">{description}</p>}
+        <h1>{heading}</h1>
+        {description ? <p>{description}</p> : null}
       </div>
 
-      {children}
+      <div className="onboarding-fields">{children}</div>
 
-      <div className="flex flex-col gap-3 border-t border-line pt-5">
-        <Button
-          type="button"
-          size="lg"
-          fullWidth
-          loading={busy}
-          loadingLabel="Saving"
-          onClick={() => void handleContinue()}
-        >
-          {continueLabel ?? 'Continue'}
-        </Button>
+      <div className="onboarding-actions">
+        <div className="onboarding-primary-action">
+          <Button
+            type="button"
+            size="lg"
+            fullWidth
+            loading={busy}
+            loadingLabel="Saving"
+            onClick={() => void handleContinue()}
+          >
+            {continueLabel ?? 'Continue'}
+            <span aria-hidden="true">→</span>
+          </Button>
+        </div>
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="onboarding-secondary-actions">
           {back ? (
             <Button
               type="button"
@@ -131,23 +134,24 @@ export function WizardShell({
  */
 function ProgressRail({ currentIndex }: { currentIndex: number }) {
   return (
-    <nav aria-label="Setup progress">
-      <ol className="flex list-none gap-1.5 p-0">
+    <nav className="onboarding-progress" aria-label="Setup progress">
+      <ol>
         {ONBOARDING_STEPS.map((step, index) => {
           const state = index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'todo';
           return (
-            <li key={step.id} className="flex-1">
+            <li key={step.id} data-step-state={state}>
               <span
                 aria-current={state === 'current' ? 'step' : undefined}
-                className={[
-                  'block h-1.5 rounded-full',
-                  state === 'todo' ? 'bg-surface-sunk' : 'bg-accent',
-                  state === 'current' ? 'ring-2 ring-accent/30' : '',
-                ].join(' ')}
-              />
-              <span className="sr-only">
+                className="onboarding-progress-marker"
+              >
+                <span aria-hidden="true">{state === 'done' ? '✓' : index + 1}</span>
+                <span className="sr-only">
+                  {step.title}
+                  {state === 'done' ? ' — done' : state === 'current' ? ' — current step' : ''}
+                </span>
+              </span>
+              <span className="onboarding-progress-title" aria-hidden="true">
                 {step.title}
-                {state === 'done' ? ' — done' : state === 'current' ? ' — current step' : ''}
               </span>
             </li>
           );

@@ -23,11 +23,71 @@ export interface ReviewModeInput {
   contextTerms: string[];
 }
 
+export {
+  DEFAULT_DRAFT_LANGUAGE,
+  DRAFT_LANGUAGES,
+  draftLanguageLine,
+  readDraftLanguage,
+  type DraftLanguage,
+} from './draft-language';
+import { draftLanguageLine, type DraftLanguage } from './draft-language';
+import { DEFAULT_GUIDANCE, type PromptGuidance } from './guidance';
+
+/**
+ * The opening angles and emoji placements now live on the prompt version (guidance.ts); these
+ * names stay exported for the tests and the seed that read the defaults.
+ */
+export const OPENING_HINTS: readonly string[] = DEFAULT_GUIDANCE.opening_hints;
+export const EMOJI_PLACEMENTS: readonly string[] = DEFAULT_GUIDANCE.emoji_placements;
+
+/** FNV-1a, for a stable choice from a seed. Not security-sensitive. */
+function seedHash(seed: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+/**
+ * The opening for this generation. Advances with the generation number, so a customer who taps
+ * "New review" four times gets four different openings rather than four variations on one —
+ * which is what happened when the hint was tied to the session alone. Consecutive generations
+ * are guaranteed different hints; the seed decides where the sequence starts.
+ */
+export function openingHintFor(
+  seed: string,
+  generationNumber = 1,
+  hints: readonly string[] = DEFAULT_GUIDANCE.opening_hints,
+): string {
+  const start = seedHash(seed) % hints.length;
+  return hints[(start + Math.max(0, generationNumber - 1)) % hints.length]!;
+}
+
+/** Emoji placement for this generation; a different stride, so it does not track the opening. */
+export function emojiPlacementFor(
+  seed: string,
+  generationNumber = 1,
+  placements: readonly string[] = DEFAULT_GUIDANCE.emoji_placements,
+): string {
+  const start = seedHash(`emoji:${seed}`) % placements.length;
+  return placements[(start + 2 * Math.max(0, generationNumber - 1)) % placements.length]!;
+}
+
 export interface GenerationRequest {
   business: BusinessContextInput;
   reviewMode?: ReviewModeInput | null;
   previousDrafts: string[];
   generationNumber: number;
+  /** Required rather than defaulted, so every caller states it and typecheck finds the ones that do not. */
+  draftLanguage: DraftLanguage;
+  /**
+   * Picks the opening hint. The anonymous session id in the customer flow, a fresh id per owner
+   * preview — anything stable for one request and different between customers. Omitted, the
+   * hint is omitted too, and the model opens however it likes.
+   */
+  variationSeed?: string;
   /**
    * Why the previous attempt in *this* request was thrown away, in the vocabulary of
    * OutputRejection.
@@ -88,7 +148,11 @@ const REJECTION_GUIDANCE: Record<string, string> = {
     'Open differently and restructure the sentences. Do not paraphrase the previous draft.',
 };
 
-export function buildPrompt(request: GenerationRequest, systemPrompt: string): BuiltPrompt {
+export function buildPrompt(
+  request: GenerationRequest,
+  systemPrompt: string,
+  guidance: PromptGuidance = DEFAULT_GUIDANCE,
+): BuiltPrompt {
   const business = {
     name: request.business.name,
     category: request.business.category,
@@ -114,8 +178,23 @@ export function buildPrompt(request: GenerationRequest, systemPrompt: string): B
     `ACTIVE_MODE=${JSON.stringify(mode)}`,
     `PREVIOUS_DRAFTS=${JSON.stringify(previousDrafts)}`,
     `GENERATION_NUMBER=${request.generationNumber}`,
+    draftLanguageLine(request.draftLanguage),
     'Generate one low-claim, editable review draft consistent with the rules.',
+    ...guidance.language_rules[request.draftLanguage],
+    ...guidance.claim_rules,
   ];
+
+  lines.push(...guidance.emoji_rules);
+  if (request.variationSeed !== undefined) {
+    const seed = request.variationSeed;
+    const n = request.generationNumber;
+    lines.push(
+      `OPENING: ${openingHintFor(seed, n, guidance.opening_hints)} Do not begin with the business name and do not begin with "Main" or "I".`,
+    );
+    if (guidance.emoji_rules.length > 0) {
+      lines.push(`EMOJI_PLACEMENT: ${emojiPlacementFor(seed, n, guidance.emoji_placements)}.`);
+    }
+  }
 
   if (previousDrafts.length > 0) {
     lines.push(
@@ -158,11 +237,20 @@ const RATING_PATTERNS = [
   /\bstar[\s-]*rating\b/i,
   /\b\d(?:\.\d)?\s*\/\s*5\b/,
   /\brated?\s+(?:it\s+)?\d/i,
+  // Roman Hindi (CHANGE-003): "paanch star", "5 sitare", "4 ki rating", "star deta hoon".
+  /\b(?:paanch|panch|chaar|char|teen|do|ek|\d)[\s-]*(?:sitare|sitaare|sitara|taare|stars?)\b/i,
+  /\b\d(?:\.\d)?\s*(?:ki\s+)?rating\b/i,
+  /\bstars?\s+(?:deta|deti|dunga|doonga|diye|di)\b/i,
 ];
 
 const INCENTIVE_PATTERNS = [
   /\b(?:discount|coupon|voucher|cashback|free\s+(?:meal|gift|item)|reward)\b/i,
   /\bin\s+(?:exchange|return)\s+for\b/i,
+  // Roman Hindi: "muft mein", "free mein", "ke badle mein", "chhoot".
+  /\bmuft\b/i,
+  /\bfree\s+(?:mein|me)\b/i,
+  /\b(?:ke\s+)?badle\s+(?:mein|me)\b/i,
+  /\bchh?oot\b/i,
 ];
 
 /** AC-012: claims the customer never supplied, because V1 never asked them anything. */
@@ -173,8 +261,11 @@ const UNSUPPORTED_CLAIM_PATTERNS = [
   // so both orders are matched. Matching only the symbol form left the commonest Indian
   // phrasing undetected.
   /(?:₹|\brs\.?|\binr\b|\$)\s*\d+(?:,\d{3})*/i,
-  /\b\d+(?:,\d{3})*\s*(?:rupees?|rs\.?|inr|dollars?|usd)\b/i,
-  /\b\d+\s*%\s*(?:off|cheaper|faster|better|less)\b/i,
+  /\b\d+(?:,\d{3})*\s*(?:rupees?|rupaye|rupay|rupiya|rupya|rs\.?|inr|dollars?|usd)\b/i,
+  /\b\d+\s*%\s*(?:off|cheaper|faster|better|less|sasta|saste|sasti|kam)\b/i,
+  // Roman Hindi durations: "10 minute mein", "do ghante ke andar". Spoken Hinglish counts in
+  // words as often as digits, so the small number words are matched too.
+  /\b(?:\d+|ek|do|teen|chaar|char|paanch|panch|das)\s*(?:minute?s?|mins?|minat|ghante|ghanta|din|hafte)\s*(?:mein|me|ke\s+andar)\b/i,
 ];
 
 const EXTREME_PRAISE_PATTERNS = [
@@ -182,6 +273,10 @@ const EXTREME_PRAISE_PATTERNS = [
   /\bperfect\b/i,
   /\bguaranteed?\b/i,
   /\bflawless\b/i,
+  // Roman Hindi superlatives. "bahut accha" (very good) is ordinary praise and passes;
+  // "sabse accha" (the best) and "behtareen"/"lajawab" (finest, beyond compare) do not.
+  /\bsabse\s+(?:best|accha|acha|achha|badhiya|badiya|behtar|behtareen)\b/i,
+  /\b(?:behtareen|lajawab)\b/i,
 ];
 
 export interface OutputCheck {

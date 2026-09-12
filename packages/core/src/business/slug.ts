@@ -28,6 +28,8 @@ export const RESERVED_SLUGS = new Set([
   'support',
   'help',
   'about',
+  'features',
+  'how-it-works',
   'terms',
   'privacy',
   'legal',

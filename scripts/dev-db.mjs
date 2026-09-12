@@ -34,6 +34,12 @@ const pg = new EmbeddedPostgres({
   password: PASSWORD,
   port: PORT,
   persistent: true,
+  // UTF-8, always. initdb otherwise takes the operating system's locale, which on this Windows
+  // machine meant WIN1252 — an encoding with no room for an emoji or a Devanagari letter. The
+  // first draft carrying one failed to save (22P05) and the customer saw a 500. The builtin
+  // C.UTF-8 locale is deterministic and needs no ICU or OS locale data. A cluster that already
+  // exists keeps its encoding: scripts/db-reencode.mjs converts one in place.
+  initdbFlags: ['--encoding=UTF8', '--locale-provider=builtin', '--builtin-locale=C.UTF-8'],
 });
 
 const command = process.argv[2] ?? 'start';

@@ -17,7 +17,11 @@ import { Card, EmptyState } from '@ai-review/ui';
  */
 export function ReportingCard() {
   return (
-    <Card title="Performance" titleAs="h2">
+    <Card
+      title="Performance"
+      titleAs="h2"
+      className="dashboard-section-card dashboard-section-card--green"
+    >
       <EmptyState
         title="Reporting is not available yet"
         description={

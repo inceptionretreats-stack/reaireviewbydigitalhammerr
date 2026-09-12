@@ -12,10 +12,14 @@ import {
   PostgresQuotaStore,
   QuotaService,
   AnthropicProvider,
+  GeminiProvider,
   OpenAiProvider,
   ReviewGenerator,
   StubAiProvider,
+  DEFAULT_DRAFT_LANGUAGE,
+  parseGuidance,
   type AiProvider,
+  type DraftLanguage,
   type PromptVersionConfig,
 } from '@ai-review/core';
 import { env } from './env';
@@ -39,6 +43,8 @@ export interface GenerationContext {
   };
   reviewMode: { name: string; description: string | null; contextTerms: string[] } | null;
   reviewModeId: string | null;
+  /** CHANGE-003. Per business; Hinglish when the business has never saved a context row. */
+  draftLanguage: DraftLanguage;
 }
 
 /** ADMIN-03-01: exactly one ACTIVE version is the production default. */
@@ -59,6 +65,7 @@ export async function loadActivePromptVersion(db: Database): Promise<PromptVersi
     maxOutputTokens: row.maxOutputTokens,
     reasoningEffort: row.reasoningEffort,
     outputSchema: row.outputSchema as Record<string, unknown>,
+    guidance: parseGuidance(row.guidance),
   };
 }
 
@@ -83,7 +90,11 @@ export async function loadGenerationContext(
   if (!business) return null;
 
   const [context] = await db
-    .select({ services: aiBusinessContexts.services, terms: aiBusinessContexts.contextTerms })
+    .select({
+      services: aiBusinessContexts.services,
+      terms: aiBusinessContexts.contextTerms,
+      draftLanguage: aiBusinessContexts.draftLanguage,
+    })
     .from(aiBusinessContexts)
     .where(eq(aiBusinessContexts.businessId, businessId))
     .limit(1);
@@ -123,6 +134,7 @@ export async function loadGenerationContext(
         }
       : null,
     reviewModeId: mode?.id ?? null,
+    draftLanguage: context?.draftLanguage ?? DEFAULT_DRAFT_LANGUAGE,
   };
 }
 
@@ -177,10 +189,13 @@ export async function loadPreviousDrafts(
  * reach that branch: packages/config requires one of the two there, so a deployment that forgets
  * both fails at boot rather than quietly serving canned drafts as though a model had written them.
  *
- * Anthropic wins when both are set. That is a deliberate, stated precedence rather than an
- * accident of ordering: a deployment holding two keys has one it means to use, and silently
- * picking by declaration order would make the active vendor a property of this file rather than
- * of configuration. Unsetting the other key is the way to switch.
+ * Precedence when more than one key is set: Anthropic, then OpenAI, then Gemini. Deliberate
+ * and stated rather than an accident of ordering: a deployment holding two keys has one it
+ * means to use, and silently picking by declaration order would make the active vendor a
+ * property of this file rather than of configuration. Gemini is last because it is the one
+ * with a free tier — an owner who later adds a paid key has upgraded, and the paid key should
+ * win without them having to remember to remove the free one. Unsetting keys is the way to
+ * switch the other direction.
  *
  * Both branches were unreachable until recently — this function returned the stub either way,
  * which is exactly the sort of thing that survives review and every gate. Hence the test.
@@ -198,17 +213,23 @@ export async function loadPreviousDrafts(
  * can disagree.
  */
 export function providerKeys(): ProviderKeys {
-  return { anthropic: env().ANTHROPIC_API_KEY, openai: env().OPENAI_API_KEY };
+  return {
+    anthropic: env().ANTHROPIC_API_KEY,
+    openai: env().OPENAI_API_KEY,
+    gemini: env().GEMINI_API_KEY,
+  };
 }
 
 export interface ProviderKeys {
   anthropic?: string | undefined;
   openai?: string | undefined;
+  gemini?: string | undefined;
 }
 
 export function selectProvider(keys: ProviderKeys): AiProvider {
   if (keys.anthropic) return new AnthropicProvider({ apiKey: keys.anthropic });
   if (keys.openai) return new OpenAiProvider({ apiKey: keys.openai });
+  if (keys.gemini) return new GeminiProvider({ apiKey: keys.gemini });
   return new StubAiProvider('ok');
 }
 
@@ -221,22 +242,27 @@ function asStringArray(value: unknown): string[] {
 }
 
 /**
- * The plan, for the rate limiter's fair-use dimension.
+ * The plan, for the rate limiter's paid abuse-observation dimension.
  *
  * A separate small read rather than a value threaded out of the generator: the limiter runs
  * *before* generation (a denied request must not reach the provider or the quota counter), so
- * the entitlement the generator resolves later is not available yet. D-006 means this only
- * changes whether the OBSERVE dimension is attached, so a stale answer costs an alert, not a
- * wrong decision.
+ * the entitlement the generator resolves later is not available yet. This only changes whether
+ * the OBSERVE dimension is attached, so a stale answer costs an alert, not a wrong decision.
  */
 export async function loadPlan(db: Database, businessId: string): Promise<'FREE' | 'PRO'> {
   const [row] = await db
-    .select({ status: subscriptions.status, expiresAt: subscriptions.expiresAt })
+    .select({
+      status: subscriptions.status,
+      startsAt: subscriptions.startsAt,
+      expiresAt: subscriptions.expiresAt,
+    })
     .from(subscriptions)
     .where(eq(subscriptions.businessId, businessId))
     .limit(1);
 
-  if (!row || row.status !== 'PRO_ACTIVE') return 'FREE';
-  if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return 'FREE';
+  if (!row || (row.status !== 'PRO_ACTIVE' && row.status !== 'PAST_DUE')) return 'FREE';
+  if (!row.startsAt || !row.expiresAt) return 'FREE';
+  const now = Date.now();
+  if (row.startsAt.getTime() > now || row.expiresAt.getTime() <= now) return 'FREE';
   return 'PRO';
 }

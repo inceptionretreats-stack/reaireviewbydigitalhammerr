@@ -47,7 +47,7 @@ export function QrSourceTable({ sources, isEmpty, rangeLabel }: QrSourceTablePro
     },
     numeric('scans', 'Scans', 'QR code scanned', (source) => source.scans),
     numeric('pages', 'Review pages', 'Review page opened', (source) => source.reviewPagesOpened),
-    numeric('drafts', 'AI drafts', 'AI draft created', (source) => source.draftsCreated),
+    numeric('drafts', 'Ai drafts', 'Ai draft created', (source) => source.draftsCreated),
     numeric('copies', 'Copies', 'Review copied', (source) => source.reviewsCopied),
     numeric(
       'google',
@@ -84,7 +84,7 @@ export function QrSourceTable({ sources, isEmpty, rangeLabel }: QrSourceTablePro
         />
       ) : (
         <Table
-          caption="QR sources with scans, review pages opened, AI drafts created, reviews copied, Google review pages opened, and visitor sessions"
+          caption="QR sources with scans, review pages opened, Ai drafts created, reviews copied, Google review pages opened, and visitor sessions"
           columns={columns}
           rows={sources}
           rowKey={(source) => source.qrCodeId ?? `bucket:${source.label}`}

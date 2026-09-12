@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { businessIdentityRequest } from '@ai-review/contracts';
+import type { ReviewDestinationKind } from '@ai-review/core';
 import { Badge, Button, Card, Field, InlineError, Input, Textarea } from '@ai-review/ui';
 import { SECONDARY_LINK } from '../link-styles';
 import { AppearanceCard } from './AppearanceCard';
 import { ProfilePreview, type PreviewSection } from './ProfilePreview';
+import { ReviewLocationCard } from './ReviewLocationCard';
 import { SectionRow } from './SectionRow';
 import { applyOrder, moveItem, resolveDragEnd, sameOrder } from './order';
 import {
@@ -91,6 +93,13 @@ export interface ProfileEditorProps {
   sections: readonly StoredSection[];
   /** From `review_destinations` — the single owner of the Google URL (AMENDMENT-003, AC-017). */
   reviewUrl: string | null;
+  /** Raw stored value plus the server-validated URL that is safe to expose as an external link. */
+  reviewLocation: {
+    url: string | null;
+    openUrl: string | null;
+    kind: ReviewDestinationKind | null;
+    enabled: boolean;
+  };
   publicUrl: string | null;
   isLive: boolean;
   /** Set for a SUSPENDED or CLOSED tenant (Flow J): the screen explains and stops accepting edits. */
@@ -114,10 +123,10 @@ interface IdentityProblems {
 }
 
 export function ProfileEditor(props: ProfileEditorProps) {
-  const { passthrough, reviewUrl, publicUrl, isLive, frozenNote, logoUrl, coverUrl, brandAccent } =
-    props;
+  const { passthrough, publicUrl, isLive, frozenNote, logoUrl, coverUrl, brandAccent } = props;
 
   const [view, setView] = useState<'edit' | 'preview'>('edit');
+  const [reviewUrl, setReviewUrl] = useState(props.reviewUrl);
 
   const [name, setName] = useState(props.name);
   const [description, setDescription] = useState(props.description);
@@ -589,6 +598,15 @@ export function ProfileEditor(props: ProfileEditorProps) {
               </p>
             )}
           </Card>
+
+          <ReviewLocationCard
+            initialUrl={props.reviewLocation.url}
+            initialOpenUrl={props.reviewLocation.openUrl}
+            initialKind={props.reviewLocation.kind}
+            initialEnabled={props.reviewLocation.enabled}
+            disabled={busy || frozen}
+            onSaved={setReviewUrl}
+          />
 
           <AppearanceCard logoUrl={logoUrl} coverUrl={coverUrl} brandAccent={brandAccent} />
 

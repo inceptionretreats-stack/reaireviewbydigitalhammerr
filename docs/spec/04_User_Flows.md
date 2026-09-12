@@ -71,7 +71,8 @@ sequenceDiagram
 5. Owner starts Razorpay checkout/subscription.
 6. Server verifies checkout signature and webhook.
 7. Entitlement becomes `PRO_ACTIVE`.
-8. AI generation resumes under fair-use controls.
+8. AI generation resumes with a fresh 2,000-draft allowance for the paid subscription year;
+   short-window abuse controls remain active.
 
 ## Flow F - manual personal review request
 1. Business adds/selects customer.

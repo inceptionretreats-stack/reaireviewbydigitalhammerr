@@ -1,0 +1,210 @@
+.card {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  aspect-ratio: 2 / 3;
+  grid-template-rows: minmax(0, 0.24fr) minmax(0, 1fr) minmax(0, 0.16fr);
+  align-items: center;
+  container-type: inline-size;
+  overflow: hidden;
+  margin: 0;
+  padding: 9% 8% 7%;
+  border: 1px solid rgb(66 133 244 / 22%);
+  border-radius: 7.5%;
+  background: #ffffff;
+  box-shadow:
+    0 9px 28px rgb(11 31 51 / 14%),
+    inset 0 0 0 1px rgb(255 255 255 / 82%);
+  color: #0b1f33;
+  font-family: Arial, 'Segoe UI', sans-serif;
+}
+
+.card::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2.2%;
+  background: linear-gradient(
+    90deg,
+    #4285f4 0 25%,
+    #ea4335 25% 50%,
+    #fbbc05 50% 75%,
+    #34a853 75% 100%
+  );
+  content: '';
+}
+
+.card::after {
+  position: absolute;
+  z-index: -1;
+  right: -25%;
+  bottom: 9%;
+  width: 65%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #e6f4ea;
+  opacity: 0.5;
+  content: '';
+}
+
+.hero {
+  width: 100%;
+}
+
+.compact {
+  width: 82px;
+  min-width: 82px;
+  padding: 10% 8% 7%;
+  border-radius: 7px;
+  box-shadow: 0 5px 13px rgb(11 31 51 / 14%);
+}
+
+.businessName {
+  display: -webkit-box;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: #0b1f33;
+  font-size: clamp(12px, 7.5cqw, 22px);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+  text-align: center;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.qrPlate {
+  position: relative;
+  width: 100%;
+  padding: 7%;
+  border: 0.7cqw solid #d2e3fc;
+  border-radius: 8%;
+  background: #ffffff;
+  box-shadow:
+    0 4cqw 10cqw rgb(11 31 51 / 12%),
+    0 0 0 2cqw #f8f9fa;
+}
+
+.qr {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  background: #ffffff;
+}
+
+.corner {
+  position: absolute;
+  width: 8cqw;
+  height: 8cqw;
+  border-color: #4285f4;
+  border-style: solid;
+  border-width: 0;
+  pointer-events: none;
+}
+
+.cornerTopLeft {
+  top: 2.7cqw;
+  left: 2.7cqw;
+  border-top-width: 1cqw;
+  border-left-width: 1cqw;
+  border-radius: 1.5cqw 0 0;
+}
+
+.cornerTopRight {
+  top: 2.7cqw;
+  right: 2.7cqw;
+  border-top-width: 1cqw;
+  border-right-width: 1cqw;
+  border-radius: 0 1.5cqw 0 0;
+  border-color: #ea4335;
+}
+
+.cornerBottomLeft {
+  bottom: 2.7cqw;
+  left: 2.7cqw;
+  border-bottom-width: 1cqw;
+  border-left-width: 1cqw;
+  border-radius: 0 0 0 1.5cqw;
+  border-color: #f9ab00;
+}
+
+.cornerBottomRight {
+  right: 2.7cqw;
+  bottom: 2.7cqw;
+  border-right-width: 1cqw;
+  border-bottom-width: 1cqw;
+  border-radius: 0 0 1.5cqw;
+  border-color: #34a853;
+}
+
+/* The header lockup at card scale: bars, then "Ai Review" over "by Digital Hammerr". */
+.brandFooter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3.8cqw;
+  margin: 0;
+  line-height: 1;
+}
+
+.brandBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 1cqw;
+  height: 11.5cqw;
+}
+
+.brandBars i {
+  display: block;
+  width: 2cqw;
+  height: 5cqw;
+  border-radius: 99px;
+  background: #4285f4;
+}
+
+.brandBars i:nth-child(2) {
+  height: 7.5cqw;
+  background: #ea4335;
+}
+
+.brandBars i:nth-child(3) {
+  height: 9.5cqw;
+  background: #fbbc05;
+}
+
+.brandBars i:nth-child(4) {
+  height: 11.5cqw;
+  background: #34a853;
+}
+
+.brandCopy {
+  display: flex;
+  flex-direction: column;
+  color: #0b1f33;
+  text-align: left;
+}
+
+.brandCopy strong {
+  font-size: 5.6cqw;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.brandCopy small {
+  margin-top: 0.8cqw;
+  color: #52627a;
+  font-size: 3.6cqw;
+  font-weight: 650;
+}
+
+.compact .businessName {
+  font-size: 7cqw;
+}
+
+.compact .brandFooter {
+  gap: 3cqw;
+}

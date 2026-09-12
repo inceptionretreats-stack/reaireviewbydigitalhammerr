@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DraftEditor } from './DraftEditor';
+import { DraftEditor, type CopyStatus } from './DraftEditor';
 
 /**
  * The customer review flow: REV-01 (generate), REV-02 (edit/regenerate/confirm/copy) and
@@ -39,7 +39,7 @@ export interface ReviewFlowProps {
   initialDraft?: { text: string; generationId: string } | null;
 }
 
-type Phase = 'ready' | 'generating' | 'draft' | 'copied';
+type Phase = 'ready' | 'generating' | 'draft';
 
 interface FlowError {
   code: string;
@@ -55,6 +55,7 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<FlowError | null>(null);
   const [edited, setEdited] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
 
   const track = useCallback(
     (name: string, properties: Record<string, unknown> = {}) => {
@@ -82,21 +83,38 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
   const generate = useCallback(
     async (isRegeneration: boolean) => {
       setError(null);
+      setCopyStatus('idle');
       setPhase('generating');
-      track(isRegeneration ? 'ai_regenerate_click' : 'ai_generate_click');
+      track(
+        isRegeneration ? 'ai_regenerate_click' : 'ai_generate_click',
+        isRegeneration && generationId ? { generation_id: generationId } : {},
+      );
 
       try {
-        const response = await fetch('/api/v1/public/review/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            slug: business.slug ?? undefined,
-            qr_code: qrCode ?? undefined,
-            previous_generation_id: isRegeneration ? generationId : undefined,
-          }),
-        });
+        const request = () =>
+          fetch('/api/v1/public/review/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              slug: business.slug ?? undefined,
+              qr_code: qrCode ?? undefined,
+              previous_generation_id: isRegeneration ? generationId : undefined,
+            }),
+          });
 
-        const payload: unknown = await response.json();
+        let response = await request();
+        let payload: unknown = await response.json();
+
+        // One quiet retry when the assistant reports itself unavailable. Measured on the free
+        // Gemini tier: about two calls in sixty ran past the budget and every one of them
+        // succeeded on the next try. A failed generation releases its quota reservation, so
+        // this costs the business nothing; the customer just sees "Writing…" a moment longer.
+        // Only 503 — a quota or plan refusal (402) is not going to change in a second.
+        if (response.status === 503) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          response = await request();
+          payload = await response.json();
+        }
 
         if (!response.ok) {
           setError(extractError(payload));
@@ -124,14 +142,36 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
     [draft, generationId, business.slug, qrCode, track],
   );
 
-  const copyReview = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(draft);
-    } catch {
-      // Clipboard permission can be denied; the textarea is still selectable, so not fatal.
+  /**
+   * Starts the clipboard write and reports whether one was possible at all.
+   *
+   * Deliberately not async. The caller is an anchor's click handler and the navigation is that
+   * click's default action; anything awaited here would run after the tab had already left.
+   * The write itself is kicked off synchronously so it still holds the user activation, and its
+   * outcome lands on this page, which stays open behind the new one.
+   *
+   * `navigator.clipboard` is absent outright on an insecure origin — a plain-HTTP LAN address —
+   * so that case is known before anything happens and returns false. A write that is attempted
+   * and then refused (a permissions prompt declined) is reported through the same 'failed'
+   * state. Neither ever shows "Copied": the customer gets the draft selected for their device's
+   * own Copy command instead.
+   */
+  const copyReview = useCallback((): boolean => {
+    setError(null);
+
+    if (!navigator.clipboard?.writeText) {
+      setCopyStatus('failed');
+      return false;
     }
-    track('review_copy', { generation_id: generationId, was_edited: edited });
-    setPhase('copied');
+
+    navigator.clipboard.writeText(draft).then(
+      () => {
+        track('review_copy', { generation_id: generationId, was_edited: edited });
+        setCopyStatus('copied');
+      },
+      () => setCopyStatus('failed'),
+    );
+    return true;
   }, [draft, edited, generationId, track]);
 
   /**
@@ -186,15 +226,17 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
         </p>
       )}
 
-      {(phase === 'draft' || phase === 'copied') && (
+      {phase === 'draft' && (
         <DraftEditor
           draft={draft}
           confirmed={confirmed}
-          copied={phase === 'copied'}
+          copyStatus={copyStatus}
           platformLabel={business.reviewPlatformLabel}
           reviewUrl={business.reviewUrl}
           onChange={(value) => {
             setDraft(value);
+            setCopyStatus('idle');
+            setError(null);
             if (!edited) {
               setEdited(true);
               track('review_edit', { generation_id: generationId });
@@ -202,10 +244,14 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
           }}
           onConfirmChange={(next) => {
             setConfirmed(next);
+            if (!next) {
+              setCopyStatus('idle');
+              setError(null);
+            }
             if (next) track('experience_confirmed', { generation_id: generationId });
           }}
           onRegenerate={() => void generate(true)}
-          onCopy={() => void copyReview()}
+          onCopy={copyReview}
           onOpenGoogle={openGoogle}
         />
       )}
@@ -232,8 +278,8 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
         AC-036: when the assistant is unavailable the direct review link must still work. It
         renders from the same configured destination, so it cannot drift from the flow above.
       */}
-      {/* Only when there is no draft to copy: once there is, the Copy button opens
-          {business.reviewPlatformLabel} itself and a second link to the same place is noise. */}
+      {/* Only when there is no draft to copy. The draft path reveals its destination after a
+          successful copy or after presenting the explicit manual-copy fallback. */}
       {phase === 'ready' && business.reviewUrl && (
         <a
           className="btn btn-secondary"
@@ -247,7 +293,7 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
       )}
 
       <p className="disclosure">
-        This draft is written with AI assistance. Please edit it so it reflects your own experience
+        This draft is written with Ai assistance. Please edit it so it reflects your own experience
         before you post it.
       </p>
     </div>

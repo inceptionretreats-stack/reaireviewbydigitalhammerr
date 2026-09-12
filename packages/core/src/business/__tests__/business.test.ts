@@ -32,6 +32,8 @@ describe('slug', () => {
     expect(validateSlug('r')).toMatchObject({ ok: false, reason: 'RESERVED' });
     expect(validateSlug('admin')).toMatchObject({ ok: false, reason: 'RESERVED' });
     expect(validateSlug('api')).toMatchObject({ ok: false, reason: 'RESERVED' });
+    expect(validateSlug('features')).toMatchObject({ ok: false, reason: 'RESERVED' });
+    expect(validateSlug('how-it-works')).toMatchObject({ ok: false, reason: 'RESERVED' });
   });
 
   it('refuses malformed shapes', () => {

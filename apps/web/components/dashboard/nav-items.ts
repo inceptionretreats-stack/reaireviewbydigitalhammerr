@@ -22,7 +22,7 @@ export interface DashboardNavItem {
 
 export const DASHBOARD_NAV: readonly DashboardNavItem[] = [
   { label: 'Dashboard', screen: 'DASH-01', href: '/app' },
-  { label: 'AI Review', screen: 'AI-01', href: '/app/ai-review' },
+  { label: 'Ai Review', screen: 'AI-01', href: '/app/ai-review' },
   { label: 'Review Modes', screen: 'AI-02', href: '/app/review-modes' },
   { label: 'QR Codes', screen: 'QR-01', href: '/app/qr' },
   { label: 'Business Profile', screen: 'PROFILE-01', href: '/app/profile' },
@@ -31,7 +31,7 @@ export const DASHBOARD_NAV: readonly DashboardNavItem[] = [
   { label: 'Private Feedback', screen: 'FB-02', href: '/app/feedback' },
   { label: 'Analytics', screen: 'AN-01', href: '/app/analytics' },
   { label: 'Custom Domain', screen: 'DOM-01' },
-  { label: 'Subscription', screen: 'SUB-01' },
+  { label: 'Subscription', screen: 'SUB-01', href: '/app/subscription' },
   { label: 'Settings', screen: 'SET-01', href: '/app/settings' },
   // The brief lists Support in the nav but the screen spec defines no screen for it, so there is
   // no route to be wrong about yet. Recorded here rather than dropped, so the gap stays visible.

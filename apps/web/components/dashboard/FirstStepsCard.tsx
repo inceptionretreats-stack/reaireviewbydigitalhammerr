@@ -1,4 +1,5 @@
 import { Card } from '@ai-review/ui';
+import { QrStandeePreview } from '@/components/qr/QrStandeePreview';
 
 /**
  * What to do once the page is live and before the first scan arrives.
@@ -17,10 +18,12 @@ import { Card } from '@ai-review/ui';
  * the only way to test the thing that actually fails: a code that will not scan off paper.
  */
 export function FirstStepsCard({
+  businessName,
   qrPreviewSrc,
   qrCode,
   qrDownloadId,
 }: {
+  businessName: string;
   qrPreviewSrc: string | null;
   qrCode: string | null;
   qrDownloadId: string | null;
@@ -32,17 +35,15 @@ export function FirstStepsCard({
       description="Nothing reaches you until a customer can scan your code, and that part happens off this screen."
     >
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-        {qrPreviewSrc && (
-          /* White plate in both themes: the symbol is black on opaque white for the scanner, so a
-             dark background behind the quiet zone would undo the margin it relies on. */
-          <img
-            src={qrPreviewSrc}
-            alt={qrCode ? `QR code ${qrCode}` : 'Your QR code'}
-            width={128}
-            height={128}
-            className="mx-auto block size-32 shrink-0 rounded-card bg-white p-2 sm:mx-0"
-          />
-        )}
+        {qrPreviewSrc ? (
+          <div className="mx-auto w-32 shrink-0 sm:mx-0">
+            <QrStandeePreview
+              businessName={businessName}
+              qrSrc={qrPreviewSrc}
+              sourceCode={qrCode ?? undefined}
+            />
+          </div>
+        ) : null}
 
         <ol className="m-0 flex list-none flex-col gap-4 p-0">
           <Step number={1} title="Print it and put it where people pay">

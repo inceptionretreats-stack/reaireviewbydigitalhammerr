@@ -37,7 +37,7 @@ import {
 export const metadata: Metadata = {
   // The root layout sets a static title with no `title.template`, so a child title replaces it
   // outright — hence the product name here, matching the four sibling onboarding pages.
-  title: 'Publish your page | AI Review',
+  title: 'Publish your page | Ai Review',
   description:
     'Publish your business page, get your own web address, and download your first QR code.',
 };

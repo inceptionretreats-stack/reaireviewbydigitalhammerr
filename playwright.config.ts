@@ -28,6 +28,12 @@ try {
   // No .env — CI supplies the real environment.
 }
 
+const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+const testOrigin = new URL(baseURL);
+const needsLocalSecureContext =
+  testOrigin.protocol === 'http:' &&
+  !['localhost', '127.0.0.1', '[::1]'].includes(testOrigin.hostname);
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -36,9 +42,16 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   reporter: [['list']],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
+    baseURL,
     channel: 'chrome',
     headless: true,
+    // A LAN-hosted dev build is intentionally reachable by the phone that scans its QR. Chromium
+    // otherwise withholds the Clipboard API from that HTTP origin, making the positive copy-path
+    // test exercise the app's manual fallback instead. Production remains HTTPS; this flag is
+    // confined to the local browser runner.
+    launchOptions: needsLocalSecureContext
+      ? { args: [`--unsafely-treat-insecure-origin-as-secure=${testOrigin.origin}`] }
+      : undefined,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     actionTimeout: 15_000,

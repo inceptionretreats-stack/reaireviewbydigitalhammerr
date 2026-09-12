@@ -31,7 +31,7 @@ import type { QrSource } from '@/components/dashboard/qr/qr-sources';
  */
 
 export const metadata: Metadata = {
-  title: 'QR codes | AI Review',
+  title: 'QR codes | Ai Review',
   description: 'Create, label, download and disable the dynamic QR codes you print.',
 };
 
@@ -47,7 +47,11 @@ export default async function Page() {
 
   const [businessRows, rows] = await Promise.all([
     database
-      .select({ status: businesses.status, timezone: businesses.timezone })
+      .select({
+        name: businesses.name,
+        status: businesses.status,
+        timezone: businesses.timezone,
+      })
       .from(businesses)
       .where(eq(businesses.id, tenant.businessId))
       .limit(1),
@@ -110,6 +114,7 @@ export default async function Page() {
 
       <QrSourcesScreen
         initialSources={sources}
+        businessName={business.name}
         timezone={business.timezone}
         // Exactly the condition `requireActiveTenant` enforces on POST /qr and PATCH /qr/{id}, so
         // the screen offers no control the API would refuse.

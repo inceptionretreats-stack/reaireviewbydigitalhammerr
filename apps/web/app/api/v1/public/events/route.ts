@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { validateEvent } from '@ai-review/analytics';
+import { EVENT_SPECS, isEventName, validateEvent } from '@ai-review/analytics';
 import { analyticsEvents } from '@ai-review/db';
 import { db } from '@/lib/db';
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
@@ -13,12 +13,10 @@ import { apiError } from '@/lib/api-error';
  * from a browser and is untrusted, and ingestion failure must never break the customer flow
  * (AC-035).
  *
- * The identity properties every event requires — business_id, anonymous_session_id, qr_code_id
- * — are injected HERE from server-resolved state, never taken from the request. An earlier
- * revision expected the client to send them; it sent qr_code instead and never sent the two
- * required ones at all, so validateEvent rejected every single event and the endpoint returned
- * 202. The entire customer funnel, including both conversion metrics, silently recorded
- * nothing. Injecting server-side makes that failure mode structurally impossible.
+ * Identity properties are injected HERE from server-resolved state, never taken from the
+ * request. Each event receives only the identity keys declared by the taxonomy: adding
+ * `qr_code_id` indiscriminately makes strict validation reject events such as `review_copy`,
+ * even though the QR relation still belongs in the database column.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   let body: {
@@ -36,6 +34,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { name, properties = {} } = body;
   if (!name) return apiError('VALIDATION_FAILED', 'Event name is required.');
+  if (!isEventName(name)) {
+    console.warn(`[analytics] rejected event: Unknown event name: ${name}`);
+    return accepted(false);
+  }
 
   const resolved = await resolvePublicRef({ slug: body.slug, qrCode: body.qr_code });
   if (!resolved.ok) return accepted(false);
@@ -44,12 +46,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const session = await resolveAnonymousSession(request, businessId);
+    const spec = EVENT_SPECS[name];
+    const declared = new Set<string>([...spec.required, ...spec.optional]);
 
     const enriched: Record<string, unknown> = {
       ...stripIdentityKeys(properties),
-      business_id: businessId,
-      ...(session ? { anonymous_session_id: session.sessionId } : {}),
-      ...(qrCodeId ? { qr_code_id: qrCodeId } : {}),
+      ...(declared.has('business_id') ? { business_id: businessId } : {}),
+      ...(session && declared.has('anonymous_session_id')
+        ? { anonymous_session_id: session.sessionId }
+        : {}),
+      ...(qrCodeId && declared.has('qr_code_id') ? { qr_code_id: qrCodeId } : {}),
     };
 
     const validation = validateEvent(name, enriched);

@@ -28,17 +28,27 @@ function mintToken(): string {
 }
 
 export default function proxy(request: NextRequest): NextResponse {
-  const response = NextResponse.next();
+  if (request.cookies.get(COOKIE_NAME)) return NextResponse.next();
 
-  if (!request.cookies.get(COOKIE_NAME)) {
-    response.cookies.set(COOKIE_NAME, mintToken(), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: TTL_DAYS * 24 * 60 * 60,
-      path: '/',
-    });
-  }
+  const token = mintToken();
+  const requestHeaders = new Headers(request.headers);
+  const existingCookies = requestHeaders.get('cookie');
+  requestHeaders.set(
+    'cookie',
+    `${existingCookies ? `${existingCookies}; ` : ''}${COOKIE_NAME}=${token}`,
+  );
+
+  // Set-Cookie only reaches the browser with the response. Forward the same token to the RSC
+  // request as well so the very first QR page load can create the anonymous session and record
+  // its scan instead of silently losing that event.
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.cookies.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: TTL_DAYS * 24 * 60 * 60,
+    path: '/',
+  });
 
   return response;
 }

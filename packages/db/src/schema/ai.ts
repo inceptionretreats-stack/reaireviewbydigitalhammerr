@@ -14,7 +14,7 @@ import {
   varchar,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { aiPromptStatus } from './enums';
+import { aiPromptStatus, draftLanguage } from './enums';
 import { businesses } from './business';
 import { users } from './identity';
 import { anonymousSessions, qrCodes } from './qr';
@@ -27,6 +27,8 @@ export const aiBusinessContexts = pgTable('ai_business_contexts', {
   summary: text('summary'),
   services: jsonb('services').notNull().default([]),
   contextTerms: jsonb('context_terms').notNull().default([]),
+  /** CHANGE-003. A business with no context row at all is Hinglish too — see loadGenerationContext. */
+  draftLanguage: draftLanguage('draft_language').notNull().default('hinglish'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   updatedBy: uuid('updated_by').references(() => users.id),
 });
@@ -74,6 +76,12 @@ export const aiPromptVersions = pgTable(
     systemPrompt: text('system_prompt').notNull(),
     outputSchema: jsonb('output_schema').notNull(),
     maxOutputTokens: integer('max_output_tokens').notNull().default(220),
+    /**
+     * The writing rules that used to be constants in prompt-builder.ts: language rules, claim
+     * rules, emoji rules, opening angles, emoji placements. Data, so an admin can change how
+     * drafts read without a deploy (ADR-006, ADMIN-03). Shape: PromptGuidance in core.
+     */
+    guidance: jsonb('guidance').notNull().default({}),
     rolloutPercent: integer('rollout_percent').notNull().default(100),
     createdBy: uuid('created_by')
       .notNull()
@@ -98,8 +106,8 @@ export const aiPromptVersions = pgTable(
  * One stored draft. Regeneration chains via parentGenerationId (Flow D).
  *
  * countedTowardQuota records the decision made at generation time rather than recomputing it
- * later: provider failures do not count (AC-014), an internal quality-gate retry counts once
- * (09_AI_Prompt_and_Generation_Spec.md), and a customer regeneration does count.
+ * later: provider failures and owner previews do not count, an internal quality-gate retry counts
+ * once, and a successful customer generation counts on both Free and Pro.
  */
 export const aiGenerations = pgTable(
   'ai_generations',

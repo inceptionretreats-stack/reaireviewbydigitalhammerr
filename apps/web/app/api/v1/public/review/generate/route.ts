@@ -29,6 +29,13 @@ import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
  * No star rating is accepted or returned at any point (D-009, AC-006), and no response ever
  * suggests the review was posted (D-028, AC-025).
  */
+/**
+ * The generator waits on the model for up to AI_REQUEST_TIMEOUT_MS and retries once on a 503, so
+ * on a serverless host the function must be allowed to outlive a default 10 s budget. Ignored
+ * by `next start`; read by Vercel.
+ */
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   let body: { slug?: string; qr_code?: string; previous_generation_id?: string };
 
@@ -54,7 +61,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // AC-032, and before anything expensive: a denied request must not reach the provider, and
   // must not consume the free quota either. Four dimensions in one atomic decision — session
-  // burst, session hourly, adaptive IP prefix, and fair-use observation for Pro tenants.
+  // burst, session hourly, adaptive IP prefix, and paid abuse observation for Pro tenants.
   if (session) {
     const decision = await rateLimiter().publicGeneration({
       businessId,
@@ -102,12 +109,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       reviewMode: context.reviewMode,
       previousDrafts,
       generationNumber: previousDrafts.length + 1,
+      draftLanguage: context.draftLanguage,
+      // Stable across the retries inside this request, different between customers. A visitor
+      // without the cookie gets a per-request id: still varied, just not repeatable.
+      variationSeed: session?.sessionId ?? crypto.randomUUID(),
     },
     promptVersion: context.promptVersion,
     timeoutMs: env().AI_REQUEST_TIMEOUT_MS,
   });
 
   if (!outcome.ok) {
+    // Server log only — the customer still gets the fixed message below. Without this line a
+    // wrong key or an unknown model id is indistinguishable from the provider being down: the
+    // adapter's (already redacted, AC-030) reason was dropped here and nothing ever printed it.
+    if (outcome.failure.code === 'AI_PROVIDER_UNAVAILABLE') {
+      console.warn('[ai] generation failed', {
+        provider: provider.name,
+        error_class: outcome.failure.errorClass,
+        message: outcome.failure.message,
+      });
+    } else if (outcome.failure.code === 'AI_OUTPUT_REJECTED') {
+      console.warn('[ai] draft rejected', {
+        provider: provider.name,
+        rejections: outcome.failure.rejections,
+      });
+    }
     await recordEvent(database, {
       businessId,
       sessionId: session?.sessionId ?? null,
@@ -154,7 +180,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       generation_id: row.id,
       model: draft.model,
       latency_ms: draft.latencyMs,
-      quota_type: draft.countedTowardQuota ? 'FREE' : 'PRO',
+      quota_type: draft.quotaType,
     },
   });
 

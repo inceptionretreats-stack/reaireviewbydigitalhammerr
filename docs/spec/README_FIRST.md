@@ -1,11 +1,11 @@
-# AI Review by Digital Hammerr - Developer Pack
+# Ai Review by Digital Hammerr - Developer Pack
 
 **Version:** 1.0  
 **Frozen product scope date:** 29 August 2026  
 **Primary product domain:** `review.digitalhammerr.com`  
 **Target:** 10,000+ independent local businesses
 
-This folder is the complete pre-development handoff for Version 1 of **AI Review by Digital Hammerr**.
+This folder is the complete pre-development handoff for Version 1 of **Ai Review by Digital Hammerr**.
 
 ## Read these files in this order
 
@@ -38,17 +38,17 @@ This folder is the complete pre-development handoff for Version 1 of **AI Review
 
 ## Frozen business decisions
 
-- Brand: **AI Review by Digital Hammerr**.
+- Brand: **Ai Review by Digital Hammerr**.
 - Market: local businesses first.
 - Business onboarding: self-service and Digital Hammerr-assisted account creation.
 - Public URL: `review.digitalhammerr.com/{businessSlug}`.
-- QR landing: direct AI Review page.
+- QR landing: direct Ai Review page.
 - Customer account: never required.
 - Customer questionnaire: none in V1.
 - Star selection: only on the external review platform (Google primary).
 - Private feedback: available to every visitor.
 - Free plan: 10 lifetime AI generations per business.
-- Paid plan: ₹999/year, all V1 features, fair-use unlimited AI generations.
+- Paid plan: ₹999/year, all V1 features, up to 2,000 successful public AI review drafts per subscription year.
 - Language: English only in V1.
 - Google Business Profile API: not in V1.
 - WhatsApp API: not in V1. The business copies/opens a prefilled message and sends from its own number.

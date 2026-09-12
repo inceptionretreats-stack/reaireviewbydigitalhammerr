@@ -13,7 +13,7 @@ export const ONBOARDING_STEPS = [
   { id: 'business', screen: 'ONB-01', path: '/onboarding/business', title: 'Your business' },
   { id: 'review-link', screen: 'ONB-02', path: '/onboarding/review-link', title: 'Google link' },
   { id: 'links', screen: 'ONB-03', path: '/onboarding/links', title: 'Contact links' },
-  { id: 'ai', screen: 'ONB-04', path: '/onboarding/ai', title: 'AI context' },
+  { id: 'ai', screen: 'ONB-04', path: '/onboarding/ai', title: 'Ai context' },
   { id: 'finish', screen: 'ONB-05', path: '/onboarding/finish', title: 'Publish' },
 ] as const;
 
