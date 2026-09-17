@@ -41,7 +41,10 @@
 @source '.';
 
 @theme {
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: var(--font-dm-sans, 'DM Sans'), Arial, sans-serif;
+  --font-weight-bold: 650;
+  --text-sm--line-height: 1.6;
+  --text-base--line-height: 1.65;
 
   --color-bg: #ffffff;
   --color-surface: #f8f9fa;

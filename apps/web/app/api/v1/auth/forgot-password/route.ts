@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, isNull } from 'drizzle-orm';
 import { passwordResetTokens, users } from '@ai-review/db';
-import { issueToken } from '@ai-review/core';
+import { issueToken, privacyHash } from '@ai-review/core';
 import { forgotPasswordRequest } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
@@ -9,6 +9,7 @@ import { apiError } from '@/lib/api-error';
 import { verifyCsrf } from '@/lib/csrf';
 import { mailer, passwordResetEmail } from '@/lib/mailer';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
+import { recordActivity } from '@/lib/activity';
 
 /** Short enough to limit the window a leaked link stays useful; long enough to reach an inbox. */
 const TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -69,7 +70,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       userId: account.id,
       tokenHash,
       expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-      requestedIpHash: ip || null,
+      // The column is a hash (13_Security): never the address itself.
+      requestedIpHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
     });
 
     const resetUrl = new URL(
@@ -77,6 +79,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       env().APP_BASE_URL,
     ).toString();
 
+    recordActivity(request, { userId: account.id }, { action: 'auth.password.reset.request' });
     await mailer().send(passwordResetEmail(email, resetUrl));
   } catch (error) {
     // Logged, not surfaced. The user is told the same thing either way (AUTH-03-01), so this

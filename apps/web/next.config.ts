@@ -1,3 +1,4 @@
+import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 
@@ -25,17 +26,25 @@ try {
  * Next's dev server blocks its own internal endpoints (`/_next/*`, `/__nextjs*`) when the
  * request carries an Origin it does not recognise, and its allowlist is localhost plus whatever
  * is listed here. Over a tunnel that means a working page but a dead HMR socket and dev overlay.
- * Derived from APP_BASE_URL rather than hard-coded so it follows `pnpm tunnel` automatically.
+ * Include the exact local addresses as well as APP_BASE_URL so loopback and LAN previews can
+ * hydrate when `next dev` binds to 0.0.0.0. No wildcard origins or QR base-URL changes are needed.
  */
 function devOrigins(): string[] {
+  const origins = new Set(['localhost', '127.0.0.1']);
+  for (const addresses of Object.values(networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      if (address.family === 'IPv4' && !address.internal) origins.add(address.address);
+    }
+  }
   const base = process.env['APP_BASE_URL'];
-  if (!base) return [];
+  if (!base) return [...origins];
   try {
     // Next expects bare hostnames here. Including the port makes tunneled/LAN dev origins miss the
     // allowlist even though APP_BASE_URL is otherwise correct.
-    return [new URL(base).hostname];
+    origins.add(new URL(base).hostname);
+    return [...origins];
   } catch {
-    return [];
+    return [...origins];
   }
 }
 

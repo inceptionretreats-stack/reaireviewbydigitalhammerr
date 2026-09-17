@@ -419,6 +419,11 @@ describe('login failures (AC-002 / AUTH-02-02)', () => {
       ...DEFAULT_RATE_LIMIT_CONFIG,
       loginFailuresPerIdentity: 50,
       loginFailuresPerIdentityPerDay: 50,
+      mfaFailuresPerSession: 5,
+      mfaSessionWindowMs: 15 * 60 * 1000,
+      mfaFailuresPerIpPrefix: 25,
+      mfaIpPrefixWindowMs: 15 * 60 * 1000,
+      mfaFailuresPerUserPerDay: 30,
       loginFailuresPerIpPrefix: 3,
     };
     const limiter = new RateLimiter(new MemoryRateLimitStore(), { now: clock().now, config });
@@ -438,6 +443,11 @@ describe('login failures (AC-002 / AUTH-02-02)', () => {
       ...DEFAULT_RATE_LIMIT_CONFIG,
       loginFailuresPerIdentity: 50,
       loginFailuresPerIdentityPerDay: 50,
+      mfaFailuresPerSession: 5,
+      mfaSessionWindowMs: 15 * 60 * 1000,
+      mfaFailuresPerIpPrefix: 25,
+      mfaIpPrefixWindowMs: 15 * 60 * 1000,
+      mfaFailuresPerUserPerDay: 30,
       loginFailuresPerIpPrefix: 3,
     };
     const limiter = new RateLimiter(new MemoryRateLimitStore(), { now: clock().now, config });

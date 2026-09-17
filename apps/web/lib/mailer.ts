@@ -3,32 +3,43 @@ import { env } from './env';
 /**
  * Transactional email.
  *
- * Deliberately an interface with a logging transport behind it. A real provider (SES per
- * 02_System_Architecture.md) needs production access that has not been requested yet — it starts
- * sandboxed and only sends to verified addresses — so wiring one now would make local
- * development depend on an approval that has not happened.
+ * An interface with three transports behind it. `ResendTransport` is the real one
+ * (AMENDMENT-029): Resend's REST API over `fetch`, chosen because it needs one key and one DNS
+ * record set to send from digitalhammerr.com, where SES starts sandboxed behind an approval.
+ * Without `RESEND_API_KEY`, development prints to the console and production fails loudly —
+ * a receipt or reset email that vanishes silently is the hardest support ticket to diagnose.
  *
- * The important property is that the call sites are already correct: they send through this
- * port, so swapping the transport is a composition change and not a rewrite. E13 owns that.
- *
- * What must NOT drift: 13_Security_Privacy_Compliance.md requires PII-redacted logs, so the dev
- * transport logs the recipient and subject but never the body. A password-reset body contains a
- * live single-use credential, and logging it would put that credential in the log aggregator.
+ * What must NOT drift: 13_Security_Privacy_Compliance.md requires PII-redacted logs, so no
+ * transport ever logs a body. A password-reset body carries a live single-use credential; a
+ * receipt carries a customer's legal name and GSTIN.
  */
 
 export interface Email {
   to: string;
   subject: string;
   text: string;
+  /** Optional HTML alternative; the text part is always sent too. */
+  html?: string;
 }
 
 export interface MailTransport {
   send(email: Email): Promise<void>;
 }
 
+export class MailError extends Error {
+  constructor(
+    readonly status: number,
+    subject: string,
+  ) {
+    super(`mail provider answered ${status} for "${subject}"`);
+    this.name = 'MailError';
+  }
+}
+
 /**
- * Development transport. Prints enough to follow the flow and no more; the reset URL is printed
- * because a developer cannot complete the flow without it and there is no inbox locally.
+ * Development transport. Prints enough to follow the flow and no more; the first link is
+ * printed because a developer cannot complete a reset or an invite without it and there is no
+ * inbox locally.
  */
 class ConsoleMailTransport implements MailTransport {
   send(email: Email): Promise<void> {
@@ -41,11 +52,7 @@ class ConsoleMailTransport implements MailTransport {
   }
 }
 
-/**
- * Production placeholder. Fails loudly rather than silently dropping mail: a reset email that
- * vanishes looks to the user exactly like a reset email that was never requested, and that is
- * the hardest class of support ticket to diagnose.
- */
+/** Production without a key. Fails loudly rather than silently dropping mail. */
 class UnconfiguredMailTransport implements MailTransport {
   send(email: Email): Promise<void> {
     console.error(`[mail] NO TRANSPORT CONFIGURED — dropped "${email.subject}" to ${email.to}`);
@@ -53,12 +60,81 @@ class UnconfiguredMailTransport implements MailTransport {
   }
 }
 
+export type MailFetchLike = (
+  url: string,
+  init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal },
+) => Promise<{ ok: boolean; status: number }>;
+
+/**
+ * Resend. One POST per email; a non-2xx answer surfaces as `MailError` with the status and the
+ * subject only — the response body can echo the request, and the request holds the recipient.
+ */
+export class ResendTransport implements MailTransport {
+  constructor(
+    private readonly options: {
+      apiKey: string;
+      from: string;
+      fetchImpl?: MailFetchLike;
+      timeoutMs?: number;
+    },
+  ) {}
+
+  async send(email: Email): Promise<void> {
+    const fetchImpl: MailFetchLike =
+      this.options.fetchImpl ??
+      ((url, init) => fetch(url, init) as Promise<{ ok: boolean; status: number }>);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 10_000);
+    try {
+      const response = await fetchImpl('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.options.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: this.options.from,
+          to: [email.to],
+          subject: email.subject,
+          text: email.text,
+          ...(email.html ? { html: email.html } : {}),
+        }),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        console.error(`[mail] resend answered ${response.status} for "${email.subject}"`);
+        throw new MailError(response.status, email.subject);
+      }
+    } catch (error) {
+      if (error instanceof MailError) throw error;
+      const status = controller.signal.aborted ? 504 : 502;
+      console.error(`[mail] resend request failed (${status}) for "${email.subject}"`);
+      throw new MailError(status, email.subject);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
 let transport: MailTransport | undefined;
 
 export function mailer(): MailTransport {
-  transport ??=
-    env().NODE_ENV === 'production' ? new UnconfiguredMailTransport() : new ConsoleMailTransport();
+  if (!transport) {
+    const e = env();
+    if (e.RESEND_API_KEY) {
+      transport = new ResendTransport({ apiKey: e.RESEND_API_KEY, from: e.EMAIL_FROM });
+    } else if (e.NODE_ENV === 'production') {
+      transport = new UnconfiguredMailTransport();
+    } else {
+      transport = new ConsoleMailTransport();
+    }
+  }
   return transport;
+}
+
+/** Whether a real provider is configured — screens say "not sent" instead of pretending. */
+export function mailConfigured(): boolean {
+  return Boolean(env().RESEND_API_KEY);
 }
 
 /** Overrides the transport. Tests use this; nothing in the app should. */
@@ -66,17 +142,4 @@ export function setMailTransport(next: MailTransport | undefined): void {
   transport = next;
 }
 
-export function passwordResetEmail(to: string, resetUrl: string): Email {
-  return {
-    to,
-    subject: 'Reset your Ai Review password',
-    text: [
-      'Someone asked to reset the password for this email address.',
-      '',
-      `Open this link to choose a new password: ${resetUrl}`,
-      '',
-      'The link works once and expires in one hour.',
-      'If this was not you, you can ignore this email — nothing has changed.',
-    ].join('\n'),
-  };
-}
+export { passwordResetEmail } from './email-templates';

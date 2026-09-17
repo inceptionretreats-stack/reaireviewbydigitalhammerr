@@ -2,6 +2,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { platformSettings, type Database } from '@ai-review/db';
 import { AuditWriter } from '../audit/writer';
 import type { Executor } from '../db-executor';
+import { GSTIN, STATE_CODE } from '../billing/gst';
 
 /**
  * Commercial configuration as data (ADMIN-04, E12-06).
@@ -26,6 +27,20 @@ export interface PlatformSettingsValues {
   pro_generation_limit: number;
   /** Abuse-observation threshold per month, independent of the annual cap. Null = off. */
   fair_use_monthly_soft_limit: number | null;
+  /** The name invoices are issued under (AMENDMENT-029). */
+  seller_legal_name: string;
+  /** The seller's address as printed on the invoice. */
+  seller_address: string;
+  /** The seller's GSTIN; null until registered. No GST is split out without one. */
+  seller_gstin: string | null;
+  /** The seller's GST state code, two digits; the default place of supply. */
+  seller_state_code: string | null;
+  /** Services Accounting Code for the subscription line (998314: online information services). */
+  seller_sac_code: string;
+  /** Invoice number prefix — DH/2026-27/000001. Changing it starts a new series. */
+  invoice_prefix: string;
+  /** GST rate in basis points (1800 = 18%). */
+  gst_rate_bps: number;
 }
 
 export const PLATFORM_SETTING_DEFAULTS: PlatformSettingsValues = {
@@ -33,6 +48,13 @@ export const PLATFORM_SETTING_DEFAULTS: PlatformSettingsValues = {
   annual_price_paise: 99_900,
   pro_generation_limit: 2_000,
   fair_use_monthly_soft_limit: null,
+  seller_legal_name: 'Digital Hammerr',
+  seller_address: '',
+  seller_gstin: null,
+  seller_state_code: null,
+  seller_sac_code: '998314',
+  invoice_prefix: 'DH',
+  gst_rate_bps: 1800,
 };
 
 export type PlatformSettingKey = keyof PlatformSettingsValues;
@@ -75,13 +97,14 @@ export class PlatformSettingsService {
 
     return PLATFORM_SETTING_KEYS.map((key) => {
       const row = byKey.get(key);
+      const stored = row === undefined ? undefined : storedValue(key, row.value);
       // A row whose value the product cannot honour is treated as absent rather than trusted:
       // a hand-edited "10 drafts" written as the string "10" must not become NaN downstream.
-      const usable = row !== undefined && isUsable(key, row.value);
+      const usable = row !== undefined && isUsable(key, stored);
       return {
         key,
         value: usable
-          ? (row.value as PlatformSettingsValues[typeof key])
+          ? (stored as PlatformSettingsValues[typeof key])
           : PLATFORM_SETTING_DEFAULTS[key],
         version: usable ? row.version : 0,
         updatedAt: usable ? row.updatedAt : null,
@@ -168,6 +191,14 @@ function validate(key: PlatformSettingKey, value: unknown): void {
       throw new InvalidPlatformSettingError(key, `must be a whole number from ${min} to ${max}`);
     }
   };
+  const text = (min: number, max: number, pattern?: RegExp) => {
+    if (typeof value !== 'string' || value.length < min || value.length > max) {
+      throw new InvalidPlatformSettingError(key, `must be text of ${min} to ${max} characters`);
+    }
+    if (pattern && !pattern.test(value)) {
+      throw new InvalidPlatformSettingError(key, 'is not in the expected format');
+    }
+  };
   switch (key) {
     case 'free_generation_limit':
       return whole(0, 100_000);
@@ -179,7 +210,42 @@ function validate(key: PlatformSettingKey, value: unknown): void {
     case 'fair_use_monthly_soft_limit':
       if (value === null) return;
       return whole(1, 1_000_000);
+    case 'seller_legal_name':
+      return text(1, 200);
+    case 'seller_address':
+      return text(0, 500);
+    case 'seller_gstin':
+      if (value === null) return;
+      return text(15, 15, GSTIN);
+    case 'seller_state_code':
+      if (value === null) return;
+      return text(2, 2, STATE_CODE);
+    case 'seller_sac_code':
+      return text(4, 8, /^[0-9]+$/);
+    case 'invoice_prefix':
+      // Short and file-safe; the series column holds 20 characters including the year.
+      return text(1, 8, /^[A-Z0-9]+$/);
+    case 'gst_rate_bps':
+      return whole(0, 10_000);
   }
+}
+
+const TEXT_KEYS: ReadonlySet<PlatformSettingKey> = new Set([
+  'seller_legal_name',
+  'seller_address',
+  'seller_gstin',
+  'seller_state_code',
+  'seller_sac_code',
+  'invoice_prefix',
+]);
+
+/**
+ * The jsonb column round-trips a text setting made only of digits — a state code "29", the SAC
+ * code "998314" — as a JSON number, because the driver mapping parses whatever parses. Text
+ * keys are put back to text here so a digits-only value is not thrown out as the wrong type.
+ */
+function storedValue(key: PlatformSettingKey, raw: unknown): unknown {
+  return TEXT_KEYS.has(key) && typeof raw === 'number' ? String(raw) : raw;
 }
 
 function isUsable(key: PlatformSettingKey, raw: unknown): boolean {

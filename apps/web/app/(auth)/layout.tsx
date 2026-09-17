@@ -38,18 +38,20 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           </footer>
         </section>
 
-        <aside className={styles.mediaPanel} aria-label="Customer review story">
+        <aside className={styles.mediaPanel} aria-label="Ai robot review story">
           <div className={styles.mediaSticky}>
             <div className={styles.mediaCanvas} data-auth-color-rail>
-              <Image
-                src="/marketing/customer-reviewing-auth.png"
-                alt="A customer sharing feedback on her phone after a café visit"
-                fill
-                preload
-                sizes="(max-width: 1050px) 100vw, 54vw"
-                className={styles.mediaImage}
-                data-motion-accent="auth-image"
-              />
+              <div className={styles.mediaArtwork}>
+                <Image
+                  src="/marketing/robot-reviewing-auth-v1.png"
+                  alt="A friendly Ai robot holding a phone at a café table"
+                  fill
+                  preload
+                  sizes="(max-width: 560px) 100vw, (max-width: 1050px) 560px, 54vw"
+                  className={styles.mediaImage}
+                  data-motion-accent="auth-image"
+                />
+              </div>
 
               <div className={styles.mediaCopy}>
                 <h2>Make every visit easier to put into words.</h2>

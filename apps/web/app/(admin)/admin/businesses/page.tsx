@@ -32,6 +32,8 @@ export default async function AdminBusinessesPage({
     if (query.plan) params.set('plan', query.plan);
     if (query.status) params.set('status', query.status);
     if (query.expiring) params.set('expiring', 'true');
+    if (query.high_ai) params.set('high_ai', 'true');
+    if (query.ai_limited) params.set('ai_limited', 'true');
     params.set('page', String(p));
     return `/admin/businesses?${params}`;
   };
@@ -52,19 +54,43 @@ export default async function AdminBusinessesPage({
         </div>
       ),
     },
-    { key: 'owner', header: 'Owner', cell: (row: AdminBusinessRow) => row.ownerEmail },
+    {
+      key: 'owner',
+      header: 'Owner',
+      cell: (row: AdminBusinessRow) => (
+        <div>
+          {row.ownerEmail}
+          {row.ownerMobile && <div className="text-xs text-ink-muted">{row.ownerMobile}</div>}
+        </div>
+      ),
+    },
     {
       key: 'status',
       header: 'Status',
       cell: (row: AdminBusinessRow) => (
-        <Badge
-          tone={
-            row.status === 'ACTIVE' ? 'success' : row.status === 'SUSPENDED' ? 'danger' : 'neutral'
-          }
-        >
-          {row.status}
-        </Badge>
+        <div className="flex flex-wrap gap-1">
+          <Badge
+            tone={
+              row.status === 'ACTIVE'
+                ? 'success'
+                : row.status === 'SUSPENDED'
+                  ? 'danger'
+                  : 'neutral'
+            }
+          >
+            {row.status}
+          </Badge>
+          {row.aiSuspendedAt && <Badge tone="danger">Ai off</Badge>}
+          {row.aiThrottleUntil && row.aiThrottleUntil > new Date() && (
+            <Badge tone="warning">throttled</Badge>
+          )}
+        </div>
       ),
+    },
+    {
+      key: 'domain',
+      header: 'Custom domain',
+      cell: (row: AdminBusinessRow) => row.domain ?? '—',
     },
     { key: 'plan', header: 'Plan', cell: (row: AdminBusinessRow) => <PlanBadge row={row} /> },
     {
@@ -137,6 +163,19 @@ export default async function AdminBusinessesPage({
           <label className="flex min-h-11 items-center gap-2 text-sm">
             <input type="checkbox" name="expiring" value="true" defaultChecked={!!query.expiring} />
             Expiring in 30 days
+          </label>
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input type="checkbox" name="high_ai" value="true" defaultChecked={!!query.high_ai} />
+            High Ai usage (24 h)
+          </label>
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="ai_limited"
+              value="true"
+              defaultChecked={!!query.ai_limited}
+            />
+            Ai suspended or throttled
           </label>
           <Button type="submit" variant="secondary">
             Filter

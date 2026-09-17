@@ -2,6 +2,8 @@ import { DEFAULT_GUIDANCE } from '@ai-review/core';
 import { describe, expect, it } from 'vitest';
 import {
   DEMO_BUSINESS_ID,
+  DEMO_BUSINESS_NAME,
+  DEMO_BUSINESS_PROFILE,
   DEMO_OWNER_EMAIL,
   PLACEHOLDER_REVIEW_URL,
   PLATFORM_ADMIN_EMAIL,
@@ -322,6 +324,17 @@ describe('tenant rows the seed file does not describe', () => {
   });
 
   /** AMENDMENT-005: there is no businesses.slug, so this row is the entire public identity. */
+  it('brands the demo business without changing its existing identity or public link', () => {
+    const { plan } = planFromSpec();
+
+    expect(plan.business.name).toBe(DEMO_BUSINESS_NAME);
+    expect(plan.business.name).toBe('Digital Hammerr');
+    expect(plan.business.id).toBe(DEMO_BUSINESS_ID);
+    expect(plan.primarySlug.slug).toBe('demo-south-cafe');
+    expect(plan.business.category).toBe('Digital Marketing Agency');
+    expect(plan.business.description).toBe(DEMO_BUSINESS_PROFILE.description);
+  });
+
   it('seeds a primary slug row with no redirect expiry', () => {
     const { plan } = planFromSpec();
 
@@ -422,11 +435,24 @@ describe('tenant rows the seed file does not describe', () => {
     expect(planFromSpec().plan.aiContext.draftLanguage).toBe('hinglish');
   });
 
-  it('carries the AI business context through as unranked hints', () => {
+  it('uses agency services as unranked hints for the branded demo', () => {
     const { aiContext } = planFromSpec().plan;
 
-    expect(aiContext.services).toEqual(['Dosa', 'Idli', 'Filter Coffee']);
-    expect(aiContext.contextTerms).toEqual(['South Indian food', 'Udaipur']);
+    expect(aiContext.services).toEqual(DEMO_BUSINESS_PROFILE.services);
+    expect(aiContext.contextTerms).toEqual(DEMO_BUSINESS_PROFILE.contextTerms);
+    expect(aiContext.summary).toBe(DEMO_BUSINESS_PROFILE.description);
+  });
+
+  it('preserves a non-demo tenant’s supplied business profile and context', () => {
+    const seed = specDocument();
+    seed.business.slug = 'another-business';
+    const { plan } = planFromSpec({ seed });
+
+    expect(plan.business.name).toBe(seed.business.name);
+    expect(plan.business.category).toBe(seed.business.category);
+    expect(plan.business.description).toBe(seed.business.description);
+    expect(plan.aiContext.services).toEqual(seed.business.ai_context.services);
+    expect(plan.aiContext.contextTerms).toEqual(seed.business.ai_context.context_terms);
   });
 });
 

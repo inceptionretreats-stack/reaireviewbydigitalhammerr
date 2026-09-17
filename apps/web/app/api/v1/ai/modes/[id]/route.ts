@@ -5,6 +5,7 @@ import { requireTenant } from '@/lib/require-tenant';
 import { isModeId, modeNotFound, refuseFrozenTenant } from '../guards';
 import { toWireMode, updateMode } from '../mode-service';
 import { parseUpdateMode } from '../schema';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * PATCH /api/v1/ai/modes/{id} — the `edit` and `archived` states of AI-02.
@@ -52,6 +53,15 @@ export async function PATCH(
   const updated = await updateMode(db(), auth.context.businessId, id, parsed.value);
   if (!updated.ok) return updateFailure(updated.reason);
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'ai.mode.update',
+      targetType: 'review_mode',
+      targetId: id,
+    },
+  );
   return NextResponse.json({ mode: toWireMode(updated.mode) });
 }
 

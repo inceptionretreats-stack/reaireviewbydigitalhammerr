@@ -26,3 +26,31 @@ export const resetPasswordRequest = z.object({
   password: z.string().min(12).max(256),
 });
 export type ResetPasswordRequest = z.infer<typeof resetPasswordRequest>;
+
+/**
+ * AMENDMENT-027 — admin MFA. A code is six digits, spaces tolerated; a recovery code is two
+ * groups of five from the unambiguous alphabet the service generates, hyphen optional.
+ */
+export const mfaCode = z
+  .string()
+  .trim()
+  .transform((value) => value.replace(/\s/g, ''))
+  .pipe(z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app.'));
+export const mfaChallengeRequest = z.object({ code: mfaCode });
+export type MfaChallengeRequest = z.infer<typeof mfaChallengeRequest>;
+export const mfaEnrolConfirmRequest = z.object({ code: mfaCode });
+export const mfaRecoveryRequest = z.object({
+  recovery_code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z2-9]{5}-?[A-Z2-9]{5}$/, 'Enter one of your recovery codes.'),
+});
+export type MfaRecoveryRequest = z.infer<typeof mfaRecoveryRequest>;
+
+/** AMENDMENT-027 — accepting an admin or support-viewer invitation (Flow B link). */
+export const inviteAcceptRequest = z.object({
+  token: z.string().min(20),
+  password: z.string().min(12).max(256),
+});
+export type InviteAcceptRequest = z.infer<typeof inviteAcceptRequest>;

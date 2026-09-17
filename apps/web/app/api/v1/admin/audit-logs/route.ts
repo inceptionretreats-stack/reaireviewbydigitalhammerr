@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
  * paged by id so a busy log never repeats or skips a row between pages.
  */
 export async function GET(request: Request) {
-  const auth = await requireAdmin(request);
+  const auth = await requireAdmin(request, { allowViewer: true });
   if (!auth.ok) return auth.response;
 
   const params = new URL(request.url).searchParams;
@@ -27,6 +27,7 @@ export async function GET(request: Request) {
       after: adminAuditLogs.afterState,
       createdAt: adminAuditLogs.createdAt,
       actorEmail: users.email,
+      actorType: adminAuditLogs.actorType,
       businessId: adminAuditLogs.businessId,
       businessName: businesses.name,
     })

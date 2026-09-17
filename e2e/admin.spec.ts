@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { expect, test, type Page } from '@playwright/test';
 import { closeDb, demoBusinessId, resetDemoEntitlement } from './support/db';
+import { E2E_ADMIN_TOTP_SECRET, signInAdmin } from './support/totp';
 
 /**
  * ADMIN-01/02/04 and RBAC rules 4 and 5, driven the way an operator uses them.
@@ -13,7 +14,15 @@ import { closeDb, demoBusinessId, resetDemoEntitlement } from './support/db';
 const ADMIN = { email: 'demo-admin@example.com', password: 'demo-admin-Password1!' };
 const OWNER = { email: 'demo-owner@example.com', password: 'demo-owner-Password1!' };
 
+/**
+ * AMENDMENT-027: an admin passes the MFA challenge after the password; an owner does not have
+ * one. The admin's authenticator is armed by create-admin below with a secret the suite knows.
+ */
 async function signIn(page: Page, who: { email: string; password: string }): Promise<void> {
+  if (who.email === ADMIN.email) {
+    await signInAdmin(page, { ...who, totpSecret: E2E_ADMIN_TOTP_SECRET });
+    return;
+  }
   await page.goto('/login');
   await page.getByLabel(/email/i).fill(who.email);
   await page.getByLabel(/password/i).fill(who.password);
@@ -38,6 +47,8 @@ test.describe('platform admin', () => {
         'Demo Admin',
         '--reason',
         'E2E suite',
+        '--totp-secret',
+        E2E_ADMIN_TOTP_SECRET,
       ],
       { encoding: 'utf8', env: { ...process.env, NODE_ENV: 'test' } },
     );
@@ -78,7 +89,9 @@ test.describe('platform admin', () => {
     await signIn(page, ADMIN);
 
     await page.goto('/admin/businesses?q=demo-south-cafe');
-    await page.getByRole('link', { name: 'Demo South Cafe' }).first().click();
+    const demoLink = page.locator(`a[href="/admin/businesses/${businessId}"]`);
+    await expect(demoLink).toHaveText('Digital Hammerr');
+    await demoLink.click();
     await expect(page).toHaveURL(new RegExp(`/admin/businesses/${businessId}$`));
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Free');
 
@@ -91,9 +104,12 @@ test.describe('platform admin', () => {
     await confirm.click();
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
 
-    // Visually distinct from a paid year (19_Admin_Panel_Spec), and the audit row is on screen.
+    // Visually distinct from a paid year (19_Admin_Panel_Spec); the audit row is on the Audit
+    // tab and the grant note on Subscription & payments (the page is tabbed since WP8).
     await expect(page.getByText('Pro — granted by admin').first()).toBeVisible();
+    await page.getByRole('link', { name: 'Subscription & payments', exact: true }).click();
     await expect(page.getByText(/agreed on a call/i).first()).toBeVisible();
+    await page.getByRole('link', { name: 'Audit', exact: true }).click();
     await expect(page.getByText('business.entitlement.adjust').first()).toBeVisible();
     await expect(page.getByText(/first year comped/).first()).toBeVisible();
 
@@ -103,7 +119,7 @@ test.describe('platform admin', () => {
       data: { slug: 'demo-south-cafe' },
     });
     expect(generated.status()).toBe(200);
-    await page.reload();
+    await page.getByRole('link', { name: 'Subscription & payments', exact: true }).click();
     await expect(page.getByText(/1 of 2000 this year/)).toBeVisible();
   });
 

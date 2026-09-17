@@ -58,6 +58,18 @@ export interface RateLimitConfig {
   readonly loginFailuresPerIdentityPerDay: number;
 
   /**
+   * AMENDMENT-027 — admin MFA challenge. Per pending session (the thing being brute-forced),
+   * per IP prefix, and a daily cap per account. A six-digit code has a million values; five
+   * tries a session and thirty a day make guessing hopeless without locking a real admin out
+   * over a phone whose clock drifted.
+   */
+  readonly mfaFailuresPerSession: number;
+  readonly mfaSessionWindowMs: number;
+  readonly mfaFailuresPerIpPrefix: number;
+  readonly mfaIpPrefixWindowMs: number;
+  readonly mfaFailuresPerUserPerDay: number;
+
+  /**
    * Private-feedback submission (E8-02, and the WAF/rate-limit line in
    * 13_Security_Privacy_Compliance.md, which names the feedback endpoint alongside AI and auth).
    *
@@ -104,6 +116,12 @@ export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   // be 480 guesses a day against one account.
   loginFailuresPerIdentityPerDay: 20,
 
+  mfaFailuresPerSession: 5,
+  mfaSessionWindowMs: 15 * MINUTE_MS,
+  mfaFailuresPerIpPrefix: 25,
+  mfaIpPrefixWindowMs: 15 * MINUTE_MS,
+  mfaFailuresPerUserPerDay: 30,
+
   feedbackPerSession: 3,
   feedbackSessionWindowMs: 10 * MINUTE_MS,
   // Sized for a shared venue connection, per the same NAT reasoning as the generation prefix.
@@ -118,6 +136,9 @@ export interface RateLimitRuleSet {
   readonly loginIdentity: RateLimitRule;
   readonly loginIpPrefix: RateLimitRule;
   readonly loginIdentityDaily: RateLimitRule;
+  readonly mfaSession: RateLimitRule;
+  readonly mfaIpPrefix: RateLimitRule;
+  readonly mfaUserDaily: RateLimitRule;
   readonly feedbackSession: RateLimitRule;
   readonly feedbackIpPrefix: RateLimitRule;
 }
@@ -176,6 +197,27 @@ export function rules(config: RateLimitConfig): RateLimitRuleSet {
     loginIdentityDaily: {
       name: 'auth.login_identity_daily',
       limit: config.loginFailuresPerIdentityPerDay,
+      windowMs: 24 * HOUR_MS,
+      code: 'AUTH_RATE_LIMITED',
+      enforcement: 'ENFORCE',
+    },
+    mfaSession: {
+      name: 'auth.mfa_session',
+      limit: config.mfaFailuresPerSession,
+      windowMs: config.mfaSessionWindowMs,
+      code: 'AUTH_RATE_LIMITED',
+      enforcement: 'ENFORCE',
+    },
+    mfaIpPrefix: {
+      name: 'auth.mfa_ip_prefix',
+      limit: config.mfaFailuresPerIpPrefix,
+      windowMs: config.mfaIpPrefixWindowMs,
+      code: 'AUTH_RATE_LIMITED',
+      enforcement: 'ENFORCE',
+    },
+    mfaUserDaily: {
+      name: 'auth.mfa_user_daily',
+      limit: config.mfaFailuresPerUserPerDay,
       windowMs: 24 * HOUR_MS,
       code: 'AUTH_RATE_LIMITED',
       enforcement: 'ENFORCE',
@@ -262,6 +304,17 @@ export interface PublicGenerationSubject {
    * second per-business window would measure nothing.
    */
   readonly plan: 'FREE' | 'PRO';
+  /**
+   * AMENDMENT-030: an admin-set hourly ceiling for this business, enforced as its own
+   * dimension while it is in force. Absent for the vast majority of requests.
+   */
+  readonly adminThrottle?: AdminThrottle;
+}
+
+/** AMENDMENT-030: an admin-set ceiling. The expiry is part of the key so a re-applied throttle starts a fresh window. */
+export interface AdminThrottle {
+  readonly perHour: number;
+  readonly untilMs: number;
 }
 
 export interface LoginSubject {
@@ -317,7 +370,40 @@ export function publicGenerationCheck(
     });
   }
 
+  if (subject.adminThrottle && subject.adminThrottle.perHour > 0) {
+    dimensions.push(adminThrottleDimension(subject.businessId, subject.adminThrottle));
+  }
+
   return { name: 'public_generation', dimensions, onStoreUnavailable: 'ALLOW' };
+}
+
+/** AMENDMENT-030: the admin-set hourly ceiling for one business, as a limiter dimension. */
+export function adminThrottleDimension(
+  businessId: string,
+  throttle: AdminThrottle,
+): RateLimitDimension {
+  return {
+    rule: {
+      name: 'public.business_admin_throttle',
+      limit: throttle.perHour,
+      windowMs: HOUR_MS,
+      code: 'FAIR_USE_THROTTLED',
+      enforcement: 'ENFORCE',
+    },
+    key: rateLimitKey('public.business_admin_throttle', businessId, String(throttle.untilMs)),
+  };
+}
+
+/**
+ * The throttle alone, for a generation request that carries no anonymous session and so
+ * skips the session-keyed check. The ceiling is per business, so it applies either way.
+ */
+export function adminThrottleCheck(businessId: string, throttle: AdminThrottle): RateLimitCheck {
+  return {
+    name: 'business_admin_throttle',
+    dimensions: [adminThrottleDimension(businessId, throttle)],
+    onStoreUnavailable: 'ALLOW',
+  };
 }
 
 /**
@@ -376,6 +462,56 @@ function identityDimensions(subject: LoginSubject, config: RateLimitConfig): Rat
   return [
     { rule: rule.loginIdentity, key: rateLimitKey(rule.loginIdentity.name, identity) },
     { rule: rule.loginIdentityDaily, key: rateLimitKey(rule.loginIdentityDaily.name, identity) },
+  ];
+}
+
+export interface MfaSubject {
+  /** The pending session's id — the thing a guesser holds. Hashed before it is a key. */
+  readonly sessionId: string;
+  readonly userId: string;
+  readonly ip: string;
+  readonly pepper: string;
+}
+
+/**
+ * AMENDMENT-027 — MFA challenge failures. Fails closed like login: a limiter that cannot
+ * count must not let a six-digit code be guessed at wire speed.
+ */
+export function mfaFailureCheck(
+  subject: MfaSubject,
+  config: RateLimitConfig = DEFAULT_RATE_LIMIT_CONFIG,
+): RateLimitCheck {
+  const rule = rules(config);
+  const prefix = ipPrefixHash(subject.ip, subject.pepper);
+  return {
+    name: 'mfa_failure',
+    dimensions: [
+      ...mfaOwnDimensions(subject, config),
+      { rule: rule.mfaIpPrefix, key: rateLimitKey(rule.mfaIpPrefix.name, prefix) },
+    ],
+    onStoreUnavailable: 'DENY',
+  };
+}
+
+/** A correct code forgives that session and account, never the prefix (see loginSuccessCheck). */
+export function mfaSuccessCheck(
+  subject: MfaSubject,
+  config: RateLimitConfig = DEFAULT_RATE_LIMIT_CONFIG,
+): RateLimitCheck {
+  return {
+    name: 'mfa_success',
+    dimensions: mfaOwnDimensions(subject, config),
+    onStoreUnavailable: 'DENY',
+  };
+}
+
+function mfaOwnDimensions(subject: MfaSubject, config: RateLimitConfig): RateLimitDimension[] {
+  const rule = rules(config);
+  const session = privacyHash(subject.sessionId, subject.pepper);
+  const user = privacyHash(subject.userId, subject.pepper);
+  return [
+    { rule: rule.mfaSession, key: rateLimitKey(rule.mfaSession.name, session) },
+    { rule: rule.mfaUserDaily, key: rateLimitKey(rule.mfaUserDaily.name, user) },
   ];
 }
 

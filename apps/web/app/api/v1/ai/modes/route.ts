@@ -5,6 +5,7 @@ import { requireTenant } from '@/lib/require-tenant';
 import { refuseFrozenTenant } from './guards';
 import { MODE_CREATE_LIMIT, createMode, listModes, toWireMode } from './mode-service';
 import { parseCreateMode } from './schema';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * GET/POST /api/v1/ai/modes — the `list` and `create` states of AI-02.
@@ -65,6 +66,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   if (!created.ok) return createFailure(created.reason);
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'ai.mode.create',
+      targetType: 'review_mode',
+      targetId: created.mode.id,
+    },
+  );
   return NextResponse.json({ mode: toWireMode(created.mode) }, { status: 201 });
 }
 

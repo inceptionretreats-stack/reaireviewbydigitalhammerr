@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { isAdminRole } from '@ai-review/core';
 import type { ReactNode } from 'react';
 import { AppBrand } from '@/components/brand/AppBrand';
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
@@ -10,7 +11,7 @@ import { getSession } from '@/lib/session';
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
   if (!session) redirect('/login');
-  if (session.role === 'SUPER_ADMIN') redirect('/admin');
+  if (isAdminRole(session.role)) redirect('/admin');
 
   return (
     <div className="app-shell">

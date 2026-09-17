@@ -1,10 +1,11 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, type NextRequest, after } from 'next/server';
 import { analyticsEvents } from '@ai-review/db';
 import { CheckoutService } from '@ai-review/core';
 import type { EventPayload } from '@ai-review/analytics';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { razorpayConfig } from '@/lib/subscription';
+import { sendReceipt } from '@/lib/billing/receipt-mail';
 
 export const runtime = 'nodejs';
 
@@ -48,6 +49,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (outcome.status === 'failed') {
     console.error('[billing] webhook failed', { event: outcome.event, error: outcome.error });
   }
+
+  if (outcome.activated && outcome.paymentId) after(() => sendReceipt(outcome.paymentId!));
 
   if (outcome.activated && outcome.businessId) {
     const properties: EventPayload<'subscription_activated'> = {

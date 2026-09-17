@@ -10,6 +10,7 @@ import {
   updateCustomer,
   type UpdateOutcome,
 } from '../repository';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * PATCH/DELETE /api/v1/customers/{id} — the `Edit` and `Delete` actions of CRM-01.
@@ -57,6 +58,15 @@ export async function PATCH(
 
   if (!outcome.ok) return describeUpdateFailure(outcome);
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'customer.update',
+      targetType: 'customer',
+      targetId: id,
+    },
+  );
   return NextResponse.json({ customer: toCustomerDto(outcome.customer) });
 }
 
@@ -107,6 +117,15 @@ export async function DELETE(
   const deleted = await softDeleteCustomer(db(), auth.context.businessId, id);
   if (!deleted) return notFound();
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'customer.delete',
+      targetType: 'customer',
+      targetId: id,
+    },
+  );
   // 204, as `08_OpenAPI_v1.yaml` declares. No body: there is nothing to say that the status code
   // does not, and a client parsing JSON out of a 204 is a bug waiting to be written.
   return new NextResponse(null, { status: 204 });

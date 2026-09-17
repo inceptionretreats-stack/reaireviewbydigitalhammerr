@@ -35,6 +35,20 @@ export const ERROR_STATUS: Record<string, number> = {
   // CHANGE-004: online payment is optional in production because admin activation exists; a
   // checkout attempted without Razorpay keys is refused with this rather than a misleading 500.
   PAYMENTS_NOT_CONFIGURED: 503,
+  // AMENDMENT-027 — admin MFA. A pending session may only reach the challenge; a stale one
+  // must re-prove itself before a high-risk action.
+  AUTH_MFA_REQUIRED: 401,
+  AUTH_MFA_INVALID: 401,
+  AUTH_MFA_STEP_UP_REQUIRED: 403,
+  AUTH_MFA_ALREADY_ENROLLED: 409,
+  AUTH_MFA_NOT_ENROLLED: 409,
+  AUTH_ACCOUNT_DISABLED: 403,
+  INVITE_INVALID: 410,
+  // AMENDMENT-029 — payment control.
+  PAYMENT_STATE_INVALID: 409,
+  REFUND_FAILED: 502,
+  // AMENDMENT-030 — Ai paused for a business by an admin; the public page keeps working.
+  AI_SUSPENDED: 409,
   UPLOAD_INVALID: 422,
   ADMIN_REASON_REQUIRED: 422,
   INTERNAL_ERROR: 500,

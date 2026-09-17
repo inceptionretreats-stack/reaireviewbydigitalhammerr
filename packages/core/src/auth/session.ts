@@ -1,5 +1,6 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
-import { sessions, users, type Database } from '@ai-review/db';
+import { sessions, users } from '@ai-review/db';
+import type { Executor } from '../db-executor';
 import { hashToken, issueToken } from './tokens';
 
 /**
@@ -16,11 +17,31 @@ import { hashToken, issueToken } from './tokens';
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const REMEMBER_ME_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
+/**
+ * AMENDMENT-027 — admin sessions. A session that has not passed the MFA challenge lives ten
+ * minutes, long enough to find the phone; one that has lives twelve hours and never honours
+ * remember-me. A step-up (re-entering a code for a high-risk action) is fresh for fifteen.
+ */
+export const MFA_PENDING_TTL_MS = 10 * 60 * 1000;
+export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+export const MFA_STEP_UP_MAX_AGE_MS = 15 * 60 * 1000;
+
+export type UserRole = 'BUSINESS_OWNER' | 'BUSINESS_SUPPORT_VIEWER' | 'SUPER_ADMIN';
+
+/** The two roles that use the admin area, and therefore MFA (05_RBAC). */
+export function isAdminRole(role: UserRole): boolean {
+  return role === 'SUPER_ADMIN' || role === 'BUSINESS_SUPPORT_VIEWER';
+}
+
 export interface SessionContext {
   sessionId: string;
   userId: string;
-  role: 'BUSINESS_OWNER' | 'BUSINESS_SUPPORT_VIEWER' | 'SUPER_ADMIN';
+  role: UserRole;
   expiresAt: Date;
+  /** When this session passed the MFA challenge; null for a pending admin session or an owner. */
+  mfaVerifiedAt: Date | null;
+  /** Whether the account has MFA armed at all — decides enrol vs challenge. */
+  mfaEnabledAt: Date | null;
 }
 
 export interface CreateSessionInput {
@@ -28,15 +49,17 @@ export interface CreateSessionInput {
   userAgent?: string | null;
   ipHash?: string | null;
   rememberMe?: boolean;
+  /** Explicit lifetime; wins over rememberMe. Admin logins set this. */
+  ttlMs?: number;
 }
 
 export class SessionService {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Executor) {}
 
   /** Returns the plaintext token exactly once; only its hash is persisted. */
   async create(input: CreateSessionInput): Promise<{ token: string; expiresAt: Date }> {
     const { token, tokenHash } = issueToken();
-    const ttl = input.rememberMe ? REMEMBER_ME_TTL_MS : SESSION_TTL_MS;
+    const ttl = input.ttlMs ?? (input.rememberMe ? REMEMBER_ME_TTL_MS : SESSION_TTL_MS);
     const expiresAt = new Date(Date.now() + ttl);
 
     await this.db.insert(sessions).values({
@@ -64,8 +87,11 @@ export class SessionService {
         sessionId: sessions.id,
         userId: sessions.userId,
         expiresAt: sessions.expiresAt,
+        mfaVerifiedAt: sessions.mfaVerifiedAt,
         role: users.role,
         deletedAt: users.deletedAt,
+        disabledAt: users.disabledAt,
+        mfaEnabledAt: users.mfaEnabledAt,
       })
       .from(sessions)
       .innerJoin(users, eq(users.id, sessions.userId))
@@ -78,7 +104,8 @@ export class SessionService {
       )
       .limit(1);
 
-    if (!row || row.deletedAt) return null;
+    // A disabled admin's sessions die with the account, without a separate sweep.
+    if (!row || row.deletedAt || row.disabledAt) return null;
 
     await this.db
       .update(sessions)
@@ -90,7 +117,27 @@ export class SessionService {
       userId: row.userId,
       role: row.role,
       expiresAt: row.expiresAt,
+      mfaVerifiedAt: row.mfaVerifiedAt,
+      mfaEnabledAt: row.mfaEnabledAt,
     };
+  }
+
+  /**
+   * Stamps the session as MFA-verified. On the first verification the pending ten-minute
+   * lifetime becomes the full admin lifetime; a later step-up only refreshes the stamp and
+   * never extends the session, so twelve hours means twelve hours.
+   */
+  async markMfaVerified(sessionId: string, options: { extendToMs: number }): Promise<Date> {
+    const now = new Date();
+    const [row] = await this.db
+      .update(sessions)
+      .set({
+        mfaVerifiedAt: now,
+        expiresAt: sql`CASE WHEN ${sessions.mfaVerifiedAt} IS NULL THEN ${new Date(now.getTime() + options.extendToMs)} ELSE ${sessions.expiresAt} END`,
+      })
+      .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)))
+      .returning({ expiresAt: sessions.expiresAt });
+    return row?.expiresAt ?? now;
   }
 
   /**

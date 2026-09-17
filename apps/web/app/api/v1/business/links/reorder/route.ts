@@ -9,6 +9,7 @@ import {
   hasDuplicates,
   sameMembers,
 } from '@/components/dashboard/profile/order';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/business/links/reorder — the persistence behind PROFILE-01's "drag to reorder".
@@ -122,6 +123,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // Echoed back so the screen can confirm it holds what the server stored rather than assuming its
   // optimistic arrangement won.
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'business.links.reorder',
+      targetType: 'business',
+      targetId: auth.context.businessId,
+      metadata: { sections: order.length },
+    },
+  );
   return NextResponse.json({ order });
 }
 

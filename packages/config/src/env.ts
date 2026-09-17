@@ -161,6 +161,25 @@ export const envSchema = z
     // Email
     EMAIL_FROM: z.email(),
     SES_REGION: nonEmpty.default('ap-south-1'),
+    /** Resend (AMENDMENT-029). Without it production drops mail and says so in the log. */
+    RESEND_API_KEY: optionalSecret,
+
+    // Scheduled work (AMENDMENT-029). Vercel sends it as a bearer token to the cron route.
+    CRON_SECRET: optionalSecret,
+    /** Days the user activity log is kept (13_Security: 90–180). */
+    ACTIVITY_RETENTION_DAYS: z.coerce.number().int().min(30).max(730).default(180),
+    /** The issuer shown in an authenticator app for admin MFA (AMENDMENT-027). */
+    MFA_ISSUER: nonEmpty.default('Ai Review by Digital Hammerr'),
+    /**
+     * Whether an admin must pass TOTP before reaching /admin (AMENDMENT-027). The spec makes
+     * it mandatory and 'true' is the default; the owner may set 'false' to run password-only
+     * for a while. Enrolment and challenge stay available either way, and step-up is skipped
+     * when off.
+     */
+    ADMIN_MFA_REQUIRED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
 
     // Observability
     SENTRY_DSN: z.string().optional(),
@@ -216,6 +235,15 @@ export const envSchema = z
         path: ['ANTHROPIC_API_KEY'],
         message:
           'set ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY in production — with none, the stub provider would serve canned drafts to real customers',
+      });
+    }
+
+    if (value.NODE_ENV === 'production' && !value.CRON_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CRON_SECRET'],
+        message:
+          'set CRON_SECRET in production — without it the expiry and reminder sweep cannot be triggered, and a subscription would never lapse',
       });
     }
 

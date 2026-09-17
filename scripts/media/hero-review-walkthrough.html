@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Digital Hammerr — hero review walkthrough source</title>
+    <style>
+      @font-face {
+        font-family: 'DM Sans';
+        src: url('../../apps/web/assets/fonts/dm-sans-variable.ttf') format('truetype');
+        font-weight: 100 1000;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f3f7ff;
+        font-family: 'DM Sans', Arial, sans-serif;
+        color: #111827;
+      }
+      #stage {
+        position: relative;
+        width: 960px;
+        height: 960px;
+        overflow: hidden;
+      }
+      #composition {
+        position: absolute;
+        inset: 0;
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        width: 960px;
+        height: 960px;
+      }
+      .caption {
+        position: absolute;
+        top: 18px;
+        left: 100px;
+        right: 100px;
+        margin: 0;
+        text-align: center;
+        font-size: 42px;
+        font-weight: 600;
+        line-height: 1.25;
+        letter-spacing: -0.02em;
+      }
+      .caption span {
+        color: #1967d2;
+      }
+      #screen {
+        position: absolute;
+        left: 197px;
+        top: 113px;
+        width: 322px;
+        height: 694px;
+        border-radius: 42px;
+        overflow: hidden;
+      }
+      .status {
+        position: absolute;
+        top: 8px;
+        left: 22px;
+        right: 17px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .status-icons {
+        display: flex;
+        align-items: end;
+        gap: 5px;
+      }
+      .signal {
+        display: flex;
+        align-items: end;
+        gap: 2px;
+        height: 10px;
+      }
+      .signal i {
+        width: 3px;
+        background: #111827;
+        border-radius: 1px;
+      }
+      .signal i:nth-child(1) {
+        height: 4px;
+      }
+      .signal i:nth-child(2) {
+        height: 7px;
+      }
+      .signal i:nth-child(3) {
+        height: 10px;
+      }
+      .battery {
+        width: 18px;
+        height: 10px;
+        border: 1px solid #111827;
+        border-radius: 3px;
+        padding: 1px;
+      }
+      .battery::after {
+        display: block;
+        width: 12px;
+        height: 6px;
+        border-radius: 1px;
+        background: #111827;
+        content: '';
+      }
+      .pane {
+        position: absolute;
+        inset: 54px 17px 31px;
+        display: none;
+      }
+      .pane.active {
+        display: block;
+      }
+      .app-title {
+        margin: 0 0 14px;
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: #1967d2;
+        text-align: center;
+      }
+      .subheading {
+        margin: 0 0 17px;
+        font-size: 18px;
+        line-height: 1.45;
+        color: #596273;
+        text-align: center;
+      }
+      .business-photo {
+        display: block;
+        width: 288px;
+        height: 126px;
+        border-radius: 15px;
+        object-fit: cover;
+      }
+      .business {
+        margin: 13px 0 9px;
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.25;
+        letter-spacing: -0.02em;
+      }
+      .stars {
+        display: flex;
+        gap: 6px;
+        margin: 11px 0 15px;
+      }
+      .stars svg {
+        width: 30px;
+        height: 30px;
+        overflow: visible;
+      }
+      .draft {
+        min-height: 156px;
+        padding: 17px;
+        border-radius: 17px;
+        background: #edf4ff;
+        font-size: 23px;
+        font-weight: 400;
+        line-height: 1.48;
+      }
+      .draft p {
+        margin: 0;
+      }
+      .draft-meta {
+        display: flex;
+        min-height: 26px;
+        margin: 9px 0 10px;
+        justify-content: space-between;
+        align-items: center;
+        color: #596273;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      .action {
+        display: flex;
+        width: 100%;
+        height: 48px;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        border: 0;
+        border-radius: 12px;
+        background: #1967d2;
+        color: #fff;
+        font-size: 19px;
+        font-weight: 600;
+      }
+      .action svg {
+        width: 21px;
+        height: 21px;
+      }
+      .action.secondary {
+        height: 43px;
+        margin-top: 9px;
+        background: #edf4ff;
+        color: #174ea6;
+      }
+      .action.success {
+        background: #137333;
+      }
+      .home-indicator {
+        position: absolute;
+        bottom: 8px;
+        left: 50%;
+        width: 105px;
+        height: 4px;
+        border-radius: 5px;
+        background: #1b2d60;
+        transform: translateX(-50%);
+      }
+      .camera {
+        position: relative;
+        height: 338px;
+        padding: 49px 23px;
+        overflow: hidden;
+        border-radius: 22px;
+        background: #102137;
+      }
+      #qr {
+        width: 242px;
+        height: 242px;
+        display: block;
+        border-radius: 12px;
+        background: #fff;
+      }
+      .camera-corners {
+        position: absolute;
+        inset: 32px 15px;
+        border-radius: 18px;
+      }
+      .camera-corners i {
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        border: solid #34a853;
+        border-width: 4px 0 0 4px;
+        border-radius: 5px 0 0;
+      }
+      .camera-corners i:nth-child(2) {
+        right: 0;
+        transform: rotate(90deg);
+      }
+      .camera-corners i:nth-child(3) {
+        right: 0;
+        bottom: 0;
+        transform: rotate(180deg);
+      }
+      .camera-corners i:nth-child(4) {
+        bottom: 0;
+        transform: rotate(270deg);
+      }
+      #scan-line {
+        position: absolute;
+        left: 23px;
+        right: 23px;
+        top: 49px;
+        height: 3px;
+        background: #34a853;
+        box-shadow: 0 0 16px #34a853;
+      }
+      .camera-note {
+        margin: 18px 0 23px;
+        font-size: 19px;
+        color: #596273;
+        text-align: center;
+      }
+      #scan-result {
+        margin-top: 25px;
+      }
+      #generating {
+        position: absolute;
+        inset: 17px;
+        color: #1967d2;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 21px;
+      }
+      #generating i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #4285f4;
+      }
+      #review-draft {
+        position: relative;
+      }
+      .google-title {
+        display: flex;
+        gap: 0;
+        justify-content: center;
+        margin-bottom: 14px;
+        font-size: 32px;
+        font-weight: 550;
+        line-height: 1.25;
+      }
+      .google-title span:nth-child(1),
+      .google-title span:nth-child(4) {
+        color: #4285f4;
+      }
+      .google-title span:nth-child(2),
+      .google-title span:nth-child(6) {
+        color: #ea4335;
+      }
+      .google-title span:nth-child(3) {
+        color: #ba7b00;
+      }
+      .google-title span:nth-child(5) {
+        color: #137333;
+      }
+      .reviewer {
+        display: flex;
+        margin: 8px 0 14px;
+        align-items: center;
+        gap: 11px;
+      }
+      .avatar {
+        display: grid;
+        width: 35px;
+        height: 35px;
+        place-items: center;
+        border-radius: 50%;
+        background: #edf4ff;
+        color: #1967d2;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .reviewer strong {
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .reviewer small {
+        display: block;
+        margin-top: 3px;
+        color: #596273;
+        font-size: 13px;
+      }
+      #google-draft {
+        height: 158px;
+        min-height: 158px;
+        border: 1px solid #d8e1ed;
+        background: #fff;
+      }
+      #post-action {
+        margin-top: 13px;
+      }
+      #post-note {
+        margin: 12px 0 0;
+        text-align: center;
+        color: #596273;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      #tap {
+        position: absolute;
+        z-index: 4;
+        width: 40px;
+        height: 40px;
+        display: none;
+        color: #174ea6;
+        filter: drop-shadow(0 2px 3px #ffffff);
+      }
+      #tap svg {
+        width: 40px;
+        height: 40px;
+      }
+      #tap-ring {
+        position: absolute;
+        z-index: 3;
+        display: none;
+        width: 44px;
+        height: 44px;
+        border: 3px solid #4285f4;
+        border-radius: 50%;
+      }
+      #burst {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .burst-star {
+        position: absolute;
+        width: 65px;
+        height: 65px;
+        filter: drop-shadow(0 5px 3px rgb(156 101 0 / 12%));
+        opacity: 0;
+      }
+      .burst-star svg {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .progress {
+        position: absolute;
+        top: 866px;
+        left: 138px;
+        right: 142px;
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 21px;
+      }
+      .step {
+        position: relative;
+        display: grid;
+        justify-items: center;
+        gap: 7px;
+        font-size: 16px;
+        line-height: 1.35;
+        color: #394153;
+      }
+      .step i {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        border-radius: 50%;
+        background: #dfe8f6;
+        color: #596273;
+        font-size: 15px;
+        font-style: normal;
+      }
+      .step.done i {
+        background: #4285f4;
+        color: #fff;
+      }
+      .step.current i {
+        background: #1967d2;
+        color: #fff;
+        box-shadow: 0 0 0 5px rgb(66 133 244 / 11%);
+      }
+      .step:last-child.current i {
+        background: #137333;
+        box-shadow: 0 0 0 5px rgb(52 168 83 / 11%);
+      }
+      .step:not(:last-child)::after {
+        position: absolute;
+        left: calc(100% - 4px);
+        top: 12px;
+        width: 26px;
+        height: 1.5px;
+        background: #b8c5d7;
+        content: '';
+      }
+      .demo-note {
+        position: absolute;
+        right: 29px;
+        bottom: 21px;
+        color: #718096;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      svg.definitions {
+        position: absolute;
+        width: 0;
+        height: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="definitions" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+          <stop stop-color="#ffe879" />
+          <stop offset=".48" stop-color="#ffca24" />
+          <stop offset="1" stop-color="#eaa007" />
+        </linearGradient>
+        <symbol id="star" viewBox="0 0 64 64">
+          <path
+            d="m32 3 8.6 18.3 20 2.8-14.6 14 3.6 20L32 48.6 14.4 58l3.6-20L3.4 24.1l20-2.8L32 3Z"
+            fill="url(#gold)"
+            stroke="#ecaf15"
+            stroke-width="1"
+            stroke-linejoin="round"
+          />
+          <path
+            d="m32 3 0 31-8.6-12.7L32 3ZM3.4 24.1 32 34 18 38 3.4 24.1Z"
+            fill="#fff1a0"
+            opacity=".7"
+          />
+          <path d="M32 34 46 38l3.6 20L32 48.6V34Z" fill="#da8704" opacity=".45" />
+        </symbol>
+        <symbol id="check" viewBox="0 0 24 24">
+          <path
+            d="m5 12 4.5 4.5L19 7"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="shuffle" viewBox="0 0 24 24">
+          <path
+            d="M3 6h3c5 0 6 12 11 12h4m-4-4 4 4-4 4M3 18h3c2 0 3-2 4-4m4-4c1-2 2-4 4-4h3m-4-4 4 4-4 4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="copy" viewBox="0 0 24 24">
+          <rect
+            x="8"
+            y="8"
+            width="12"
+            height="12"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          />
+          <path
+            d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          />
+        </symbol>
+        <symbol id="hand" viewBox="0 0 40 40">
+          <path
+            d="M17 21V8a3 3 0 0 1 6 0v9l2-1a3 3 0 0 1 4 2 3 3 0 0 1 5 3l-1 9-5 7H17l-8-13a3 3 0 0 1 5-3l3 4"
+            fill="#fff"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+      </defs>
+    </svg>
+    <main id="stage" data-step="scan">
+      <div id="composition">
+        <img class="scene" src="../../apps/web/public/marketing/hero-review-scene-v2.png" alt="" />
+        <h1 class="caption">Your experience, <span>shared.</span></h1>
+        <div id="screen">
+          <div class="status">
+            <span>9:41</span
+            ><span class="status-icons"
+              ><span class="signal"><i></i><i></i><i></i></span><span class="battery"></span
+            ></span>
+          </div>
+          <section id="scan-pane" class="pane active">
+            <h2 class="app-title">Scan the QR</h2>
+            <p class="subheading">Start with a scan.</p>
+            <div class="camera">
+              <img
+                id="qr"
+                alt="Illustrative QR code"
+                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='white'/%3E%3Cg fill='none' stroke='%23111827' stroke-width='5'%3E%3Cpath d='M12 12h25v25H12zM63 12h25v25H63zM12 63h25v25H12z'/%3E%3C/g%3E%3Cpath fill='%23111827' d='M20 20h9v9h-9zM71 20h9v9h-9zM20 71h9v9h-9zM48 13h5v15h-5zM46 43h12v8H46zM66 49h8v12h-8zM82 45h7v18h-7zM44 64h9v14h-9zM61 69h12v8H61zM78 80h10v8H78zM45 85h24v5H45z'/%3E%3C/svg%3E"
+              />
+              <div class="camera-corners"><i></i><i></i><i></i><i></i></div>
+              <div id="scan-line"></div>
+            </div>
+            <p class="camera-note">Keep the code in the frame</p>
+            <div id="scan-result" class="action">Scanning…</div>
+          </section>
+          <section id="draft-pane" class="pane">
+            <h2 class="app-title">Ai Review</h2>
+            <img
+              class="business-photo"
+              src="../../apps/web/public/marketing/digital-hammerr-agency-v1.png"
+              alt="Digital Hammerr"
+            />
+            <h3 class="business">Digital Hammerr</h3>
+            <div class="stars" data-rating-stars></div>
+            <div id="review-draft" class="draft">
+              <div id="generating">Writing your draft <i></i><i></i><i></i></div>
+              <p id="draft-text"></p>
+            </div>
+            <div class="draft-meta">
+              <span id="draft-helper">Make it your own</span><span id="draft-number">1 / 3</span>
+            </div>
+            <div id="draft-action" class="action">
+              <svg><use href="#shuffle" /></svg><span>Shuffle review</span>
+            </div>
+            <div id="draft-secondary" class="action secondary">
+              <svg><use href="#copy" /></svg><span>Copy review</span>
+            </div>
+          </section>
+          <section id="post-pane" class="pane">
+            <h2 class="google-title">
+              <span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span>
+            </h2>
+            <img
+              class="business-photo"
+              src="../../apps/web/public/marketing/digital-hammerr-agency-v1.png"
+              alt="Digital Hammerr"
+            />
+            <h3 class="business">Digital Hammerr</h3>
+            <div class="stars" id="post-stars" data-rating-stars></div>
+            <div class="reviewer">
+              <span class="avatar">You</span>
+              <div><strong>Your review</strong><small>Posting publicly on Google</small></div>
+            </div>
+            <div id="google-draft" class="draft"><p id="post-text">Paste your review</p></div>
+            <div id="post-action" class="action">Post</div>
+            <p id="post-note">You choose what gets shared.</p>
+          </section>
+          <span class="home-indicator"></span>
+          <div id="tap-ring"></div>
+          <div id="tap">
+            <svg><use href="#hand" /></svg>
+          </div>
+        </div>
+        <div id="burst"></div>
+      </div>
+      <div class="progress" aria-label="Review walkthrough steps">
+        <div class="step"><i>1</i><span>Scan</span></div>
+        <div class="step"><i>2</i><span>Generate</span></div>
+        <div class="step"><i>3</i><span>Shuffle</span></div>
+        <div class="step"><i>4</i><span>Copy</span></div>
+        <div class="step"><i>5</i><span>Post</span></div>
+        <div class="step"><i>6</i><span>Celebrate</span></div>
+      </div>
+      <small class="demo-note">Illustrative demo</small>
+    </main>
+    <script>
+      const duration = 30;
+      const starts = [0, 5, 10, 15, 19, 25];
+      const names = ['scan', 'generate', 'shuffle', 'copy', 'post', 'celebrate'];
+      const reviews = [
+        'A helpful team for website and app development.',
+        'Clear communication and thoughtful graphic design.',
+        'A professional team for digital marketing and SEO.',
+      ];
+      const byId = (id) => document.getElementById(id);
+      const starMarkup = '<svg viewBox="0 0 64 64"><use href="#star" /></svg>';
+      document.querySelectorAll('[data-rating-stars]').forEach((row) => {
+        row.innerHTML = starMarkup.repeat(5);
+      });
+      byId('burst').innerHTML = Array.from(
+        { length: 5 },
+        () => `<span class="burst-star">${starMarkup}</span>`,
+      ).join('');
+      const starFlights = [
+        { x: 565, y: 89, size: 66, delay: 0.12 },
+        { x: 621, y: 105, size: 48, delay: 0.36 },
+        { x: 673, y: 126, size: 38, delay: 0.6 },
+        { x: 714, y: 148, size: 31, delay: 0.84 },
+        { x: 746, y: 171, size: 23, delay: 1.08 },
+      ];
+      const clamp = (value) => Math.max(0, Math.min(1, value));
+      const ease = (value) => 1 - Math.pow(1 - clamp(value), 3);
+      const icon = (name) => `<svg viewBox="0 0 24 24"><use href="#${name}" /></svg>`;
+
+      function tapAt(time, start, x, y, visibleFor = 0.9) {
+        const local = time - start;
+        if (local < -0.35 || local > visibleFor) return;
+        const arrival = ease((local + 0.35) / 0.35);
+        const pressed = local >= 0 && local < 0.16;
+        const tap = byId('tap');
+        tap.style.display = 'block';
+        tap.style.left = `${x + (1 - arrival) * 24}px`;
+        tap.style.top = `${y + (1 - arrival) * 35}px`;
+        tap.style.opacity = String(Math.min(arrival, clamp((visibleFor - local) / 0.25)));
+        tap.style.transform = `scale(${pressed ? 0.88 : 1})`;
+        if (local >= 0 && local <= 0.65) {
+          const ring = byId('tap-ring');
+          ring.style.display = 'block';
+          ring.style.left = `${x - 12}px`;
+          ring.style.top = `${y - 11}px`;
+          ring.style.opacity = String(1 - local / 0.65);
+          ring.style.transform = `scale(${0.45 + local * 1.6})`;
+        }
+      }
+
+      function tapTarget(time, start, targetId, visibleFor = 0.9) {
+        const screen = byId('screen').getBoundingClientRect();
+        const target = byId(targetId).getBoundingClientRect();
+        tapAt(
+          time,
+          start,
+          target.left - screen.left + target.width * 0.72 - 20,
+          target.top - screen.top + target.height / 2 - 8,
+          visibleFor,
+        );
+      }
+
+      window.renderAt = function renderAt(seconds) {
+        const t = Math.max(0, Math.min(duration - 0.001, seconds));
+        let chapter = 0;
+        starts.forEach((start, index) => {
+          if (t >= start) chapter = index;
+        });
+        byId('stage').dataset.step = names[chapter];
+        document.querySelectorAll('.step').forEach((step, index) => {
+          step.className = `step${index < chapter ? ' done' : index === chapter ? ' current' : ''}`;
+        });
+        byId('composition').style.transform = `translateY(${Math.sin(t * 0.65) * 0.7}px)`;
+        byId('scan-pane').classList.toggle('active', chapter === 0);
+        byId('draft-pane').classList.toggle('active', chapter >= 1 && chapter <= 3);
+        byId('post-pane').classList.toggle('active', chapter >= 4);
+        byId('tap').style.display = 'none';
+        byId('tap-ring').style.display = 'none';
+
+        byId('scan-line').style.transform = `translateY(${(t * 89) % 242}px)`;
+        byId('scan-line').style.opacity = t < 3.2 ? '1' : '0';
+        byId('scan-result').className = `action${t >= 3.2 ? ' success' : ''}`;
+        byId('scan-result').innerHTML =
+          t >= 3.2 ? `${icon('check')}<span>QR detected</span>` : 'Scanning…';
+
+        let reviewIndex = 0;
+        if (chapter >= 2) reviewIndex = t < 11.65 ? 0 : t < 13.25 ? 1 : 2;
+        const writing = t < 5.85;
+        byId('generating').style.display = writing ? 'flex' : 'none';
+        byId('generating')
+          .querySelectorAll('i')
+          .forEach((dot, index) => {
+            dot.style.opacity = String(0.3 + (Math.sin(t * 7 - index) + 1) * 0.35);
+          });
+        const letters =
+          chapter === 1
+            ? Math.floor(clamp((t - 5.85) / 2.35) * reviews[0].length)
+            : reviews[reviewIndex].length;
+        byId('draft-text').textContent = writing ? '' : reviews[reviewIndex].slice(0, letters);
+        const shuffleLocal = Math.min(Math.abs(t - 11.65), Math.abs(t - 13.25));
+        byId('draft-text').style.opacity =
+          chapter === 2 ? String(0.55 + 0.45 * clamp(shuffleLocal / 0.28)) : '1';
+        byId('draft-number').textContent = `${reviewIndex + 1} / 3`;
+        byId('draft-helper').textContent =
+          chapter === 3 ? 'Your chosen review' : 'Make it your own';
+        const copied = chapter === 3 && t >= 16.65;
+        byId('draft-action').className = `action${copied ? ' success' : ''}`;
+        byId('draft-action').innerHTML =
+          chapter === 3
+            ? `${icon(copied ? 'check' : 'copy')}<span>${copied ? 'Copied' : 'Copy review'}</span>`
+            : `${icon('shuffle')}<span>Shuffle review</span>`;
+        byId('draft-secondary').innerHTML = copied
+          ? '<span>Open Google</span>'
+          : chapter === 3
+            ? '<span>Edit your words</span>'
+            : `${icon('copy')}<span>Copy review</span>`;
+        if (chapter === 2) {
+          tapTarget(t, 11.55, 'draft-action');
+          tapTarget(t, 13.15, 'draft-action');
+        }
+        if (chapter === 3) {
+          tapTarget(t, 16.55, 'draft-action');
+          tapTarget(t, 18.15, 'draft-secondary', 0.6);
+        }
+
+        const posted = chapter === 5;
+        const pasted = t >= 20.6;
+        byId('post-text').textContent = pasted ? reviews[2] : 'Paste your review';
+        byId('post-text').style.color = pasted ? '#111827' : '#718096';
+        byId('post-action').className = `action${posted ? ' success' : ''}`;
+        byId('post-action').innerHTML = posted
+          ? `${icon('check')}<span>Review posted</span>`
+          : t >= 24.2
+            ? 'Posting…'
+            : 'Post';
+        byId('post-note').textContent = posted
+          ? 'Your experience, in your words.'
+          : 'You choose what gets shared.';
+        byId('post-stars')
+          .querySelectorAll('svg')
+          .forEach((star, index) => {
+            star.style.opacity = chapter === 4 && t < 19.75 + index * 0.1 ? '.25' : '1';
+          });
+        if (chapter === 4) {
+          tapTarget(t, 20.45, 'google-draft');
+          tapTarget(t, 24.1, 'post-action', 0.75);
+        }
+
+        document.querySelectorAll('.burst-star').forEach((star, index) => {
+          const flight = starFlights[index];
+          const local = t - 25 - flight.delay;
+          const p = ease(local / 1.1);
+          const x = 508 + (flight.x - 508) * p;
+          const y = 198 + (flight.y - 198) * p - Math.sin(p * Math.PI) * 35;
+          star.style.left = `${x}px`;
+          star.style.top = `${y + Math.sin(t * 2 + index) * 2.5}px`;
+          star.style.width = `${flight.size}px`;
+          star.style.height = `${flight.size}px`;
+          star.style.opacity =
+            local < 0 ? '0' : String(clamp(local / 0.18) * clamp((30 - t) / 0.45));
+          star.style.transform = `scale(${0.15 + 0.85 * p}) rotate(${(1 - p) * -35}deg)`;
+        });
+      };
+      window.STORY_DURATION = duration;
+      window.setQrSource = async (source) => {
+        byId('qr').src = source;
+        await byId('qr').decode();
+      };
+      window.STORY_READY = Promise.all([
+        document.fonts.ready,
+        ...Array.from(document.images, (image) => image.decode()),
+      ]);
+      window.renderAt(0);
+      if (new URLSearchParams(location.search).has('autoplay')) {
+        window.STORY_READY.then(() => {
+          const began = performance.now();
+          const tick = (now) => {
+            window.renderAt(((now - began) / 1000) % duration);
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+      }
+    </script>
+  </body>
+</html>

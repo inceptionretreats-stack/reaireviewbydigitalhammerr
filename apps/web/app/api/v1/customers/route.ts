@@ -5,6 +5,7 @@ import { requireTenant } from '@/lib/require-tenant';
 import { readCustomerBody } from './body';
 import { parseListQuery } from './query';
 import { createCustomer, loadCustomerPage, toCustomerDto } from './repository';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * GET/POST /api/v1/customers — the `list`, `empty` and `form` states of CRM-01.
@@ -69,5 +70,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'customer.create',
+      targetType: 'customer',
+      targetId: created.customer.id,
+    },
+  );
   return NextResponse.json({ customer: toCustomerDto(created.customer) }, { status: 201 });
 }

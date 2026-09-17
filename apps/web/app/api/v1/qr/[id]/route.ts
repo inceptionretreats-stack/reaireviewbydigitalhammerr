@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
 import { parseQrSourcePatch, isQrSourceId, toQrSourceWire } from '../qr-source';
 import { qrDataUri } from '@/lib/qr-image';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * PATCH /api/v1/qr/{id} — the Rename, Disable and Enable actions of QR-01.
@@ -101,6 +102,16 @@ export async function PATCH(
    * projection, this is where the bump belongs.
    */
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'qr.update',
+      targetType: 'qr_code',
+      targetId: id,
+      metadata: { fields: Object.keys(parsed.value) },
+    },
+  );
   return NextResponse.json({
     source: toQrSourceWire(
       updated,

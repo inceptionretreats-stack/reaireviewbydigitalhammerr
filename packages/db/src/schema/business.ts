@@ -51,6 +51,20 @@ export const businesses = pgTable(
     brandAccent: varchar('brand_accent', { length: 7 }),
     configVersion: bigint('config_version', { mode: 'number' }).notNull().default(1),
     publishedAt: timestamp('published_at', { withTimezone: true }),
+
+    // AMENDMENT-029 — what a GST invoice needs to say about the buyer. All optional: an
+    // unregistered buyer gets an invoice with no GSTIN and intra-state tax by default.
+    billingLegalName: varchar('billing_legal_name', { length: 200 }),
+    gstin: varchar('gstin', { length: 15 }),
+    billingStateCode: char('billing_state_code', { length: 2 }),
+    billingAddress: varchar('billing_address', { length: 500 }),
+
+    // AMENDMENT-030 — admin abuse controls narrower than a suspension: the public page and the
+    // Google button keep working, only the Ai draft is paused or rationed.
+    aiSuspendedAt: timestamp('ai_suspended_at', { withTimezone: true }),
+    aiSuspendedReason: varchar('ai_suspended_reason', { length: 500 }),
+    aiThrottleUntil: timestamp('ai_throttle_until', { withTimezone: true }),
+    aiThrottlePerHour: integer('ai_throttle_per_hour'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),

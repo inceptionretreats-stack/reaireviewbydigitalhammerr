@@ -1,0 +1,1059 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Digital Hammerr — how it works editable clips</title>
+    <style>
+      @font-face {
+        font-family: 'DM Sans';
+        src: url('../../apps/web/assets/fonts/dm-sans-variable.ttf') format('truetype');
+        font-weight: 100 1000;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: 'DM Sans', Arial, sans-serif;
+        color: #111827;
+        background: #eff6ff;
+      }
+      #stage {
+        width: 480px;
+        height: 900px;
+        position: relative;
+        overflow: hidden;
+        background: #eff6ff;
+      }
+      #device {
+        position: absolute;
+        left: 30px;
+        top: 20px;
+        width: 420px;
+        height: 860px;
+        background: #171b22;
+        border: 2px solid #66717b;
+        border-radius: 56px;
+        box-shadow:
+          0 10px 18px -10px #24456850,
+          inset 0 0 0 1px #0c1015;
+      }
+      #device::before,
+      #device::after {
+        content: '';
+        position: absolute;
+        width: 4px;
+        background: #3c454e;
+        border-radius: 3px;
+      }
+      #device::before {
+        left: -6px;
+        top: 120px;
+        height: 62px;
+      }
+      #device::after {
+        right: -6px;
+        top: 147px;
+        height: 80px;
+      }
+      #screen {
+        position: absolute;
+        inset: 3px;
+        border-radius: 51px;
+        overflow: hidden;
+        background: #f9fcff;
+      }
+      #stage[data-clip='scan'] #screen {
+        background: #24303a;
+      }
+      #stage[data-clip='business'],
+      #stage[data-clip='copy'] {
+        background: linear-gradient(135deg, #fafffd, #edf9f3);
+      }
+      #stage[data-clip='generate'],
+      #stage[data-clip='google'] {
+        background: linear-gradient(135deg, #fffafa, #fff1ef);
+      }
+      #stage[data-clip='shuffle'],
+      #stage[data-clip='post'] {
+        background: linear-gradient(135deg, #fffdf8, #fff7e8);
+      }
+      #notch {
+        display: none;
+        position: absolute;
+        left: 50%;
+        top: 10px;
+        width: 104px;
+        height: 24px;
+        border-radius: 14px;
+        transform: translateX(-50%);
+        background: #171b22;
+        z-index: 8;
+      }
+      #notch.visible {
+        display: block;
+      }
+      #notch::before {
+        content: '';
+        position: absolute;
+        width: 7px;
+        height: 7px;
+        right: 15px;
+        top: 8px;
+        border: 1px solid #415166;
+        border-radius: 50%;
+        background: #202b3c;
+      }
+      #notch::after {
+        content: '';
+        position: absolute;
+        width: 34px;
+        height: 3px;
+        left: 18px;
+        top: 11px;
+        border-radius: 5px;
+        background: #30363c;
+      }
+      .pane {
+        position: absolute;
+        /* Preserve the approved 384x814 native UI at its existing stage coordinates. */
+        inset: 18px 13px;
+        display: none;
+      }
+      .pane.active {
+        display: block;
+      }
+      .content {
+        padding: 78px 24px 24px;
+      }
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h2 {
+        font-size: 34px;
+        font-weight: 650;
+        line-height: 1.25;
+        letter-spacing: -0.025em;
+      }
+      .muted {
+        color: #62748b;
+        font-size: 32px;
+        line-height: 1.3;
+      }
+      .draft {
+        border: 2px solid #d1e1f6;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.86);
+        padding: 22px 24px;
+        font-size: 34px;
+        line-height: 1.42;
+        letter-spacing: -0.015em;
+      }
+      .action {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+        min-height: 74px;
+        border-radius: 16px;
+        background: #0969ff;
+        color: white;
+        font-size: 32px;
+        font-weight: 600;
+        line-height: 1.25;
+        padding: 14px;
+      }
+      .action svg {
+        width: 32px;
+        height: 32px;
+        flex-shrink: 0;
+      }
+      .action.disabled {
+        background: #cbd9ed;
+        color: #5c7088;
+      }
+      .success {
+        color: #075f3e;
+        background: #e1f7ee;
+      }
+      .success svg {
+        color: #15965a;
+      }
+      .caret {
+        display: inline-block;
+        width: 3px;
+        height: 37px;
+        margin-left: 5px;
+        vertical-align: -0.14em;
+        background: #0969ff;
+      }
+      .dots {
+        display: flex;
+        justify-content: center;
+        gap: 17px;
+      }
+      .dots i {
+        display: block;
+        height: 22px;
+        width: 22px;
+        background: #0969ff;
+        border-radius: 50%;
+      }
+      .definitions {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .scan-photo {
+        position: absolute;
+        inset: -24px;
+        width: 432px;
+        height: 862px;
+        object-fit: cover;
+        filter: blur(16px);
+        opacity: 0.33;
+      }
+      #scan-pane {
+        background: #24303a;
+        color: white;
+      }
+      .camera-shade {
+        position: absolute;
+        inset: -18px -13px;
+        background: linear-gradient(180deg, rgba(14, 23, 29, 0.05), rgba(14, 23, 29, 0.7));
+      }
+      .camera {
+        position: absolute;
+        top: 168px;
+        left: 12px;
+        width: 360px;
+        height: 360px;
+      }
+      #qr {
+        position: absolute;
+        top: 30px;
+        left: 30px;
+        width: 300px;
+        height: 300px;
+        border-radius: 10px;
+        image-rendering: pixelated;
+        box-shadow: 0 8px 32px #0003;
+      }
+      .corners {
+        position: absolute;
+        inset: 0;
+        border: 5px solid #f7fbff;
+        border-radius: 29px;
+      }
+      .corners::before,
+      .corners::after {
+        content: none;
+        position: absolute;
+        background: #24303a;
+      }
+      .corners::before {
+        left: 58px;
+        right: 58px;
+        top: -6px;
+        bottom: -6px;
+      }
+      .corners::after {
+        top: 58px;
+        bottom: 58px;
+        left: -6px;
+        right: -6px;
+      }
+      #scan-line {
+        position: absolute;
+        z-index: 2;
+        left: -8px;
+        right: -8px;
+        top: 30px;
+        height: 5px;
+        background: #57ff96;
+        box-shadow: 0 0 14px 8px #39ff8180;
+      }
+      #scan-result {
+        position: absolute;
+        top: 582px;
+        left: 24px;
+        right: 24px;
+        text-align: center;
+        font-size: 34px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 13px;
+      }
+      #scan-result svg {
+        width: 34px;
+        height: 34px;
+      }
+      .scan-note {
+        position: absolute;
+        top: 646px;
+        left: 24px;
+        right: 24px;
+        text-align: center;
+        font-size: 32px;
+        line-height: 1.25;
+        color: #d3dee8;
+      }
+      .identity {
+        padding: 88px 24px 0;
+        text-align: center;
+      }
+      .avatar {
+        width: 130px;
+        height: 130px;
+        object-fit: cover;
+        border-radius: 25px;
+        box-shadow: 0 4px 14px #10243c18;
+      }
+      .identity h2 {
+        margin: 20px 0 12px;
+        font-size: 34px;
+      }
+      .business-body {
+        margin: 38px 24px 0;
+      }
+      .business-body h3 {
+        margin-bottom: 20px;
+        font-size: 32px;
+        font-weight: 650;
+      }
+      .business-writing {
+        height: 160px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 22px;
+        text-align: center;
+        font-size: 32px;
+      }
+      .business-writing .dots i {
+        width: 16px;
+        height: 16px;
+      }
+      .generation {
+        padding: 78px 24px 24px;
+      }
+      .sparkle {
+        width: 70px;
+        height: 70px;
+        display: block;
+        margin: 0 auto 26px;
+        color: #0969ff;
+      }
+      .generation > .muted {
+        text-align: center;
+        margin-bottom: 36px;
+        font-size: 32px;
+      }
+      #generation-draft {
+        min-height: 190px;
+      }
+      .generation > .dots {
+        margin-top: 38px;
+      }
+      .shuffle-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .shuffle-head h2 {
+        font-size: 32px;
+      }
+      #shuffle-action {
+        min-height: 62px;
+        font-size: 30px;
+        padding: 12px 14px;
+        border: 2px solid #d0e1f7;
+        border-radius: 18px;
+        background: #f7fbff;
+        color: #0969ff;
+        gap: 8px;
+      }
+      #shuffle-action svg {
+        width: 32px;
+        height: 32px;
+      }
+      .option {
+        position: relative;
+        margin-top: 28px;
+        padding: 24px 64px 24px 24px;
+        min-height: 186px;
+        border: 2px solid #d1e1f6;
+        border-radius: 22px;
+        background: #fff;
+        font-size: 34px;
+        line-height: 1.4;
+        letter-spacing: -0.015em;
+      }
+      .option.chosen {
+        background: #edf5ff;
+        border-color: #9ec2ff;
+      }
+      .radio {
+        position: absolute;
+        right: 20px;
+        top: 50%;
+        margin-top: -16px;
+        width: 32px;
+        height: 32px;
+        border: 3px solid #8192aa;
+        border-radius: 50%;
+      }
+      .chosen .radio {
+        border: 9px solid #0969ff;
+        background: #fff;
+      }
+      .edit-content h2 {
+        margin: 20px 0 36px;
+      }
+      #edit-draft {
+        min-height: 245px;
+      }
+      #edit-phrase {
+        position: relative;
+        border-radius: 7px;
+      }
+      #edit-phrase.selected {
+        background: #b5d6ff;
+      }
+      #edit-phrase.selected::before,
+      #edit-phrase.selected::after {
+        content: '';
+        position: absolute;
+        width: 5px;
+        height: 21px;
+        background: #0969ff;
+        bottom: -18px;
+      }
+      #edit-phrase.selected::before {
+        left: 0;
+      }
+      #edit-phrase.selected::after {
+        right: 0;
+      }
+      .selection-handle {
+        display: none;
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        background: #0969ff;
+        border-radius: 50%;
+        bottom: -35px;
+      }
+      #edit-phrase.selected .selection-handle {
+        display: block;
+      }
+      .selection-handle.first {
+        left: -8px;
+      }
+      .selection-handle.last {
+        right: -8px;
+      }
+      .edit-note {
+        margin-top: 32px;
+        color: #62748b;
+        font-size: 32px;
+      }
+      #copy-draft {
+        min-height: 178px;
+      }
+      #copy-action {
+        font-size: 30px;
+      }
+      .confirm {
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+        margin: 24px 0 26px;
+        font-size: 32px;
+        line-height: 1.25;
+      }
+      #confirm-box {
+        width: 32px;
+        height: 32px;
+        flex-shrink: 0;
+        margin-top: 3px;
+        border: 2px solid #99aec7;
+        border-radius: 7px;
+        background: white;
+      }
+      #confirm-box.checked {
+        color: white;
+        background: #0969ff;
+        border-color: #0969ff;
+      }
+      #confirm-box svg {
+        width: 28px;
+        height: 28px;
+        display: none;
+      }
+      #confirm-box.checked svg {
+        display: block;
+      }
+      #copy-result {
+        margin-top: 24px;
+        min-height: 80px;
+        padding: 14px 18px;
+        justify-content: flex-start;
+        font-size: 32px;
+        opacity: 0;
+      }
+      #continue-pane .content {
+        padding-top: 130px;
+      }
+      #continue-pane h2 {
+        margin-bottom: 30px;
+      }
+      #continue-pane .draft {
+        min-height: 182px;
+        margin-bottom: 32px;
+      }
+      .google-content {
+        padding: 78px 24px 24px;
+      }
+      .google-head {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+      }
+      .google-logo {
+        width: 58px;
+        height: 58px;
+        flex-shrink: 0;
+      }
+      .google-head h2 {
+        font-size: 34px;
+      }
+      .google-head h3 {
+        font-size: 32px;
+        font-weight: 600;
+        line-height: 1.3;
+        margin-top: 8px;
+      }
+      .rating {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 28px;
+      }
+      .rating svg {
+        width: 56px;
+        height: 56px;
+        overflow: visible;
+        color: #8190a5;
+      }
+      .rating svg.filled {
+        color: #fbbc04;
+      }
+      .rating svg path {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linejoin: round;
+      }
+      .rating svg.filled path {
+        fill: currentColor;
+      }
+      .rating-note {
+        text-align: center;
+        margin-top: 16px;
+        font-size: 32px;
+        line-height: 1.3;
+        color: #62748b;
+      }
+      #google-draft {
+        margin-top: 26px;
+        min-height: 190px;
+        font-size: 34px;
+        padding: 22px 24px;
+      }
+      #google-draft.placeholder {
+        color: #718299;
+      }
+      #post-action {
+        min-height: 70px;
+        margin-top: 22px;
+        font-size: 32px;
+        padding: 12px 14px;
+      }
+      #demo-label {
+        text-align: center;
+        margin-top: 18px;
+        font-size: 32px;
+        line-height: 1.2;
+        color: #62748b;
+      }
+      #home-indicator {
+        position: absolute;
+        width: 120px;
+        height: 5px;
+        border-radius: 5px;
+        background: #24303a;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0.3;
+        display: none;
+        z-index: 7;
+      }
+      #stage[data-clip='scan'] #home-indicator {
+        background: #fff;
+        opacity: 0.55;
+      }
+      #tap {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        display: none;
+        z-index: 12;
+        color: #174ea6;
+        filter: drop-shadow(0 3px 5px #102c4940);
+      }
+      #tap svg {
+        width: 40px;
+        height: 40px;
+      }
+      #tap-ring {
+        position: absolute;
+        display: none;
+        width: 67px;
+        height: 67px;
+        border: 4px solid #73a9ff;
+        border-radius: 50%;
+        background: #0969ff12;
+        z-index: 11;
+      }
+      #burst {
+        position: absolute;
+        inset: 18px 13px;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 10;
+      }
+      .burst-star {
+        position: absolute;
+        opacity: 0;
+      }
+      .burst-star svg {
+        width: 100%;
+        height: 100%;
+        filter: drop-shadow(0 3px 3px #ae780330);
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="definitions" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <symbol id="check" viewBox="0 0 24 24">
+          <path
+            d="m5 12 4.5 4.5L19 7"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="copy" viewBox="0 0 24 24">
+          <rect
+            x="8"
+            y="8"
+            width="12"
+            height="12"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          />
+          <path
+            d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="shuffle" viewBox="0 0 24 24">
+          <path
+            d="M3 6h3c5 0 6 12 11 12h4m-4-4 4 4-4 4M3 18h3c2 0 3-2 4-4m4-4c1-2 2-4 4-4h3m-4-4 4 4-4 4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="hand" viewBox="0 0 40 40">
+          <path
+            d="M17 21V8a3 3 0 0 1 6 0v9l2-1a3 3 0 0 1 4 2 3 3 0 0 1 5 3l-1 9-5 7H17l-8-13a3 3 0 0 1 5-3l3 4"
+            fill="#fff"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="sparkle" viewBox="0 0 64 64">
+          <path
+            d="M27 10c3 12 7 16 19 19-12 3-16 7-19 19-3-12-7-16-19-19 12-3 16-7 19-19Zm23-7c1.2 5 3 7 8 8-5 1-6.8 3-8 8-1.2-5-3-7-8-8 5-1 6.8-3 8-8Z"
+            fill="currentColor"
+          />
+        </symbol>
+        <symbol id="gold-star" viewBox="0 0 64 64">
+          <path
+            d="m32 3 8.6 18.3 20 2.8-14.6 14 3.6 20L32 48.6 14.4 58l3.6-20L3.4 24.1l20-2.8L32 3Z"
+            fill="#ffca24"
+            stroke="#edaf14"
+            stroke-width="1"
+            stroke-linejoin="round"
+          />
+          <path
+            d="m32 3 0 31-8.6-12.7L32 3ZM3.4 24.1 32 34 18 38 3.4 24.1Z"
+            fill="#ffef93"
+            opacity=".7"
+          />
+        </symbol>
+        <symbol id="google-g" viewBox="0 0 48 48">
+          <path
+            fill="#4285f4"
+            d="M43.61 24.46c0-1.36-.12-2.66-.35-3.92H24v7.43h11c-.48 2.4-1.91 4.43-4.07 5.79v4.82h6.6c3.86-3.55 6.08-8.77 6.08-14.12Z"
+          />
+          <path
+            fill="#34a853"
+            d="M24 44c5.5 0 10.11-1.82 13.48-4.95l-6.6-5.13c-1.83 1.23-4.18 1.95-6.88 1.95-5.31 0-9.82-3.6-11.43-8.45H5.76v5.27A20.36 20.36 0 0 0 24 44Z"
+          />
+          <path
+            fill="#fbbc05"
+            d="M12.57 27.42a12.24 12.24 0 0 1 0-7.84v-5.27H5.76a20 20 0 0 0 0 18.38l6.81-5.27Z"
+          />
+          <path
+            fill="#ea4335"
+            d="M24 11.13c2.98 0 5.65 1.03 7.75 3.07l5.82-5.82C34.1 5.14 29.49 3 24 3A20.36 20.36 0 0 0 5.76 14.31l6.81 5.27c1.61-4.85 6.12-8.45 11.43-8.45Z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+    <main id="stage" data-clip="scan">
+      <div id="device">
+        <div id="screen">
+          <section id="scan-pane" class="pane active">
+            <img
+              class="scan-photo"
+              src="../../apps/web/public/marketing/digital-hammerr-agency-v1.png"
+              alt=""
+            />
+            <div class="camera-shade"></div>
+            <div class="camera">
+              <div class="corners"></div>
+              <img
+                id="qr"
+                alt="Illustrative QR code"
+                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='white'/%3E%3Cg fill='none' stroke='%23111827' stroke-width='5'%3E%3Cpath d='M12 12h25v25H12zM63 12h25v25H63zM12 63h25v25H12z'/%3E%3C/g%3E%3Cpath fill='%23111827' d='M20 20h9v9h-9zM71 20h9v9h-9zM20 71h9v9h-9zM48 13h5v15h-5zM46 43h12v8H46zM66 49h8v12h-8zM82 45h7v18h-7zM44 64h9v14h-9zM61 69h12v8H61zM78 80h10v8h-10z'/%3E%3C/svg%3E"
+              />
+              <div id="scan-line"></div>
+            </div>
+            <div id="scan-result">Scan QR code</div>
+            <p class="scan-note">Point your camera at the code</p>
+          </section>
+          <section id="business-pane" class="pane">
+            <div class="identity">
+              <img
+                class="avatar"
+                src="../../apps/web/public/marketing/digital-hammerr-agency-v1.png"
+                alt="Digital Hammerr"
+              />
+              <h2>Digital Hammerr</h2>
+              <p class="muted">Your business review page</p>
+            </div>
+            <div class="business-body">
+              <h3>Your review</h3>
+              <div class="draft business-writing">
+                <p>Writing your review…</p>
+                <div class="dots"><i></i><i></i><i></i></div>
+              </div>
+            </div>
+          </section>
+          <section id="generate-pane" class="pane">
+            <div class="generation">
+              <svg class="sparkle"><use href="#sparkle" /></svg>
+              <p class="muted">Ai is writing a draft…</p>
+              <div id="generation-draft" class="draft">
+                <span id="generated-text"></span><span id="generation-caret" class="caret"></span>
+              </div>
+              <div class="dots"><i></i><i></i><i></i></div>
+            </div>
+          </section>
+          <section id="shuffle-pane" class="pane">
+            <div class="content">
+              <div class="shuffle-head">
+                <h2>Draft options</h2>
+                <div id="shuffle-action" class="action">
+                  <svg><use href="#shuffle" /></svg>Shuffle
+                </div>
+              </div>
+              <div id="option-first" class="option chosen">
+                <span id="option-first-text"></span><span class="radio"></span>
+              </div>
+              <div id="option-second" class="option">
+                <span id="option-second-text"></span><span class="radio"></span>
+              </div>
+            </div>
+          </section>
+          <section id="edit-pane" class="pane">
+            <div class="content edit-content">
+              <h2>Edit your review</h2>
+              <div id="edit-draft" class="draft">
+                A helpful team and<br /><span id="edit-phrase"
+                  ><span id="edit-words">thoughtful design.</span
+                  ><i class="selection-handle first"></i><i class="selection-handle last"></i></span
+                ><span id="edit-caret" class="caret"></span>
+              </div>
+              <p class="edit-note">Your words, your experience.</p>
+            </div>
+          </section>
+          <section id="copy-pane" class="pane">
+            <div class="content">
+              <div id="copy-draft" class="draft">A helpful team and a well-designed website.</div>
+              <div id="confirm-row" class="confirm">
+                <span id="confirm-box"
+                  ><svg><use href="#check" /></svg></span
+                ><span>This reflects my experience.</span>
+              </div>
+              <div id="copy-action" class="action disabled">
+                <svg><use href="#copy" /></svg><span>Copy &amp; open Google</span>
+              </div>
+              <div id="copy-result" class="action success">
+                <svg><use href="#check" /></svg><span>Copied to clipboard!</span>
+              </div>
+            </div>
+          </section>
+          <section id="continue-pane" class="pane">
+            <div class="content">
+              <h2>Ready for Google</h2>
+              <div class="draft">A helpful team and a well-designed website.</div>
+              <div id="continue-action" class="action">
+                <svg><use href="#copy" /></svg><span>Copy &amp; open Google</span>
+              </div>
+            </div>
+          </section>
+          <section id="google-pane" class="pane">
+            <div class="google-content">
+              <div class="google-head">
+                <svg class="google-logo"><use href="#google-g" /></svg>
+                <div>
+                  <h2>Write a review</h2>
+                  <h3>Digital Hammerr</h3>
+                </div>
+              </div>
+              <div id="rating" class="rating"></div>
+              <p class="rating-note">Choose your own rating</p>
+              <div id="google-draft" class="draft placeholder">
+                <span id="google-text">Paste your review</span>
+              </div>
+              <div id="post-action" class="action disabled">Post</div>
+              <p id="demo-label">Demo review</p>
+            </div>
+          </section>
+          <span id="home-indicator"></span>
+          <div id="burst"></div>
+          <div id="tap-ring"></div>
+          <div id="tap">
+            <svg><use href="#hand" /></svg>
+          </div>
+          <div id="notch"></div>
+        </div>
+      </div>
+    </main>
+    <script>
+      const ids = ['scan', 'draft', 'publish'];
+      const byId = (id) => document.getElementById(id);
+      const clamp = (value) => Math.max(0, Math.min(1, value));
+      const ease = (value) => 1 - Math.pow(1 - clamp(value), 3);
+      const icon = (name) => `<svg viewBox="0 0 24 24"><use href="#${name}" /></svg>`;
+      const original = 'A helpful team and thoughtful design.';
+      const editedPhrase = 'a well-designed website.';
+      const edited = `A helpful team and ${editedPhrase}`;
+      let current = 'scan';
+      byId('rating').innerHTML = Array.from(
+        { length: 5 },
+        (_, index) =>
+          `<svg id="rating-${index + 1}" viewBox="0 0 24 24"><path d="m12 2 3.05 6.18 6.82.99-4.93 4.81 1.16 6.79L12 17.56l-6.1 3.21 1.17-6.79L2.14 9.17l6.81-.99L12 2Z" /></svg>`,
+      ).join('');
+      byId('burst').innerHTML = Array.from(
+        { length: 5 },
+        () =>
+          '<span class="burst-star"><svg viewBox="0 0 64 64"><use href="#gold-star" /></svg></span>',
+      ).join('');
+      function tapTarget(time, start, id, duration = 0.72) {
+        const local = time - start;
+        if (local < -0.25 || local > duration) return;
+        const screen = byId('screen').getBoundingClientRect();
+        const target = byId(id).getBoundingClientRect();
+        const x = target.left - screen.left + target.width * 0.72 - 22;
+        const y = target.top - screen.top + target.height / 2 - 8;
+        const p = ease((local + 0.25) / 0.25);
+        const tap = byId('tap');
+        tap.style.display = 'block';
+        tap.style.left = `${x + (1 - p) * 22}px`;
+        tap.style.top = `${y + (1 - p) * 24}px`;
+        tap.style.opacity = String(Math.min(p, clamp((duration - local) / 0.2)));
+        tap.style.transform = `scale(${local >= 0 && local < 0.14 ? 0.88 : 1})`;
+        if (local >= 0 && local <= 0.5) {
+          const ring = byId('tap-ring');
+          ring.style.display = 'block';
+          ring.style.left = `${x - 11}px`;
+          ring.style.top = `${y - 12}px`;
+          ring.style.opacity = String(1 - local / 0.5);
+          ring.style.transform = `scale(${0.4 + local * 1.8})`;
+        }
+      }
+      function renderScene(current, seconds) {
+        if (!Number.isFinite(seconds)) throw new Error('renderAt requires finite seconds.');
+        const t = Math.max(0, Math.min(5.999, seconds));
+        const pane =
+          current === 'post' ? 'google' : current === 'google' && t < 1.65 ? 'continue' : current;
+        document
+          .querySelectorAll('.pane')
+          .forEach((node) => node.classList.toggle('active', node.id === `${pane}-pane`));
+        const notched = true;
+        byId('notch').classList.toggle('visible', notched);
+        byId('home-indicator').style.display = notched ? 'block' : 'none';
+        byId('tap').style.display = 'none';
+        byId('tap-ring').style.display = 'none';
+        document.querySelectorAll('.dots i').forEach((dot, index) => {
+          dot.style.opacity = String(0.25 + 0.75 * ((Math.sin(t * 5 - index * 1.5) + 1) / 2));
+        });
+        const detected = t >= 3.35;
+        byId('scan-line').style.transform = `translateY(${(t * 95) % 300}px)`;
+        byId('scan-line').style.opacity = detected ? '0' : '1';
+        byId('scan-result').innerHTML = detected
+          ? `${icon('check')}<span>QR detected</span>`
+          : 'Scan QR code';
+        byId('scan-result').style.color = detected ? '#87ffb3' : '#fff';
+        const letters = Math.floor(clamp((t - 0.55) / 2.7) * original.length);
+        byId('generated-text').textContent = original.slice(0, letters);
+        byId('generation-caret').style.opacity =
+          t < 3.25 || Math.floor(t * 2) % 2 === 0 ? '1' : '0';
+        const shuffled = t >= 1.7;
+        byId('option-first-text').textContent = shuffled
+          ? 'Clear communication and thoughtful design.'
+          : original;
+        byId('option-second-text').textContent = shuffled
+          ? original
+          : 'Professional digital marketing support.';
+        byId('option-first').classList.toggle('chosen', t < 3.15);
+        byId('option-second').classList.toggle('chosen', t >= 3.15);
+        const selected = t >= 0.85 && t < 2.15;
+        byId('edit-phrase').classList.toggle('selected', selected);
+        byId('edit-words').textContent =
+          t < 2.15
+            ? 'thoughtful design.'
+            : editedPhrase.slice(0, Math.floor(clamp((t - 2.15) / 1.05) * editedPhrase.length));
+        byId('edit-caret').style.display = selected ? 'none' : 'inline-block';
+        byId('edit-caret').style.opacity = t < 3.2 || Math.floor(t * 2) % 2 === 0 ? '1' : '0';
+        byId('confirm-box').classList.toggle('checked', t >= 1.15);
+        byId('copy-action').classList.toggle('disabled', t < 1.15);
+        byId('copy-result').style.opacity = t >= 2.45 ? '1' : '0';
+        const rating = current === 'post' ? 4 : current === 'google' && t >= 2.9 ? 4 : 0;
+        document
+          .querySelectorAll('#rating svg')
+          .forEach((star, index) => star.classList.toggle('filled', index < rating));
+        const pasted = current === 'post' && t >= 1.35;
+        const posted = current === 'post' && t >= 3.65;
+        byId('google-text').textContent = pasted ? edited : 'Paste your review';
+        byId('google-draft').classList.toggle('placeholder', !pasted);
+        byId('post-action').className = `action${posted ? ' success' : !pasted ? ' disabled' : ''}`;
+        byId('post-action').innerHTML = posted
+          ? `${icon('check')}<span>Review posted</span>`
+          : current === 'post' && t >= 3.2
+            ? 'Posting…'
+            : 'Post';
+        if (current === 'shuffle') {
+          tapTarget(t, 1.5, 'shuffle-action');
+          tapTarget(t, 3, 'option-second');
+        }
+        if (current === 'edit') tapTarget(t, 0.8, 'edit-phrase');
+        if (current === 'copy') {
+          tapTarget(t, 1.05, 'confirm-box');
+          tapTarget(t, 2.3, 'copy-action');
+        }
+        if (current === 'google') {
+          if (t < 1.65) tapTarget(t, 1.4, 'continue-action', 0.4);
+          else tapTarget(t, 2.75, 'rating-4');
+        }
+        if (current === 'post') {
+          tapTarget(t, 1.2, 'google-draft');
+          tapTarget(t, 3.05, 'post-action');
+        }
+        const flights = [
+          { x: 5, y: 266, size: 27 },
+          { x: 351, y: 266, size: 27 },
+          { x: 5, y: 537, size: 27 },
+          { x: 351, y: 537, size: 27 },
+          { x: 346, y: 79, size: 25 },
+        ];
+        document.querySelectorAll('.burst-star').forEach((star, index) => {
+          const flight = flights[index];
+          const local = t - 3.7 - index * 0.07;
+          const p = ease(local / 0.95);
+          star.style.left = `${192 + (flight.x - 192) * p}px`;
+          star.style.top = `${583 + (flight.y - 583) * p - Math.sin(p * Math.PI) * 18}px`;
+          star.style.width = `${flight.size}px`;
+          star.style.height = `${flight.size}px`;
+          star.style.opacity =
+            current !== 'post' || local < 0
+              ? '0'
+              : String(clamp(local / 0.18) * clamp((6 - t) / 0.35));
+          star.style.transform = `scale(${0.15 + 0.85 * p}) rotate(${(1 - p) * 35}deg)`;
+        });
+      }
+      window.renderAt = (seconds) => {
+        if (!Number.isFinite(seconds)) throw new Error('renderAt requires finite seconds.');
+        const t = Math.max(0, Math.min(8.999, seconds));
+        let scene;
+        let local;
+        if (current === 'scan') {
+          scene = t < 5.2 ? 'scan' : 'business';
+          local = t < 5.2 ? t : t - 5.2;
+        } else if (current === 'draft') {
+          scene = t < 3 ? 'generate' : t < 6 ? 'shuffle' : 'edit';
+          local = t < 3 ? t * 1.3 : t < 6 ? (t - 3) * 1.7 : (t - 6) * 1.65;
+        } else {
+          scene = t < 2.6 ? 'copy' : t < 5 ? 'google' : 'post';
+          local = t < 2.6 ? t * 1.2 : t < 5 ? 1.65 + (t - 2.6) * 1.4 : (t - 5) * 1.3;
+        }
+        byId('stage').dataset.clip = scene;
+        byId('stage').dataset.story = current;
+        renderScene(scene, local);
+      };
+      window.STORY_SIZE = Object.freeze({ width: 480, height: 900 });
+      window.STORY_DURATION = 9;
+      window.STORY_READY = Promise.all([
+        document.fonts.ready,
+        ...Array.from(document.images, (image) => image.decode()),
+      ]);
+      window.selectClip = async (id) => {
+        if (!ids.includes(id)) throw new Error(`Unknown clip: ${id}`);
+        current = id;
+        byId('stage').dataset.clip = id;
+        await window.STORY_READY;
+        window.renderAt(0);
+      };
+      window.setQrSource = async (source) => {
+        byId('qr').src = source;
+        await byId('qr').decode();
+      };
+      window.renderAt(0);
+    </script>
+  </body>
+</html>

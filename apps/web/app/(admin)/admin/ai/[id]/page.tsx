@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
+import { getSession } from '@/lib/session';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { Badge } from '@ai-review/ui';
 import { PromptVersionService } from '@ai-review/core';
 import { db } from '@/lib/db';
@@ -18,6 +19,10 @@ export default async function AdminPromptVersionPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // 05_RBAC: a support viewer may not see the system prompt or change platform settings.
+  const viewerCheck = await getSession();
+  if (viewerCheck?.role !== 'SUPER_ADMIN') redirect('/admin');
+
   const { id } = await params;
   if (!UUID.test(id)) notFound();
   const row = await new PromptVersionService(db()).get(id);

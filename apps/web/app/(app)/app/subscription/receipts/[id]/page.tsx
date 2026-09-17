@@ -10,6 +10,8 @@ import { getSession } from '@/lib/session';
 import { formatDate, formatMoney } from '@/components/dashboard/presentation';
 import { describePaymentStatus } from '@/components/dashboard/subscription/PaymentHistory';
 import { PrintButton } from '@/components/dashboard/subscription/PrintButton';
+import { InvoiceDocument } from '@/components/billing/InvoiceDocument';
+import { invoiceViewFrom } from '@/lib/billing/invoice-view';
 
 /**
  * A receipt for one captured payment (SUB-01 "Download receipt", E10-06).
@@ -17,6 +19,10 @@ import { PrintButton } from '@/components/dashboard/subscription/PrintButton';
  * The payment is looked up by id AND by the business the session resolves to, so a receipt id
  * from another tenant is a 404 rather than someone else's invoice (AC-003). Only a captured
  * payment has a receipt; a started or failed attempt 404s too — there is nothing to receipt.
+ *
+ * AMENDMENT-029: a payment settled since invoicing began carries a numbered invoice with the
+ * tax split, and that is what renders. Older captured payments keep the plain receipt below.
+ * A refunded payment still shows its invoice, with the refund noted — the sale happened.
  */
 
 export const metadata: Metadata = { title: 'Receipt | Ai Review' };
@@ -46,9 +52,39 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     .innerJoin(users, eq(users.id, businesses.ownerUserId))
     .where(and(eq(payments.id, id), eq(payments.businessId, tenant.businessId)))
     .limit(1);
-  if (!row || row.payment.status !== 'CAPTURED') notFound();
+  if (!row || (row.payment.status !== 'CAPTURED' && row.payment.status !== 'REFUNDED')) {
+    notFound();
+  }
 
   const p = row.payment;
+  const invoice = invoiceViewFrom(p);
+  if (invoice) {
+    return (
+      <div className="flex max-w-2xl flex-col gap-6">
+        <div className="flex flex-wrap items-start justify-between gap-3 print:hidden">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold tracking-wider text-ink-muted uppercase">
+              Subscription
+            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-ink">
+              {invoice.tax.gst_applicable ? 'Invoice' : 'Receipt'} {invoice.invoiceNumber}
+            </h1>
+          </div>
+          <div className="flex gap-2">
+            <Link
+              href="/app/subscription"
+              className="inline-flex items-center text-sm font-medium text-ink underline underline-offset-2"
+            >
+              Back to your plan
+            </Link>
+            <PrintButton />
+          </div>
+        </div>
+        <InvoiceDocument invoice={invoice} timezone={row.timezone} />
+      </div>
+    );
+  }
+
   const reference = p.rawReference as Record<string, unknown>;
   const periodStart = isoDate(reference['period_starts_at']);
   const periodEnd = isoDate(reference['period_expires_at']);

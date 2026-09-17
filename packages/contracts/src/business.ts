@@ -57,3 +57,27 @@ export const customerRequest = z.object({
   note: z.string().max(1000).optional(),
 });
 export type CustomerRequest = z.infer<typeof customerRequest>;
+
+/**
+ * AMENDMENT-029. What the owner wants printed on their GST invoice. Every field is optional —
+ * a business with no GSTIN still gets an invoice, just one addressed to the business by name.
+ * Empty strings clear a field; the GSTIN and state code are checked for shape only, the seller's
+ * accountant checks the rest.
+ */
+const GSTIN_SHAPE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+export const billingDetailsRequest = z.object({
+  billing_legal_name: z.string().trim().max(200).default(''),
+  gstin: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((v) => v === '' || GSTIN_SHAPE.test(v), 'Enter a 15-character GSTIN.')
+    .default(''),
+  billing_state_code: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || /^[0-9]{2}$/.test(v), 'Enter the two-digit GST state code.')
+    .default(''),
+  billing_address: z.string().trim().max(500).default(''),
+});
+export type BillingDetailsRequest = z.infer<typeof billingDetailsRequest>;

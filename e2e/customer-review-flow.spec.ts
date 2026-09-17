@@ -39,7 +39,7 @@ test.describe('customer review flow', () => {
     await page.context().clearCookies();
     await page.goto(`/r/${QR_CODE}`);
 
-    await expect(page.getByRole('heading', { name: /demo south cafe/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Digital Hammerr', exact: true })).toBeVisible();
 
     // D-008: no questionnaire, and now no tap either — the scan was the intent, so the draft is
     // written on arrival. Nothing is asked of the customer before they have something to react to.
@@ -190,7 +190,9 @@ test.describe('customer review flow', () => {
     ]);
     await opened.close();
 
-    await expect(page.locator('.notice-error')).toContainText(/could not copy automatically/i);
+    await expect(page.getByRole('alert').filter({ hasText: /could not copy/i })).toContainText(
+      /could not copy automatically/i,
+    );
     await expect(page.getByText(/^Copied\./)).toHaveCount(0);
     await expect(page.getByRole('link', { name: /^open google$/i })).toBeVisible();
     await expect
@@ -236,7 +238,9 @@ test.describe('customer review flow', () => {
     page.context().on('page', () => (pagesOpened += 1));
     await page.getByRole('link', { name: 'Copy & open Google' }).click();
 
-    await expect(page.locator('.notice-error')).toContainText(/could not copy automatically/i);
+    await expect(page.getByRole('alert').filter({ hasText: /could not copy/i })).toContainText(
+      /could not copy automatically/i,
+    );
     await expect(page.getByText(/^Copied\./)).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`/r/${QR_CODE}`));
     expect(pagesOpened).toBe(0);

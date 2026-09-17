@@ -145,11 +145,10 @@ everything else.
 actions and the audit trail), `/admin/settings` (platform settings, versioned), `/admin/audit`,
 `/admin/ai` and `/admin/ai/[id]`. Guarded by `requireAdmin` — CSRF, session, `SUPER_ADMIN` —
 in a separate route group with its own layout (RBAC rule 4); `landingPathFor` already sent admins
-to `/admin`. **MFA is not built.** `19_Admin_Panel_Spec.md` makes it mandatory and it is E13;
-until then no admin account may exist on a publicly reachable deployment. `create-admin.mjs`
-refuses to run in production for that reason. The seed keeps an existing admin's password on a
-reseed unless `SEED_ADMIN_PASSWORD` is set, because a reseed that silently locked the operator out
-is what happened the first time.
+to `/admin`. MFA was not built at this point; AMENDMENT-027 builds it and makes it mandatory,
+and `create-admin.mjs` no longer refuses production. The seed keeps an existing admin's password
+on a reseed unless `SEED_ADMIN_PASSWORD` is set, because a reseed that silently locked the
+operator out is what happened the first time.
 
 **Platform settings are data.** `platform_settings` holds `free_generation_limit` (10),
 `annual_price_paise` (99,900), `pro_generation_limit` (2,000) and `fair_use_monthly_soft_limit`
@@ -287,7 +286,7 @@ Was a bare varchar(40) where every comparable field in the schema is an enum.
 
 `13_Security_Privacy_Compliance.md` and `19_Admin_Panel_Spec.md` both make MFA **mandatory** for
 super-admin, but `users` carried no columns for it. Storage defined now; the enrolment and challenge
-flow is built in E13.
+flow is AMENDMENT-027.
 
 ### AMENDMENT-008 — user_invites table added
 
@@ -710,6 +709,136 @@ assistant answers 503 — never on 402, which will not change in a second — be
 A failed generation releases its reservation (AC-014), so the retry costs the business nothing.
 `AI_REQUEST_TIMEOUT_MS` is 12 s in the local environment for the same reason; the spec's 8 s was
 written against OpenAI and the free tier is spikier.
+
+### AMENDMENT-027 — admin MFA is built and mandatory; a support viewer role; 12-hour admin sessions
+
+Closes the gap CHANGE-004 left open and resolves AMENDMENT-007's "flow in E13" now rather than
+later: the production admin was password-only on a public host.
+
+**Enrolment and challenge.** RFC 6238 TOTP on `node:crypto` (SHA-1, six digits, 30 s, one step
+of drift either way), no new dependency. An admin signing in with a password gets a ten-minute
+_pending_ session that can reach only the MFA screens: `/login/mfa/enrol` (QR plus manual key,
+confirm with one code, eight recovery codes shown once) until enrolled, `/login/mfa` after. A
+passed challenge marks the session verified and extends it to the twelve-hour cap;
+`remember_me` is ignored for admin roles. The secret is sealed with AES-256-GCM under a key
+derived (HKDF) from the already-required `APP_ENCRYPTION_KEY`, versioned (`v1.`) with the user
+id as associated data; recovery codes are stored as `privacyHash` digests and consumed by a
+single atomic UPDATE, so a double submit spends one code. Replay is refused through
+`users.mfa_last_used_step`. Rate limits: five failures per session per 15 minutes, 25 per IP
+prefix, 30 per user per day, DENY when the store is unreachable.
+
+**Step-up.** A fresh code within 15 minutes is demanded for `platform_settings.update`,
+`user.role.change`, `user.disable`, `user.mfa.reset`, `user.invite.create` and
+`payment.refund` (`requireAdmin(request, { stepUp: true })`, answered as
+`AUTH_MFA_STEP_UP_REQUIRED`; the screens prompt and retry). Existing business actions are
+unchanged.
+
+**Team management in-app.** `/admin/team`: invite (reusing `user_invites`, now with `role` and
+`full_name`, a three-day emailed link — the create response also carries the URL outside
+production so the flow works before Resend exists), change role, disable/enable, reset another
+admin's MFA. A member cannot act on themselves; the last `SUPER_ADMIN` cannot be demoted or
+disabled. `BUSINESS_SUPPORT_VIEWER` (05_RBAC) is real: read-only overview, businesses,
+payments, activity and audit; no Ai prompts, settings or team; MFA mandatory just the same.
+`create-admin.mjs` no longer refuses production (MFA is enforced at first sign-in) and takes
+`--totp-secret` for break-glass and E2E.
+
+**Sessions.** `sessions.mfa_verified_at`; `users.disabled_at/disabled_reason` — a disabled
+account resolves to no session and its password answers like a wrong one.
+
+**The switch.** `ADMIN_MFA_REQUIRED` (default `true`). On 16 September 2026 the owner asked
+for MFA to be removed "for now"; rather than tear the flow out, production runs with the switch
+off: an admin signs in to a twelve-hour session straight away, `requireAdmin` skips the
+verified check and the step-up, and the enrolment and challenge screens stay reachable. This is
+a deliberate departure from 19_Admin_Panel_Spec's "MFA mandatory" on a public host, recorded
+here so it is not mistaken for the intended end state; flipping the variable back restores
+the mandatory flow with no code change.
+
+### AMENDMENT-028 — every action a signed-in person takes is recorded
+
+The owner asked that "all the user action should be tracked". `analytics_events` was the wrong
+home: partitioned, typed from the frozen CSV taxonomy, `business_id NOT NULL`, thirteen-month
+retention. Security logs need a nullable business (failed logins, admin sign-ins) and a
+90–180-day retention (13_Security). Hence `user_activity_logs`: `user_id` (SET NULL on delete),
+`business_id`, `session_id`, `action` from a closed list (`packages/core/src/activity/actions.ts`
+— auth._, account._, business._, ai._, qr._, customer._, review_request._, feedback._,
+subscription.*), `outcome` SUCCESS|FAILURE|DENIED, target, sanitised `metadata` (keys matching
+password/token/secret/code/hash/authorization/cookie are dropped, strings capped at 500, one
+level deep, 40 keys), `ip_hash` (never an address), `user_agent`, `occurred_at`.
+`ActivityRecorder.record` never throws and runs after the response (`after()`), so tracking can
+never fail a request. Thirty-four routes are instrumented, one line after the write each
+describes; GET reads, `public/**` and webhooks are not. `/admin/activity` is the explorer
+(filters by person, business, action or area, outcome, dates; keyset "Older"); the business
+page has an Activity tab; `GET /api/v1/admin/activity` serves the same with `allowViewer`.
+Retention: `ACTIVITY_RETENTION_DAYS` (180), purged by the daily cron.
+
+### AMENDMENT-029 — payments that take money: GST invoices, refunds, reconciliation, expiry, receipts
+
+**Invoices at settle time.** `settleOrder` (the one path a paid order becomes a Pro year; now
+public so reconciliation uses it) issues the invoice in the same UPDATE as the period: a number
+drawn from `invoice_sequences` by UPSERT inside the transaction (consecutive under concurrency,
+no gap on rollback; `DH/2026-27/000001` per financial year, April–March in IST), the tax split,
+and both parties frozen as `seller_snapshot`/`buyer_snapshot`. A later price or GST change never
+rewrites an issued invoice (ADMIN-04-02). The ₹999 price is GST-inclusive: taxable value =
+gross × 10000 ÷ (10000 + rate bps), tax = gross − taxable, CGST/SGST within the seller's state
+(odd paisa to SGST), IGST across; the buyer's state decides, the seller's stands in when the
+buyer gave none and the invoice says so. No GST is split out until the seller's GSTIN and state
+code are set in `/admin/settings` — an unregistered seller may not charge it; until then the
+document is titled a receipt and records the reason. Seller settings: `seller_legal_name`,
+`seller_address`, `seller_gstin`, `seller_state_code`, `seller_sac_code` (998314 — accountant to
+confirm), `invoice_prefix`, `gst_rate_bps`. Owner billing details on `/app/settings`
+(`PUT /api/v1/business/billing`). The document renders on the owner's receipt page and at
+`/admin/payments/{id}/invoice`; PDF is the browser's print.
+
+**Payment control.** `/admin/payments`: every tenant's payments with invoice, refunds and the
+last webhook outcome; a webhook ledger tab (`payment_webhook_events` now carries `payment_id`
+and `outcome`). Actions: refund (step-up; full or partial; three phases — REQUESTED row, Razorpay
+`POST /payments/{id}/refund`, then the row and `payments.refunded_paise` updated with what it
+said — idempotent by `provider_refund_id`, so `refund.processed` for our own refund is a no-op
+and a refund made at the Razorpay dashboard is recorded once as SYSTEM), reconcile (lists the
+order's payments at Razorpay and settles a captured one through `settleOrder`), mark failed
+(CREATED/AUTHORIZED only), resend receipt. **Policy:** a partial refund never touches the
+entitlement; a full refund revokes Pro only when that payment funds the current period
+(`entitlement_note = 'payment:<id>'`). All audited (`payment.refund/reconcile/mark_failed` are
+high-risk). Webhook events subscribed: `payment.captured`, `order.paid`, `payment.failed`
+(now storing `failure_reason`), `refund.created`, `refund.processed`, `refund.failed`.
+
+**System actor.** `admin_audit_logs.actor_user_id` is nullable with `actor_type`
+('ADMIN'|'SYSTEM') and a CHECK; the expiry sweep and provider-initiated refunds write as
+`system`, shown as such in the explorer.
+
+**Expiry, reminders, receipts.** `EXPIRED` was a status nothing wrote. The daily cron
+(`/api/cron/subscriptions`, Vercel Cron 00:30 UTC, bearer `CRON_SECRET`, 503 while unset)
+flips lapsed PRO_ACTIVE/PAST_DUE rows to EXPIRED under SKIP LOCKED with a SYSTEM audit row,
+queues T30/T7/T1 renewal reminders and the EXPIRED notice as rows first
+(`subscription_reminders`, unique per period and kind, so a run that repeats or is late never
+sends twice and a late run sends only the nearest due kind), sends what is queued (five
+attempts, stale ones skipped when the year was renewed), and purges activity past retention.
+Receipts go out from the browser callback or the webhook, whichever settles first, and
+`payments.receipt_emailed_at` records it; without Resend the payment shows "not sent".
+Email is Resend (`RESEND_API_KEY`); development prints to the console.
+
+### AMENDMENT-030 — abuse signals computed on read, and Ai-only responses
+
+19_Admin_Panel_Spec L107-122 as built, without a pipeline. Four signals from numbers the tables
+already hold, each shown with its evidence: a generation spike (24 h > 3× the 7-day daily
+average and ≥ 20), repeated sign-ups (≥ 3 `auth.signup` activity rows sharing an `ip_hash` in
+24 h), feedback spam (≥ 10 private feedback in 24 h), and an unsafe Ai context (the owner's own
+summary or terms matching the incentive/rating/claim gates in `prompt-builder`). The overview
+lists them; the business list filters "High Ai usage" (top decile, 24 h) and "Ai suspended or
+throttled".
+
+Responses, all high-risk (reason required) and narrower than a suspension: `warn` (an email,
+audited even when no transport exists), `suspend_ai` / `restore_ai`
+(`businesses.ai_suspended_at/reason`; the public generate route answers `AI_SUSPENDED` with the
+same words as a provider outage and the page's Google button keeps working — Flow E step 3),
+`throttle` / `unthrottle` (`ai_throttle_until`, `ai_throttle_per_hour`; a per-business ENFORCE
+dimension in the public generation limiter, keyed by the throttle's expiry so a re-applied
+throttle starts a fresh window, applied even to a caller with no anonymous session).
+
+**Business detail as eleven tabs** (spec L56-66): Overview, Owner & account (with an audited
+"send password reset"), Public profile, Ai context & modes, QR sources, Analytics (30-day
+funnel and daily table from `analytics_events`), Subscription & payments, Domain (read-only
+until E11), Usage & abuse, Activity, Audit. `?tab=` is the state.
 
 ---
 

@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { verifyCsrf } from '@/lib/csrf';
 import { passwordHasher } from '@/lib/auth-helpers';
 import { clearSessionCookie, sessionService } from '@/lib/session';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/auth/reset-password — AUTH-03-02.
@@ -102,6 +103,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   await sessionService().revokeAllForUser(userId, 'PASSWORD_RESET');
   await clearSessionCookie();
 
+  recordActivity(
+    request,
+    { userId },
+    { action: 'auth.password.reset.complete', targetType: 'user', targetId: userId },
+  );
   return NextResponse.json({
     message: 'Your password has been changed. Please sign in.',
     next: '/login',

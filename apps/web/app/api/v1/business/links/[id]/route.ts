@@ -13,6 +13,7 @@ import {
   sectionTarget,
   type SectionType,
 } from '@/components/dashboard/profile/sections';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * PATCH/DELETE /api/v1/business/links/{id} — the per-section half of PROFILE-01.
@@ -213,6 +214,15 @@ export async function PATCH(
     throw error;
   }
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'business.link.update',
+      targetType: 'business_link',
+      targetId: id,
+    },
+  );
   return NextResponse.json({
     // Field names mirror GET /business/links, so the screen reads back exactly the shape it lists.
     section: {
@@ -288,6 +298,15 @@ export async function DELETE(
   // The remaining rows are deliberately not renumbered. `sort_order` is read only as a relative
   // ordering (`ORDER BY sort_order, created_at` on the public page), so a gap changes nothing an
   // owner or a visitor can observe, and a second write per delete would be for tidiness alone.
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'business.link.delete',
+      targetType: 'business_link',
+      targetId: row.id,
+    },
+  );
   return NextResponse.json({ id: row.id, deleted: true });
 }
 

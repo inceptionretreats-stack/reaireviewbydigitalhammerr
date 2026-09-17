@@ -95,13 +95,13 @@
 .brandCopy {
   display: flex;
   flex-direction: column;
-  line-height: 1.04;
+  line-height: 1.2;
 }
 
 .brandCopy strong {
   font-size: 20px;
-  font-weight: 840;
-  letter-spacing: -0.04em;
+  font-weight: 650;
+  letter-spacing: -0.02em;
 }
 
 .brandCopy small {
@@ -120,7 +120,7 @@
   border-radius: 11px;
   color: #465063;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -138,9 +138,9 @@
   margin: 0;
   color: #111827;
   font-size: clamp(36px, 4vw, 52px);
-  font-weight: 860;
-  letter-spacing: -0.055em;
-  line-height: 1.02;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .formContent :global(h1 + p) {
@@ -153,7 +153,7 @@
 .formContent :global(label) {
   color: #172033;
   font-size: 14px;
-  font-weight: 750;
+  font-weight: 650;
 }
 
 .formContent :global(input:not([type='checkbox'])) {
@@ -183,12 +183,12 @@
   border-radius: 13px;
   box-shadow: 0 13px 28px rgb(25 103 210 / 22%);
   font-size: 15px;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .formContent :global(a) {
   color: #174ea6;
-  font-weight: 730;
+  font-weight: 650;
   text-underline-offset: 3px;
 }
 
@@ -292,6 +292,12 @@
   content: '';
 }
 
+.mediaArtwork {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
 .mediaImage {
   object-fit: cover;
   object-position: 50% 44%;
@@ -302,24 +308,24 @@
   position: absolute;
   z-index: 3;
   top: clamp(50px, 8vh, 90px);
-  left: clamp(35px, 6vw, 80px);
-  width: min(330px, 42%);
+  left: clamp(28px, 3vw, 48px);
+  width: min(230px, 27%);
   color: #0b1f33;
   text-shadow: 0 2px 24px rgb(255 255 255 / 95%);
 }
 
 .mediaCopy h2 {
   margin: 0;
-  font-size: clamp(43px, 4.5vw, 67px);
-  font-weight: 870;
-  letter-spacing: -0.06em;
-  line-height: 0.99;
+  font-size: clamp(30px, 3.2vw, 44px);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .mediaCopy p {
   margin: 20px 0 0;
   color: #4f5968;
-  font-size: clamp(15px, 1.4vw, 20px);
+  font-size: clamp(14px, 1.1vw, 16px);
   font-weight: 580;
   line-height: 1.42;
   text-shadow: 0 2px 20px #ffffff;
@@ -457,21 +463,18 @@
   }
 
   .mediaPanel {
-    min-height: 240px;
+    min-height: 520px;
   }
 
   .mediaSticky {
     position: relative;
-    height: 240px;
+    height: 520px;
   }
 
   .mediaCanvas::before {
-    background: linear-gradient(
-      90deg,
-      rgb(255 255 255 / 72%) 0,
-      rgb(255 255 255 / 30%) 47%,
-      transparent 75%
-    );
+    bottom: auto;
+    height: 154px;
+    background: #f3f6f4;
   }
 
   .mediaCanvas::after {
@@ -490,18 +493,31 @@
     );
   }
 
+  .mediaArtwork {
+    top: 154px;
+    right: auto;
+    left: 50%;
+    width: min(560px, 100%);
+    translate: -50% 0;
+  }
+
   .mediaImage {
-    object-position: 50% 43%;
+    object-fit: contain;
+    object-position: 50% 50%;
+    animation: none;
   }
 
   .mediaCopy {
-    top: 35px;
-    left: 28px;
-    width: 300px;
+    top: 28px;
+    left: 50%;
+    width: min(480px, calc(100% - 56px));
+    translate: -50% 0;
+    text-shadow: none;
   }
 
   .mediaCopy h2 {
-    font-size: 36px;
+    font-size: clamp(30px, 4.6vw, 36px);
+    text-wrap: balance;
   }
 
   .mediaCopy p {
@@ -509,10 +525,27 @@
   }
 
   .mediaCard {
-    right: 25px;
-    bottom: 21px;
-    width: 270px;
+    right: auto;
+    bottom: 18px;
+    left: 50%;
+    width: min(315px, calc(100% - 40px));
     padding: 13px;
+    translate: -50% 0;
+  }
+
+  .tickBlue {
+    top: 38%;
+    left: 20%;
+  }
+
+  .tickRed {
+    top: 56%;
+    left: 16%;
+  }
+
+  .tickGreen {
+    top: 48%;
+    right: 16%;
   }
 }
 
@@ -583,18 +616,9 @@
     gap: 2px;
   }
 
-  .mediaPanel {
-    min-height: 270px;
-  }
-
-  .mediaSticky {
-    height: 270px;
-  }
-
   .mediaCopy {
     top: 28px;
-    left: 20px;
-    width: 205px;
+    width: calc(100% - 40px);
   }
 
   .mediaCopy h2 {
@@ -602,9 +626,7 @@
   }
 
   .mediaCard {
-    right: 16px;
-    bottom: 15px;
-    width: 230px;
+    width: min(315px, calc(100% - 32px));
   }
 
   .mediaCardIcon {

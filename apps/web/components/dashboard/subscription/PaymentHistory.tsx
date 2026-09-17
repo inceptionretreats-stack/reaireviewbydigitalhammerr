@@ -8,7 +8,8 @@ import { formatDate, formatMoney } from '@/components/dashboard/presentation';
  *
  * Every row is a `payments` record for this business, newest first. A receipt exists only for
  * a payment that was captured: a started or failed attempt has nothing to receipt, and a link
- * on those rows would open a page that says so.
+ * on those rows would open a page that says so. A refunded payment keeps its receipt — the
+ * sale happened, and the invoice now notes the refund (AMENDMENT-029).
  */
 
 const STATUS_LABEL: Record<Payment['status'], string> = {
@@ -54,14 +55,18 @@ export function PaymentHistory({ payments, timezone }: PaymentHistoryProps) {
     },
     {
       key: 'receipt',
-      header: 'Receipt',
+      header: 'Invoice',
       cell: (p) =>
-        p.status === 'CAPTURED' ? (
+        p.status === 'CAPTURED' || p.status === 'REFUNDED' ? (
           <Link
             href={`/app/subscription/receipts/${p.id}`}
             className="text-sm font-medium text-ink underline underline-offset-2"
           >
-            Download receipt
+            {p.invoiceNumber ? (
+              <span className="font-mono text-xs">{p.invoiceNumber}</span>
+            ) : (
+              'Download receipt'
+            )}
           </Link>
         ) : (
           <span className="text-ink-muted">—</span>

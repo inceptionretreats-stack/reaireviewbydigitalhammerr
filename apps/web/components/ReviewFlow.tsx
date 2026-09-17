@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import styles from './CustomerReview.module.css';
 import { DraftEditor, type CopyStatus } from './DraftEditor';
+import { ReviewFlowIcon } from './ReviewFlowIcon';
 
 /**
  * The customer review flow: REV-01 (generate), REV-02 (edit/regenerate/confirm/copy) and
@@ -197,106 +199,135 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
   }, [generationId, track]);
 
   return (
-    <div className="stack">
-      <div className="identity">
-        {business.logoUrl && <img src={business.logoUrl} alt="" width={72} height={72} />}
-        <h1>{business.name}</h1>
-      </div>
+    <article className={styles.card} data-customer-review-flow>
+      <header className={styles.identity}>
+        {business.logoUrl ? (
+          <img className={styles.logo} src={business.logoUrl} alt="" width={64} height={64} />
+        ) : (
+          <span className={styles.monogram} aria-hidden="true">
+            {business.name
+              .trim()
+              .split(/\s+/)
+              .slice(0, 2)
+              .map((word) => Array.from(word)[0] ?? '')
+              .join('')
+              .toUpperCase() || '•'}
+          </span>
+        )}
+        <h1 className={styles.businessName}>{business.name}</h1>
+      </header>
 
-      {error && (
-        <p className="notice notice-error" role="alert">
-          {error.message}
-        </p>
-      )}
+      <div className={styles.flowBody}>
+        {error && (
+          <p className={styles.errorNotice} role="alert">
+            {error.message}
+          </p>
+        )}
 
-      {phase === 'generating' && (
-        <p className="muted" aria-live="polite" aria-busy="true">
-          Writing your review…
-        </p>
-      )}
+        {phase === 'generating' && (
+          <div className={styles.loadingState} aria-live="polite" aria-busy="true">
+            <ReviewFlowIcon name="spinner" className={styles.spinner} />
+            <p className={styles.loadingTitle}>Writing your review…</p>
+          </div>
+        )}
 
-      {/*
+        {/*
         'ready' is now only reachable by failing before a first draft exists. AC-036 requires the
         direct route to stay open when the assistant is down, so this offers writing it by hand
         rather than a Generate button that has just been shown not to work.
       */}
-      {phase === 'ready' && (
-        <p className="muted">
-          You can still write your own review — the link below opens {business.reviewPlatformLabel}.
-        </p>
-      )}
+        {phase === 'ready' && (
+          <p className={styles.readyState}>
+            You can still write your own review — the link below opens{' '}
+            {business.reviewPlatformLabel}.
+          </p>
+        )}
 
-      {phase === 'draft' && (
-        <DraftEditor
-          draft={draft}
-          confirmed={confirmed}
-          copyStatus={copyStatus}
-          platformLabel={business.reviewPlatformLabel}
-          reviewUrl={business.reviewUrl}
-          onChange={(value) => {
-            setDraft(value);
-            setCopyStatus('idle');
-            setError(null);
-            if (!edited) {
-              setEdited(true);
-              track('review_edit', { generation_id: generationId });
-            }
-          }}
-          onConfirmChange={(next) => {
-            setConfirmed(next);
-            if (!next) {
+        {phase === 'draft' && (
+          <DraftEditor
+            draft={draft}
+            confirmed={confirmed}
+            copyStatus={copyStatus}
+            platformLabel={business.reviewPlatformLabel}
+            reviewUrl={business.reviewUrl}
+            onChange={(value) => {
+              setDraft(value);
               setCopyStatus('idle');
               setError(null);
-            }
-            if (next) track('experience_confirmed', { generation_id: generationId });
-          }}
-          onRegenerate={() => void generate(true)}
-          onCopy={copyReview}
-          onOpenGoogle={openGoogle}
-        />
-      )}
+              if (!edited) {
+                setEdited(true);
+                track('review_edit', { generation_id: generationId });
+              }
+            }}
+            onConfirmChange={(next) => {
+              setConfirmed(next);
+              if (!next) {
+                setCopyStatus('idle');
+                setError(null);
+              }
+              if (next) track('experience_confirmed', { generation_id: generationId });
+            }}
+            onRegenerate={() => void generate(true)}
+            onCopy={copyReview}
+            onOpenGoogle={openGoogle}
+          />
+        )}
 
-      {/*
+        {/*
         No private_feedback_open here. The feedback page emits it on render, which is what the
         taxonomy means by "Private feedback form opened" — emitting on the click as well would
         double-count every visitor who arrives from this flow, and inflate the denominator that
         private_feedback_submit is measured against.
       */}
-      {/*
+        {/*
         Omitted rather than linked when there is no slug: the feedback page lives at
         /{slug}/feedback and there is nowhere to send anyone without one. A dead link that looks
         alive is worse than an absent one — this is the visitor's only private route, so it must
         either work or not be offered.
       */}
-      {business.slug !== null && (
-        <a className="btn btn-text" href={`/${business.slug}/feedback`}>
-          Send private feedback instead
-        </a>
-      )}
+        {business.slug !== null && (
+          <a className={styles.feedbackLink} href={`/${business.slug}/feedback`}>
+            <ReviewFlowIcon name="message" />
+            <span>Send private feedback instead</span>
+          </a>
+        )}
 
-      {/*
+        {/*
         AC-036: when the assistant is unavailable the direct review link must still work. It
         renders from the same configured destination, so it cannot drift from the flow above.
       */}
-      {/* Only when there is no draft to copy. The draft path reveals its destination after a
+        {/* Only when there is no draft to copy. The draft path reveals its destination after a
           successful copy or after presenting the explicit manual-copy fallback. */}
-      {phase === 'ready' && business.reviewUrl && (
-        <a
-          className="btn btn-secondary"
-          href={business.reviewUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={openGoogle}
-        >
-          Write your own review on {business.reviewPlatformLabel}
-        </a>
-      )}
+        {phase === 'ready' && business.reviewUrl && (
+          <a
+            className={styles.secondaryButton}
+            href={business.reviewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={openGoogle}
+          >
+            <span className={styles.buttonContent}>
+              Write your own review on {business.reviewPlatformLabel}
+              <ReviewFlowIcon name="arrow" />
+            </span>
+          </a>
+        )}
+      </div>
 
-      <p className="disclosure">
-        This draft is written with Ai assistance. Please edit it so it reflects your own experience
-        before you post it.
-      </p>
-    </div>
+      <footer className={styles.footer}>
+        <p className={styles.disclosure}>
+          This draft is written with Ai assistance. Please edit it so it reflects your own
+          experience before you post it.
+        </p>
+        <div className={styles.brandBars} aria-hidden="true">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <p className={styles.credit}>By Digital Hammerr</p>
+      </footer>
+    </article>
   );
 }
 

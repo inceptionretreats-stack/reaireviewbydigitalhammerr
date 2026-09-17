@@ -4,7 +4,8 @@ import type { ReactNode } from 'react';
 import { AppBrand } from '@/components/brand/AppBrand';
 import { AdminNav } from '@/components/admin/AdminNav';
 import { SignOutButton } from '@/components/dashboard/SignOutButton';
-import { getSession } from '@/lib/session';
+import { isAdminRole } from '@ai-review/core';
+import { adminMfaRequired, getSession, nextPathAfterLogin } from '@/lib/session';
 
 /**
  * The admin shell (19_Admin_Panel_Spec: "Separate admin route and guard").
@@ -12,11 +13,15 @@ import { getSession } from '@/lib/session';
  * A signed-in owner who lands here is sent to their own workspace, not shown a forbidden page:
  * there is nothing for them to know about this area. The role check is repeated by
  * `requireAdmin` on every API call these pages make; this layout only decides what to render.
+ *
+ * AMENDMENT-027: an admin session that has not passed MFA is sent to the challenge (or to
+ * enrolment when the account has none). Nothing in this shell renders until it has.
  */
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
   if (!session) redirect('/login');
-  if (session.role !== 'SUPER_ADMIN') redirect('/app');
+  if (!isAdminRole(session.role)) redirect('/app');
+  if (adminMfaRequired() && !session.mfaVerifiedAt) redirect(nextPathAfterLogin(session));
 
   return (
     <div className="app-shell">
@@ -32,7 +37,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <AppBrand />
         </Link>
         <p className="app-nav-label">Platform admin</p>
-        <AdminNav />
+        <AdminNav
+          role={session.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'BUSINESS_SUPPORT_VIEWER'}
+        />
         <div className="app-sidebar-note">
           <strong>Every change here is written to the audit log with your name on it.</strong>
         </div>

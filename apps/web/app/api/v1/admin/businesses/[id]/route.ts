@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { adminBusinessAction } from '@ai-review/contracts';
 import {
+  AbuseService,
+  AbuseTargetNotFoundError,
   AuditReasonRequiredError,
   InvalidQuotaAdjustmentError,
   SubscriptionNotFoundError,
@@ -11,6 +13,7 @@ import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireAdmin } from '@/lib/require-admin';
 import { getBusinessDetail } from '@/lib/admin/businesses';
+import { sendOwnerPasswordReset, warnOwner } from '@/lib/admin/owner-actions';
 
 export const runtime = 'nodejs';
 
@@ -18,7 +21,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** ADMIN-02 detail: everything the operator needs to decide, on one screen. */
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin(request);
+  const auth = await requireAdmin(request, { allowViewer: true });
   if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
@@ -96,9 +99,36 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       case 'reactivate':
         await service.reactivate(id, base);
         break;
+      // AMENDMENT-030 — abuse responses. Ai-only: the public page keeps working.
+      case 'warn': {
+        const { sent } = await warnOwner({ businessId: id, ...base, message: action.message });
+        const detail = await getBusinessDetail(db(), id);
+        return NextResponse.json({ ...detail, email_sent: sent });
+      }
+      case 'suspend_ai':
+        await new AbuseService(db()).suspendAi(id, base);
+        break;
+      case 'restore_ai':
+        await new AbuseService(db()).restoreAi(id, base);
+        break;
+      case 'throttle':
+        await new AbuseService(db()).throttle(id, {
+          ...base,
+          perHour: action.per_hour,
+          until: new Date(Date.now() + action.hours * 3_600_000),
+        });
+        break;
+      case 'unthrottle':
+        await new AbuseService(db()).unthrottle(id, base);
+        break;
+      case 'send_password_reset': {
+        const { sent, email } = await sendOwnerPasswordReset({ businessId: id, ...base });
+        const detail = await getBusinessDetail(db(), id);
+        return NextResponse.json({ ...detail, email_sent: sent, email });
+      }
     }
   } catch (error) {
-    if (error instanceof SubscriptionNotFoundError) {
+    if (error instanceof SubscriptionNotFoundError || error instanceof AbuseTargetNotFoundError) {
       return apiError('RESOURCE_NOT_FOUND', 'No such business.');
     }
     if (error instanceof AuditReasonRequiredError) {

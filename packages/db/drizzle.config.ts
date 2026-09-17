@@ -6,7 +6,8 @@ export default defineConfig({
   out: './drizzle',
   casing: 'snake_case',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? '',
+    // Drizzle Kit accepts TLS options in its URL. Use a direct/session URL for schema tools.
+    url: process.env.DIRECT_DATABASE_URL?.trim() || process.env.DATABASE_URL || '',
   },
   verbose: true,
   strict: true,

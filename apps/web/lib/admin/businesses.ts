@@ -29,6 +29,9 @@ export interface AdminBusinessRow {
   city: string | null;
   status: string;
   ownerEmail: string;
+  ownerMobile: string | null;
+  aiSuspendedAt: Date | null;
+  aiThrottleUntil: Date | null;
   plan: 'FREE' | 'PRO';
   subscriptionStatus: string;
   entitlementSource: string;
@@ -74,6 +77,26 @@ export async function listBusinesses(
   if (query.plan === 'pro') filters.push(paid!);
   if (query.plan === 'free') filters.push(sql`NOT (${paid})`);
   if (query.expiring) filters.push(and(paid, lt(subscriptions.expiresAt, soon))!);
+  // AMENDMENT-030 — abuse filters. "High Ai usage" is the top decile of businesses by drafts
+  // in the last 24 hours, among those with any; "Ai limited" is a live suspension or throttle.
+  if (query.high_ai) {
+    filters.push(
+      sql`${businesses.id} IN (
+        SELECT business_id FROM (
+          SELECT business_id, count(*) AS n,
+                 percent_rank() OVER (ORDER BY count(*)) AS pr
+            FROM ai_generations
+           WHERE created_at >= now() - interval '24 hours'
+           GROUP BY business_id
+        ) ranked WHERE pr >= 0.9
+      )`,
+    );
+  }
+  if (query.ai_limited) {
+    filters.push(
+      sql`(${businesses.aiSuspendedAt} IS NOT NULL OR ${businesses.aiThrottleUntil} > now())`,
+    );
+  }
 
   const where = and(...filters);
   const base = db
@@ -85,6 +108,9 @@ export async function listBusinesses(
       city: businesses.city,
       status: businesses.status,
       ownerEmail: users.email,
+      ownerMobile: users.mobile,
+      aiSuspendedAt: businesses.aiSuspendedAt,
+      aiThrottleUntil: businesses.aiThrottleUntil,
       subscriptionStatus: subscriptions.status,
       startsAt: subscriptions.startsAt,
       expiresAt: subscriptions.expiresAt,
@@ -156,12 +182,15 @@ export interface AdminBusinessDetail extends AdminBusinessRow {
     providerPaymentId: string | null;
     paidAt: Date | null;
     createdAt: Date;
+    refundedPaise: number;
+    invoiceNumber: string | null;
   }>;
   audit: Array<{
     id: number;
     action: string;
     reason: string | null;
     actorEmail: string | null;
+    actorType: string;
     before: unknown;
     after: unknown;
     createdAt: Date;
@@ -182,7 +211,10 @@ export async function getBusinessDetail(
       city: businesses.city,
       status: businesses.status,
       ownerEmail: users.email,
+      ownerMobile: users.mobile,
       ownerName: users.fullName,
+      aiSuspendedAt: businesses.aiSuspendedAt,
+      aiThrottleUntil: businesses.aiThrottleUntil,
       ownerUserId: users.id,
       subscriptionId: subscriptions.id,
       subscriptionStatus: subscriptions.status,
@@ -238,6 +270,8 @@ export async function getBusinessDetail(
         providerPaymentId: payments.providerPaymentId,
         paidAt: payments.paidAt,
         createdAt: payments.createdAt,
+        refundedPaise: payments.refundedPaise,
+        invoiceNumber: payments.invoiceNumber,
       })
       .from(payments)
       .where(eq(payments.businessId, businessId))
@@ -249,6 +283,7 @@ export async function getBusinessDetail(
         action: adminAuditLogs.action,
         reason: adminAuditLogs.reason,
         actorEmail: users.email,
+        actorType: adminAuditLogs.actorType,
         before: adminAuditLogs.beforeState,
         after: adminAuditLogs.afterState,
         createdAt: adminAuditLogs.createdAt,

@@ -1,0 +1,35 @@
+# Keep all local secrets, database files, and build/test artifacts off Vercel.
+# Production configuration is managed in the linked Vercel project.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+.git/
+.vercel/
+.pgdata
+.dev
+.cache/
+tmp/
+node_modules/
+**/node_modules/
+.pnpm-store/
+.next/
+**/.next/
+dist/
+**/dist/
+build/
+out/
+*.tsbuildinfo
+**/*.tsbuildinfo
+coverage/
+test-results/
+playwright-report/
+.playwright/
+e2e-results/
+*.log
+**/*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

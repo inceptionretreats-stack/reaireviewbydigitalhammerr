@@ -4,6 +4,7 @@ import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
 import { sessionService } from '@/lib/session';
 import { countOtherLiveSessions, reportableRevoked } from '../../session-count';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/account/sessions/revoke-others — "Log out other sessions" on SET-01.
@@ -46,6 +47,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       sessionId,
     );
 
+    recordActivity(
+      request,
+      { session: auth.context.session, businessId: auth.context.businessId },
+      {
+        action: 'auth.sessions.revoke_others',
+        metadata: { revoked: reportableRevoked(liveBefore, revoked) },
+      },
+    );
     return NextResponse.json({
       // SET-01-02 asks for the action to have visible effect, and a bare 204 has none — an owner
       // cannot tell a successful sweep from a button that did nothing. The screen turns this into

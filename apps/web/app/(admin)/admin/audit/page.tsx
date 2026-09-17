@@ -24,6 +24,7 @@ export default async function AdminAuditPage({
       reason: adminAuditLogs.reason,
       createdAt: adminAuditLogs.createdAt,
       actorEmail: users.email,
+      actorType: adminAuditLogs.actorType,
       businessId: adminAuditLogs.businessId,
       businessName: businesses.name,
     })
@@ -52,7 +53,11 @@ export default async function AdminAuditPage({
             header: 'When',
             cell: (e) => adminDateTime(e.createdAt),
           },
-          { key: 'who', header: 'Who', cell: (e) => e.actorEmail ?? 'unknown' },
+          {
+            key: 'who',
+            header: 'Who',
+            cell: (e) => (e.actorType === 'SYSTEM' ? 'system' : (e.actorEmail ?? 'unknown')),
+          },
           { key: 'action', header: 'Action', cell: (e) => <code>{e.action}</code> },
           {
             key: 'business',

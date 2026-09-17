@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { SessionService, type SessionContext } from '@ai-review/core';
+import { SessionService, isAdminRole, type SessionContext } from '@ai-review/core';
 import { db } from './db';
 import { env } from './env';
 
@@ -71,8 +71,27 @@ export type Role = SessionContext['role'];
  * Where a role lands after authenticating (AUTH-02-03).
  *
  * A super-admin who signs in at /login belongs in the admin console, not a tenant dashboard,
- * and the two are separately guarded (RBAC rule 4).
+ * and the two are separately guarded (RBAC rule 4). AMENDMENT-027: an admin role goes through
+ * MFA first — enrolment if the account has none, the challenge otherwise — and only a session
+ * that has passed it reaches /admin.
  */
+export function nextPathAfterLogin(
+  session: Pick<SessionContext, 'role' | 'mfaEnabledAt' | 'mfaVerifiedAt'>,
+  mfaRequired = adminMfaRequired(),
+): string {
+  if (!isAdminRole(session.role)) return '/app';
+  if (!mfaRequired) return '/admin';
+  if (!session.mfaEnabledAt) return '/login/mfa/enrol';
+  if (!session.mfaVerifiedAt) return '/login/mfa';
+  return '/admin';
+}
+
+/** AMENDMENT-027's switch: false runs the admin area password-only. */
+export function adminMfaRequired(): boolean {
+  return env().ADMIN_MFA_REQUIRED;
+}
+
+/** The destination once every check has passed. */
 export function landingPathFor(role: Role): string {
-  return role === 'SUPER_ADMIN' ? '/admin' : '/app';
+  return isAdminRole(role) ? '/admin' : '/app';
 }

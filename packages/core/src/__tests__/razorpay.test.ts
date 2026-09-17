@@ -78,24 +78,45 @@ describe('Razorpay signatures', () => {
       parseWebhookEvent(
         '{"event":"payment.captured","payload":{"payment":{"entity":{"id":"pay_1","order_id":"order_1","amount":99900,"status":"captured"}}}}',
       ),
-    ).toEqual({
+    ).toMatchObject({
       event: 'payment.captured',
       orderId: 'order_1',
       paymentId: 'pay_1',
       amountPaise: 99900,
       paymentStatus: 'captured',
+      refundId: null,
     });
     expect(
       parseWebhookEvent(
         '{"event":"order.paid","payload":{"order":{"entity":{"id":"order_2","amount":99900,"amount_paid":99900}}}}',
       ),
-    ).toEqual({
+    ).toMatchObject({
       event: 'order.paid',
       orderId: 'order_2',
       paymentId: null,
       amountPaise: 99900,
       paymentStatus: null,
     });
+    // AMENDMENT-029: refund events name the refund and the payment it belongs to; a failed
+    // payment carries Razorpay's reason.
+    expect(
+      parseWebhookEvent(
+        '{"event":"refund.processed","payload":{"refund":{"entity":{"id":"rfnd_1","payment_id":"pay_1","amount":10000,"status":"processed"}},"payment":{"entity":{"id":"pay_1","order_id":"order_1","amount":99900,"amount_refunded":10000,"status":"captured"}}}}',
+      ),
+    ).toMatchObject({
+      event: 'refund.processed',
+      paymentId: 'pay_1',
+      orderId: 'order_1',
+      refundId: 'rfnd_1',
+      refundAmountPaise: 10000,
+      refundStatus: 'processed',
+      amountRefundedPaise: 10000,
+    });
+    expect(
+      parseWebhookEvent(
+        '{"event":"payment.failed","payload":{"payment":{"entity":{"id":"pay_9","order_id":"order_9","amount":99900,"status":"failed","error_code":"BAD_REQUEST_ERROR","error_description":"Card declined"}}}}',
+      ),
+    ).toMatchObject({ errorCode: 'BAD_REQUEST_ERROR', errorDescription: 'Card declined' });
     expect(parseWebhookEvent('not json')).toBeNull();
     expect(parseWebhookEvent('{"no":"event"}')).toBeNull();
   });
@@ -168,6 +189,121 @@ describe('RazorpayClient.createOrder', () => {
         amountPaise: 99900,
         receipt: 'r',
       }),
+    ).rejects.toMatchObject({ code: 'UPSTREAM' });
+  });
+});
+
+describe('RazorpayClient refunds and lookups', () => {
+  const ok = (body: unknown) =>
+    vi.fn(async (_url: string, _init: unknown) => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(body),
+    }));
+
+  it('posts a partial refund with our receipt and reads the refund back', async () => {
+    const fetchImpl = ok({ id: 'rfnd_1', payment_id: 'pay_1', amount: 10000, status: 'pending' });
+    const client = new RazorpayClient({ keyId: 'k', keySecret: 's', fetchImpl });
+    const refund = await client.refund('pay_1', { amountPaise: 10000, receipt: 'refund-row-id' });
+    expect(refund).toEqual({
+      id: 'rfnd_1',
+      paymentId: 'pay_1',
+      amountPaise: 10000,
+      status: 'pending',
+    });
+    const [url, init] = fetchImpl.mock.calls[0]! as [string, { method: string; body: string }];
+    expect(url).toBe('https://api.razorpay.com/v1/payments/pay_1/refund');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({
+      amount: 10000,
+      speed: 'normal',
+      receipt: 'refund-row-id',
+      notes: {},
+    });
+  });
+
+  it('omits the amount for a full refund, and refuses less than a rupee before any request', async () => {
+    const fetchImpl = ok({ id: 'rfnd_2', payment_id: 'pay_1', amount: 99900, status: 'processed' });
+    const client = new RazorpayClient({ keyId: 'k', keySecret: 's', fetchImpl });
+    await client.refund('pay_1', { receipt: 'r' });
+    const [, init] = fetchImpl.mock.calls[0]! as [string, { body: string }];
+    expect(JSON.parse(init.body)).not.toHaveProperty('amount');
+    await expect(client.refund('pay_1', { amountPaise: 50, receipt: 'r' })).rejects.toMatchObject({
+      code: 'REJECTED',
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads a payment and lists the payments on an order, dropping malformed items', async () => {
+    const one = ok({
+      id: 'pay_1',
+      order_id: 'order_1',
+      amount: 99900,
+      status: 'captured',
+      amount_refunded: 0,
+      currency: 'INR',
+    });
+    const payment = await new RazorpayClient({
+      keyId: 'k',
+      keySecret: 's',
+      fetchImpl: one,
+    }).fetchPayment('pay_1');
+    expect(payment).toEqual({
+      id: 'pay_1',
+      orderId: 'order_1',
+      amountPaise: 99900,
+      status: 'captured',
+      amountRefundedPaise: 0,
+      currency: 'INR',
+      errorCode: null,
+    });
+    const [url, init] = one.mock.calls[0]! as [string, { method: string; body: string }];
+    expect(url).toBe('https://api.razorpay.com/v1/payments/pay_1');
+    expect(init.method).toBe('GET');
+    // A GET with a body — even an empty string — is refused by fetch, so none is sent.
+    expect(init).not.toHaveProperty('body');
+
+    const many = ok({
+      items: [
+        {
+          id: 'pay_a',
+          order_id: 'order_1',
+          amount: 99900,
+          status: 'failed',
+          error_code: 'BAD_REQUEST_ERROR',
+        },
+        { nonsense: true },
+        { id: 'pay_b', order_id: 'order_1', amount: 99900, status: 'captured' },
+      ],
+    });
+    const list = await new RazorpayClient({
+      keyId: 'k',
+      keySecret: 's',
+      fetchImpl: many,
+    }).listOrderPayments('order_1');
+    expect(list.map((p) => [p.id, p.status, p.errorCode])).toEqual([
+      ['pay_a', 'failed', 'BAD_REQUEST_ERROR'],
+      ['pay_b', 'captured', null],
+    ]);
+    expect(many.mock.calls[0]![0]).toBe('https://api.razorpay.com/v1/orders/order_1/payments');
+  });
+
+  it('turns a 4xx into REJECTED with only the error code, and a 5xx into UPSTREAM', async () => {
+    const bad = vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      text: async () =>
+        JSON.stringify({ error: { code: 'BAD_REQUEST_ERROR', description: 'secret stuff' } }),
+    }));
+    await expect(
+      new RazorpayClient({ keyId: 'k', keySecret: 's', fetchImpl: bad }).fetchPayment('pay_x'),
+    ).rejects.toMatchObject({
+      code: 'REJECTED',
+      message: expect.not.stringContaining('secret stuff'),
+    });
+    const down = vi.fn(async () => ({ ok: false, status: 503, text: async () => 'gateway' }));
+    await expect(
+      new RazorpayClient({ keyId: 'k', keySecret: 's', fetchImpl: down }).listOrderPayments('o'),
     ).rejects.toMatchObject({ code: 'UPSTREAM' });
   });
 });

@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { resolveBySlug } from '@/lib/public-business';
 import { ReviewFlow } from '@/components/ReviewFlow';
+import styles from '@/components/CustomerReview.module.css';
 
 /**
  * GET /{slug}/review — the same customer experience as the QR route, reached by link.
@@ -22,7 +23,7 @@ export default async function SlugReviewPage({ params }: { params: Promise<{ slu
   const { config } = resolution;
 
   return (
-    <main className="shell">
+    <main className={styles.page}>
       <ReviewFlow
         business={{
           slug: config.slug ?? slug,

@@ -7,6 +7,7 @@ import { resolveByQrCode } from '@/lib/public-business';
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
 import { loadLatestDraft } from '@/lib/generation-service';
 import { ReviewFlow } from '@/components/ReviewFlow';
+import styles from '@/components/CustomerReview.module.css';
 
 /**
  * GET /r/{qrCode} — the dynamic QR landing (ADR-002, D-007, Flow C).
@@ -52,7 +53,7 @@ export default async function QrLandingPage({ params }: { params: Promise<{ code
   const existingDraft = session ? await loadLatestDraft(database, session.sessionId) : null;
 
   return (
-    <main className="shell">
+    <main className={styles.page}>
       <ReviewFlow
         business={{
           slug: config.slug,
@@ -70,10 +71,10 @@ export default async function QrLandingPage({ params }: { params: Promise<{ code
 
 function UnavailablePage() {
   return (
-    <main className="shell">
-      <div className="notice">
+    <main className={styles.page}>
+      <div className={`${styles.card} ${styles.unavailable}`}>
         <p>This review page is not available at the moment.</p>
-        <p className="muted">Please ask the business for an up-to-date link.</p>
+        <p className={styles.helper}>Please ask the business for an up-to-date link.</p>
       </div>
     </main>
   );

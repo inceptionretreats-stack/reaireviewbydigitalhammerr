@@ -5,6 +5,7 @@ import { aiContextRequest, DEFAULT_DRAFT_LANGUAGE } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * GET/PUT /api/v1/ai/context — ONB-04 and AI-01.
@@ -128,5 +129,14 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       .where(eq(businesses.id, businessId));
   });
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'ai.context.update',
+      targetType: 'business',
+      targetId: businessId,
+    },
+  );
   return NextResponse.json({ saved: true });
 }

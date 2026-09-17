@@ -5,6 +5,7 @@ import { Card } from '@ai-review/ui';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 import { AccountDetailsForm } from '@/components/dashboard/settings/AccountDetailsForm';
+import { BillingDetailsForm } from '@/components/dashboard/settings/BillingDetailsForm';
 import { BusinessStatusCard } from '@/components/dashboard/settings/BusinessStatusCard';
 import { PasswordChangeForm } from '@/components/dashboard/settings/PasswordChangeForm';
 import { SessionsCard } from '@/components/dashboard/settings/SessionsCard';
@@ -62,6 +63,7 @@ export default async function Page() {
       </div>
 
       <AccountDetailsForm initial={settings.account} />
+      <BillingDetailsForm initial={settings.billing} />
       <PasswordChangeForm />
       <SessionsCard otherSessions={settings.otherLiveSessions} />
       <BusinessStatusCard business={settings.business} />

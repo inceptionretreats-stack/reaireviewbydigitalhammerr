@@ -2507,14 +2507,83 @@ x-skeleton-delta:
         (`activate_pro`, `revoke_pro`, `adjust_free_quota`, `reset_free_usage`, `suspend`,
         `reactivate`) and every action carries a reason written to `admin_audit_logs` in the
         same transaction. `GET /admin/audit-logs` is the endpoint OPEN-03 recorded as missing.
-        Guarded by `requireAdmin` (CSRF + session + SUPER_ADMIN). Super-admin MFA is not built;
-        `19_Admin_Panel_Spec.md` makes it mandatory, so admin accounts must not exist on a
-        publicly reachable deployment until it is.
+        Guarded by `requireAdmin` (CSRF + session + admin role + MFA verified, AMENDMENT-027).
+        Since AMENDMENT-030 the PATCH also takes `warn` (with `message`), `suspend_ai`,
+        `restore_ai`, `throttle` (`per_hour`, `hours`), `unthrottle`, and
+        `send_password_reset`; GET routes take a BUSINESS_SUPPORT_VIEWER; the list query adds
+        `high_ai` and `ai_limited`.
     - path: /admin/ai/prompt-versions, /admin/ai/prompt-versions/{id}, …/{id}/activate, …/{id}/archive
       methods: [get, post, patch]
       note: |
         ADMIN-03 / ADR-006: prompt versions with their writing rules as data (`guidance`),
         DRAFT → ACTIVE → ARCHIVED, one ACTIVE at a time, rollback by activating an archived one.
+    - path: /auth/mfa/enrol, /auth/mfa/enrol/confirm, /auth/mfa/challenge, /auth/mfa/recovery, /auth/mfa/recovery/regenerate
+      methods: [post]
+      note: |
+        AMENDMENT-027. TOTP enrolment and challenge for admin roles, on the ten-minute pending
+        session the password step issues. `enrol` answers `{ otpauth_uri, manual_key, qr_data_uri }`;
+        `enrol/confirm` takes `{ code }` and answers the eight recovery codes once;
+        `challenge` takes `{ code }`, `recovery` takes `{ recovery_code }`. Errors:
+        AUTH_MFA_INVALID (401), AUTH_MFA_ALREADY_ENROLLED / AUTH_MFA_NOT_ENROLLED (409),
+        AUTH_RATE_LIMITED (429). Login answers `{ next, mfa: 'enrol' | 'challenge' | null }`.
+        Any admin route may answer AUTH_MFA_REQUIRED (401) before the challenge, and the
+        high-risk ones AUTH_MFA_STEP_UP_REQUIRED (403) when the last code is older than 15 minutes.
+    - path: /auth/invite/accept
+      methods: [post]
+      note: AMENDMENT-027. `{ token, password }` → the invited admin or viewer account; INVITE_INVALID (410) when spent or expired.
+    - path: /admin/team, /admin/team/{id}, /admin/team/{id}/mfa/reset, /admin/team/invites/{id}
+      methods: [get, post, patch, delete]
+      note: |
+        AMENDMENT-027. Members and open invites; `POST /admin/team` invites
+        (`{ email, full_name, role, reason }`, step-up; `invite_url` in the answer outside
+        production); `PATCH /admin/team/{id}` is action-based (`change_role`, `disable`,
+        `enable`, step-up); `POST …/mfa/reset` (step-up, never self); `DELETE …/invites/{id}`.
+        SUPER_ADMIN only.
+    - path: /admin/activity
+      methods: [get]
+      note: |
+        AMENDMENT-028. The activity explorer as JSON: `user`, `business`, `action` (exact, or an
+        area with a trailing dot), `outcome`, `from`, `to`, `before` (keyset). Answers
+        `{ entries, next_before }`; entries carry `ip_hash`, never an address. Viewers may.
+    - path: /business/billing
+      methods: [get, put]
+      note: |
+        AMENDMENT-029. The owner's invoice details (`billing_legal_name`, `gstin`,
+        `billing_state_code`, `billing_address`); empty strings clear. Copied onto the next
+        invoice at the moment of sale, never onto an issued one.
+    - path: /admin/payments, /admin/payments/webhooks, /admin/payments/{id}, /admin/payments/{id}/refund, /admin/payments/{id}/actions
+      methods: [get, post]
+      note: |
+        AMENDMENT-029. Cross-tenant payments (`status`, `business`, `from`, `to`,
+        `refunded`, `before`), the webhook ledger (`outcome`, `event`, `before`), one
+        payment with refunds, webhooks and audit. `POST …/refund` (`{ reason, amount_paise? }`,
+        step-up; PAYMENT_STATE_INVALID 409, REFUND_FAILED 502, PAYMENTS_NOT_CONFIGURED 503);
+        `POST …/actions` (`{ action: reconcile | mark_failed | resend_receipt, reason }`).
+        Viewers may read; only SUPER_ADMIN acts.
+    - path: /admin/settings
+      methods: [patch]
+      note: |
+        AMENDMENT-029 adds the seller fields to the PATCH: `seller_legal_name`, `seller_address`,
+        `seller_gstin`, `seller_state_code`, `seller_sac_code`, `invoice_prefix`, `gst_rate_bps`.
+        Step-up applies to the whole PATCH (AMENDMENT-027).
+    - path: /webhooks/razorpay
+      methods: [post]
+      note: |
+        AMENDMENT-029 handles `refund.created`, `refund.processed` and `refund.failed` as well,
+        and `payment.failed` now stores Razorpay's error code and description as `failure_reason`.
+        Every ledger row carries the payment it landed on and its outcome.
+    - path: /cron/subscriptions
+      methods: [get]
+      note: |
+        AMENDMENT-029. Not under `/api/v1` — `/api/cron/subscriptions`, for Vercel Cron with
+        `Authorization: Bearer <CRON_SECRET>` (401 otherwise; 503 while the secret is unset).
+        Answers the sweep's counts: expired, queued, sent, failed, skipped, activity_purged, mail.
+    - path: /public/review/generate
+      methods: [post]
+      note: |
+        AMENDMENT-030 adds AI_SUSPENDED (409) — the same customer-facing words as a provider
+        outage, so the page still offers the direct Google link — and FAIR_USE_THROTTLED (429)
+        as an enforced answer when an admin has set an hourly ceiling for the business.
 
   implemented-with-a-different-shape:
     - skeleton: POST /public/review/generate with a required `public_business_ref`
@@ -2611,3 +2680,6 @@ x-skeleton-delta:
       - PAYMENT_VERIFICATION_FAILED — /subscription/verify, /subscription/checkout, /webhooks/razorpay (CHANGE-004)
       - ADMIN_REASON_REQUIRED — every admin mutation (CHANGE-004)
       - PAYMENTS_NOT_CONFIGURED — 503; not in 23_API_Error_Codes.md, added by CHANGE-004
+      - AUTH_MFA_REQUIRED (401), AUTH_MFA_INVALID (401), AUTH_MFA_STEP_UP_REQUIRED (403), AUTH_MFA_ALREADY_ENROLLED (409), AUTH_MFA_NOT_ENROLLED (409), AUTH_ACCOUNT_DISABLED (403), INVITE_INVALID (410) — AMENDMENT-027
+      - PAYMENT_STATE_INVALID (409), REFUND_FAILED (502) — AMENDMENT-029
+      - AI_SUSPENDED (409) — AMENDMENT-030

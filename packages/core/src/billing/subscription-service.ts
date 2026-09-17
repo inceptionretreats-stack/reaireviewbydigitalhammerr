@@ -23,8 +23,18 @@ import type { Executor } from '../db-executor';
  */
 
 export interface AdminActor {
-  userId: string;
+  /** The person acting. Null only when `system` is set (AMENDMENT-029). */
+  userId: string | null;
   ipHash?: string | null;
+  /** The platform acting on its own — the expiry sweep, a provider-initiated refund. */
+  system?: boolean;
+}
+
+/** The actor the platform uses for mutations nobody clicked. */
+export const SYSTEM_ACTOR: AdminActor = { userId: null, system: true };
+
+export function auditActorType(actor: AdminActor): 'ADMIN' | 'SYSTEM' {
+  return actor.system ? 'SYSTEM' : 'ADMIN';
 }
 
 export interface AdminAction {
@@ -122,6 +132,7 @@ export class SubscriptionService {
       if (input.source === 'ADMIN') {
         await new AuditWriter(tx).record({
           actorUserId: input.actor.userId,
+          actorType: auditActorType(input.actor),
           ipHash: input.actor.ipHash ?? null,
           businessId,
           action: 'business.entitlement.adjust',
@@ -227,6 +238,7 @@ export class SubscriptionService {
         .where(eq(businesses.id, businessId));
       await new AuditWriter(tx).record({
         actorUserId: input.actor.userId,
+        actorType: auditActorType(input.actor),
         ipHash: input.actor.ipHash ?? null,
         businessId,
         action,
@@ -251,6 +263,7 @@ export class SubscriptionService {
       const [after] = await mutate(tx, before);
       await new AuditWriter(tx).record({
         actorUserId: input.actor.userId,
+        actorType: auditActorType(input.actor),
         ipHash: input.actor.ipHash ?? null,
         businessId,
         action,

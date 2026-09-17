@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
 import type { AssignableFeedbackStatus } from '@/components/dashboard/feedback/filters';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * PATCH /api/v1/feedback/{id} — the Mark read and Archive actions of FB-02.
@@ -88,6 +89,16 @@ export async function PATCH(
   // The message, name and mobile are deliberately not echoed back. The caller already has them
   // from the list, nothing in the flow needs them again, and the less often customer contact
   // details cross the wire the smaller the surface AC-039 has to hold.
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'feedback.update',
+      targetType: 'private_feedback',
+      targetId: updated.id,
+      metadata: { status: updated.status },
+    },
+  );
   return NextResponse.json(
     { id: updated.id, status: updated.status, updated_at: updated.updatedAt.toISOString() },
     { headers: { 'Cache-Control': 'no-store, private' } },

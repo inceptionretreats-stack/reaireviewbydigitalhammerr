@@ -14,6 +14,7 @@ import { verifyCsrf } from '@/lib/csrf';
 import { passwordHasher, SHELL_CATEGORY, shellBusinessName } from '@/lib/auth-helpers';
 import { landingPathFor, sessionService, setSessionCookie } from '@/lib/session';
 import { clientIp } from '@/lib/rate-limit';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/auth/signup — AUTH-01.
@@ -134,6 +135,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   });
   await setSessionCookie(session.token, session.expiresAt);
 
+  recordActivity(
+    request,
+    { userId },
+    { action: 'auth.signup', targetType: 'user', targetId: userId },
+  );
   return NextResponse.json(
     { next: landingPathFor('BUSINESS_OWNER'), onboarding_required: true },
     { status: 201 },

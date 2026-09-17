@@ -1,41 +1,60 @@
-import Image from 'next/image';
 import type { LandingDemo } from '@/lib/landing-demo';
+import { BusinessAudienceStrip } from './BusinessAudienceStrip';
 import { HeroAiAccent } from './HeroAiAccent';
+import { HowItWorksVideos } from './HowItWorksVideos';
 import { PricingPlanCards } from './PricingMarketingPage';
 import { ReviewStoryVideo } from './ReviewStoryVideo';
-import { ROBOT_IMAGE, RobotClaimBand } from './RobotClaimBand';
+import { RobotClaimBand } from './RobotClaimBand';
 import {
   ActionLink,
   MarketingShell,
-  ReviewerVisual,
+  HeroVideoVisual,
   TrustBand,
   marketingStyles as styles,
 } from './MarketingSite';
 
 const HERO_FLOW_STEPS = [
-  { label: 'SCAN', tone: 'green' },
-  { label: 'COPY', tone: 'blue' },
-  { label: 'PASTE', tone: 'yellow' },
-  { label: 'REVIEW', tone: 'red' },
+  { label: 'Scan', tone: 'green', icon: 'scan' },
+  { label: 'Copy', tone: 'blue', icon: 'copy' },
+  { label: 'Paste', tone: 'yellow', icon: 'clipboard' },
+  { label: 'Review', tone: 'red', icon: 'star' },
 ] as const;
 
-const HOW_IT_WORKS_STEPS = [
-  {
-    icon: '🧮',
-    title: 'Scan or Tap',
-    body: 'Customer scans your QR code or taps your NFC card at the counter. No app download needed.',
-  },
-  {
-    icon: 'robot',
-    title: 'Ai Writes the Review',
-    body: 'In under 3 seconds, Ai creates a genuine-sounding review based on your business type. Sounds like a real person wrote it.',
-  },
-  {
-    icon: '✅',
-    title: 'One Tap to Post',
-    body: 'Customer copies the review and is instantly redirected to your Google page. Done in 10 seconds.',
-  },
-] as const;
+function HeroFlowIcon({ name }: { name: (typeof HERO_FLOW_STEPS)[number]['icon'] }) {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {name === 'scan' ? (
+        <path d="M8 4H5a1 1 0 0 0-1 1v3m12-4h3a1 1 0 0 1 1 1v3M4 16v3a1 1 0 0 0 1 1h3m12-4v3a1 1 0 0 1-1 1h-3" />
+      ) : null}
+      {name === 'copy' ? (
+        <>
+          <rect x="8" y="8" width="12" height="12" rx="2" />
+          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+        </>
+      ) : null}
+      {name === 'clipboard' ? (
+        <>
+          <path d="M8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+          <rect x="8" y="2" width="8" height="6" rx="2" />
+        </>
+      ) : null}
+      {name === 'star' ? (
+        <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />
+      ) : null}
+    </svg>
+  );
+}
 
 export function HomeMarketingPage({ demo }: { demo: LandingDemo | null }) {
   return (
@@ -47,17 +66,16 @@ export function HomeMarketingPage({ demo }: { demo: LandingDemo | null }) {
           </p>
           <h1 className={styles.heroHeadline}>
             <span className={styles.heroHeadlineLine}>
-              <span className={styles.heroWordRed}>REVIEW</span> <HeroAiAccent />
+              <span className={styles.heroWordReview}>Review</span> <HeroAiAccent />
             </span>{' '}
             <span className={styles.heroHeadlineLine}>
-              <span className={styles.heroWordYellow}>LIKH</span>{' '}
-              <span className={styles.heroWordGreen}>DEGA</span>
+              <span className={styles.heroWordLikh}>likh</span>{' '}
+              <span className={styles.heroWordGreen}>dega</span>
             </span>
           </h1>
-          <div className={styles.heroMicrocopy}>
-            <span>Share your experience.</span>
-            <strong>Help others choose us!</strong>
-          </div>
+          <p className={styles.heroDescription} data-hero-description>
+            Aapka experience, Ai ki madad. Review edit karo aur Google par share karo.
+          </p>
           <div className={styles.heroActions}>
             <ActionLink href="/signup">Create your free QR</ActionLink>
           </div>
@@ -71,68 +89,27 @@ export function HomeMarketingPage({ demo }: { demo: LandingDemo | null }) {
                   data-tone={step.tone}
                   key={step.label}
                 >
-                  {step.label}
+                  <span className={styles.heroFlowIcon} data-hero-flow-icon aria-hidden="true">
+                    <HeroFlowIcon name={step.icon} />
+                  </span>
+                  <span className={styles.heroFlowLabel}>{step.label}</span>
                 </li>
               ))}
             </ol>
-            <p className={styles.heroTrustLine} data-hero-trust-line>
-              <span>Real reviews.</span> <strong>Real trust.</strong> <em>Real growth.</em>
-            </p>
           </div>
         </div>
-        <ReviewerVisual demo={demo} />
+        <HeroVideoVisual />
       </section>
 
-      <section className={styles.homeSteps} id="how-it-works" aria-labelledby="home-steps-title">
-        <header className={styles.stepsHeading}>
-          <span className={styles.stepsEyebrow}>How it works</span>
-          <h2 id="home-steps-title">
-            <span>Simple for You.</span>
-            <span>Effortless for Customers.</span>
-          </h2>
-        </header>
+      <BusinessAudienceStrip />
 
-        <ol className={styles.stepPreview}>
-          {HOW_IT_WORKS_STEPS.map((step, index) => (
-            <li key={step.title}>
-              <span className={styles.stepNumber} aria-hidden="true">
-                {String(index + 1).padStart(2, '0')}
-              </span>
-              <span className={styles.stepPreviewIcon} aria-hidden="true">
-                {step.icon === 'robot' ? (
-                  <Image
-                    className={styles.stepRobot}
-                    src={ROBOT_IMAGE}
-                    alt=""
-                    width={74}
-                    height={89}
-                  />
-                ) : (
-                  step.icon
-                )}
-              </span>
-              <h3>{step.title}</h3>
-              <p>{step.body}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <HowItWorksVideos />
 
       <section
         className={styles.storyShowcase}
         id="review-journey"
-        aria-labelledby="story-showcase-title"
+        aria-label="Customer review journey"
       >
-        <div className={styles.storyShowcaseCopy}>
-          <span className={styles.storyEyebrow}>See it in motion</span>
-          <h2 id="story-showcase-title">The whole review journey, brought to life.</h2>
-          <p>
-            Follow a quick scan into an editable draft, a customer-made revision, and a final
-            handoff to Google that always stays in their control.
-          </p>
-          <ActionLink href="/signup">Create your review flow</ActionLink>
-        </div>
-
         <ReviewStoryVideo />
       </section>
 

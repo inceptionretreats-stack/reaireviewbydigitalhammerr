@@ -1,6 +1,8 @@
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
+import { createPoolConfig, migrationDatabaseConfig } from './connection';
 
 /**
  * One-shot migration runner.
@@ -10,26 +12,22 @@ import { Pool } from 'pg';
  * deploy corrupts its own schema. This is invoked as a release step, before the API and
  * worker roll (deployment order steps 3-5).
  */
-async function main(): Promise<void> {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    console.error('DATABASE_URL is required to run migrations.');
-    process.exit(1);
-  }
-
-  const pool = new Pool({ connectionString, max: 1 });
+export async function runMigrations(source: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const pool = new Pool(createPoolConfig(migrationDatabaseConfig(source)));
   const db = drizzle(pool);
 
   try {
     console.warn('Running migrations...');
-    await migrate(db, { migrationsFolder: './drizzle' });
+    await migrate(db, { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) });
     console.warn('Migrations complete.');
   } finally {
     await pool.end();
   }
 }
 
-main().catch((error: unknown) => {
-  console.error('Migration failed:', error);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runMigrations().catch((error: unknown) => {
+    console.error('Migration failed:', error);
+    process.exitCode = 1;
+  });
+}

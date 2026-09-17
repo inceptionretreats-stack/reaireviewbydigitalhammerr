@@ -8,6 +8,7 @@ import { resolvePublicRef } from '@/lib/resolve-public-ref';
 import {
   buildGenerator,
   loadGenerationContext,
+  loadAiControls,
   loadPlan,
   loadPreviousDrafts,
   providerKeys,
@@ -59,6 +60,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const database = db();
   const session = await resolveAnonymousSession(request, businessId);
 
+  // AMENDMENT-030: an admin has switched Ai off for this business. The page and the Google
+  // button keep working; the customer is told drafting is unavailable, in the same words as
+  // a provider outage (Flow E step 3), and nothing about why.
+  const controls = await loadAiControls(database, businessId);
+  if (controls.suspended) {
+    if (session) {
+      await recordEvent(database, {
+        businessId,
+        sessionId: session.sessionId,
+        qrCodeId,
+        name: 'ai_generate_failure',
+        properties: { error_class: 'AI_SUSPENDED', provider: 'admin' },
+      });
+    }
+    return apiError(
+      'AI_SUSPENDED',
+      'The writing assistant is unavailable right now. You can still write your own review.',
+    );
+  }
+
   // AC-032, and before anything expensive: a denied request must not reach the provider, and
   // must not consume the free quota either. Four dimensions in one atomic decision — session
   // burst, session hourly, adaptive IP prefix, and paid abuse observation for Pro tenants.
@@ -69,6 +90,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ip: clientIp(request),
       pepper: env().HASH_PEPPER,
       plan: await loadPlan(database, businessId),
+      adminThrottle: controls.throttle,
     });
 
     if (isDenied(decision)) {
@@ -80,6 +102,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         properties: { error_class: decision.code, provider: 'rate_limit' },
       });
 
+      return apiError(
+        decision.code,
+        'You have requested several drafts already. Please wait a moment and try again.',
+        { retryAfterSeconds: decision.retryAfterSeconds },
+      );
+    }
+  }
+
+  // AMENDMENT-030: the per-business ceiling holds for a caller with no anonymous session too
+  // (the check above is keyed by session and skipped without one).
+  if (!session && controls.throttle !== undefined) {
+    const decision = await rateLimiter().businessThrottle(businessId, controls.throttle);
+    if (isDenied(decision)) {
       return apiError(
         decision.code,
         'You have requested several drafts already. Please wait a moment and try again.',

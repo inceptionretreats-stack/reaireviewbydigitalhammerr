@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
 import { loadSubscriptionView, razorpayClient, razorpayConfig } from '@/lib/subscription';
+import { recordActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -77,6 +78,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     console.warn('[analytics] subscription_checkout_started failed', error);
   }
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'subscription.checkout.start',
+      targetType: 'payment',
+      targetId: started.paymentId,
+      metadata: { amount_paise: started.amountPaise },
+    },
+  );
   return NextResponse.json(
     {
       key_id: config.keyId,

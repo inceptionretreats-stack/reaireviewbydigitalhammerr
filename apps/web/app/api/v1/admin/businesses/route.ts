@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 /** ADMIN-02: search and filter every tenant. */
 export async function GET(request: Request) {
-  const auth = await requireAdmin(request);
+  const auth = await requireAdmin(request, { allowViewer: true });
   if (!auth.ok) return auth.response;
 
   const params = Object.fromEntries(new URL(request.url).searchParams.entries());

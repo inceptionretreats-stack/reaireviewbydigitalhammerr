@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, type NextRequest, after } from 'next/server';
 import { checkoutVerifyRequest } from '@ai-review/contracts';
 import { analyticsEvents } from '@ai-review/db';
 import { CheckoutError, CheckoutService } from '@ai-review/core';
@@ -7,6 +7,8 @@ import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
 import { loadSubscriptionView, razorpayConfig, subscriptionToWire } from '@/lib/subscription';
+import { recordActivity } from '@/lib/activity';
+import { sendReceipt } from '@/lib/billing/receipt-mail';
 
 export const runtime = 'nodejs';
 
@@ -73,6 +75,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   if (outcome.activated) {
+    // The receipt goes out once the response is on its way (AMENDMENT-029).
+    after(() => sendReceipt(outcome.payment.id));
     const properties: EventPayload<'subscription_activated'> = {
       business_id: businessId,
       provider: 'RAZORPAY',
@@ -86,6 +90,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'subscription.checkout.verify',
+      targetType: 'payment',
+      targetId: outcome.payment.id,
+      metadata: { activated: outcome.activated },
+    },
+  );
   const view = await loadSubscriptionView(database, businessId);
   return NextResponse.json({
     activated: outcome.activated,

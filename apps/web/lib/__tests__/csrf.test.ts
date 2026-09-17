@@ -24,6 +24,8 @@ beforeAll(async () => {
     OPENAI_DEFAULT_MODEL: 'gpt-5.6-luna',
     S3_BUCKET: 'assets',
     EMAIL_FROM: 'no-reply@digitalhammerr.com',
+    // AMENDMENT-029: production refuses to boot without the cron secret.
+    CRON_SECRET: 'e'.repeat(32),
   });
 
   ({ verifyCsrf } = await import('../csrf'));

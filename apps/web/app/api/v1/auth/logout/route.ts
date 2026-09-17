@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { verifyCsrf } from '@/lib/csrf';
 import { clearSessionCookie, getSession, sessionService } from '@/lib/session';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/auth/logout — revokes the session row and clears the cookie.
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     await sessionService().revoke(session.sessionId, 'USER_LOGOUT');
   }
 
+  if (session) recordActivity(request, { session }, { action: 'auth.logout' });
   await clearSessionCookie();
   return new NextResponse(null, { status: 204 });
 }

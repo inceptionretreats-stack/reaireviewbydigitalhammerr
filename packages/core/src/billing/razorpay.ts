@@ -29,7 +29,7 @@ export interface RazorpayHttpResponse {
 
 export type RazorpayFetchLike = (
   url: string,
-  init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal },
+  init: { method: string; headers: Record<string, string>; body?: string; signal: AbortSignal },
 ) => Promise<RazorpayHttpResponse>;
 
 export interface RazorpayClientOptions {
@@ -53,6 +53,26 @@ export class RazorpayError extends Error {
 
 const DEFAULT_BASE_URL = 'https://api.razorpay.com/v1';
 
+export interface RazorpayPayment {
+  id: string;
+  orderId: string | null;
+  amountPaise: number;
+  /** created | authorized | captured | refunded | failed */
+  status: string;
+  amountRefundedPaise: number;
+  currency: string;
+  /** Razorpay's error_code on a failed payment, when it gives one. */
+  errorCode: string | null;
+}
+
+export interface RazorpayRefund {
+  id: string;
+  paymentId: string;
+  amountPaise: number;
+  /** pending | processed | failed */
+  status: string;
+}
+
 export class RazorpayClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: RazorpayFetchLike;
@@ -74,23 +94,85 @@ export class RazorpayClient {
     if (!Number.isInteger(input.amountPaise) || input.amountPaise < 100) {
       throw new RazorpayError('REJECTED', 'order amount must be at least ₹1');
     }
+    const parsed = await this.request('POST', '/orders', {
+      amount: input.amountPaise,
+      currency: input.currency ?? 'INR',
+      // Razorpay caps receipts at 40 characters.
+      receipt: input.receipt.slice(0, 40),
+      notes: input.notes ?? {},
+    });
+    if (typeof parsed['id'] !== 'string' || typeof parsed['amount'] !== 'number') {
+      throw new RazorpayError('UPSTREAM', 'razorpay order response had no id or amount');
+    }
+    return {
+      id: parsed['id'],
+      amountPaise: parsed['amount'],
+      currency: typeof parsed['currency'] === 'string' ? parsed['currency'] : 'INR',
+      status: typeof parsed['status'] === 'string' ? parsed['status'] : 'created',
+    };
+  }
+
+  /**
+   * POST /payments/{id}/refund (AMENDMENT-029). Without an amount Razorpay refunds the whole
+   * captured amount; with one, that much of it. `speed: normal` — an instant refund costs a
+   * fee and the product has no reason to pay it. The receipt is our refund row's id, so the
+   * dashboard and our ledger name the same thing.
+   */
+  async refund(
+    paymentId: string,
+    input: { amountPaise?: number; receipt: string; notes?: Record<string, string> },
+  ): Promise<RazorpayRefund> {
+    if (
+      input.amountPaise !== undefined &&
+      (!Number.isInteger(input.amountPaise) || input.amountPaise < 100)
+    ) {
+      throw new RazorpayError('REJECTED', 'refund amount must be at least ₹1');
+    }
+    const parsed = await this.request('POST', `/payments/${encodeURIComponent(paymentId)}/refund`, {
+      ...(input.amountPaise !== undefined ? { amount: input.amountPaise } : {}),
+      speed: 'normal',
+      receipt: input.receipt.slice(0, 40),
+      notes: input.notes ?? {},
+    });
+    const refund = parseRefund(parsed);
+    if (!refund) throw new RazorpayError('UPSTREAM', 'razorpay refund response had no id');
+    return refund;
+  }
+
+  /** GET /payments/{id}. */
+  async fetchPayment(paymentId: string): Promise<RazorpayPayment> {
+    const parsed = await this.request('GET', `/payments/${encodeURIComponent(paymentId)}`);
+    const payment = parsePayment(parsed);
+    if (!payment) throw new RazorpayError('UPSTREAM', 'razorpay payment response had no id');
+    return payment;
+  }
+
+  /** GET /orders/{id}/payments — every attempt against an order, for reconciliation. */
+  async listOrderPayments(orderId: string): Promise<RazorpayPayment[]> {
+    const parsed = await this.request('GET', `/orders/${encodeURIComponent(orderId)}/payments`);
+    const items = Array.isArray(parsed['items']) ? (parsed['items'] as unknown[]) : [];
+    return items
+      .map((item) => parsePayment(item as Record<string, unknown>))
+      .filter((p): p is RazorpayPayment => p !== null);
+  }
+
+  private async request(
+    method: 'GET' | 'POST',
+    path: string,
+    body?: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await this.fetchImpl(`${this.baseUrl}/orders`, {
-        method: 'POST',
+      const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+        method,
         headers: {
           Authorization: `Basic ${Buffer.from(`${this.options.keyId}:${this.options.keySecret}`).toString('base64')}`,
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({
-          amount: input.amountPaise,
-          currency: input.currency ?? 'INR',
-          // Razorpay caps receipts at 40 characters.
-          receipt: input.receipt.slice(0, 40),
-          notes: input.notes ?? {},
-        }),
+        // No body key at all on GET: fetch refuses a GET that carries one, even an empty one.
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: controller.signal,
       });
       const text = await response.text();
@@ -98,19 +180,14 @@ export class RazorpayClient {
         // The body can quote our request; only the status and Razorpay's error code go on.
         throw new RazorpayError(
           response.status >= 500 ? 'UPSTREAM' : 'REJECTED',
-          `razorpay orders api answered ${response.status} (${errorCode(text)})`,
+          `razorpay ${path.split('/')[1] ?? 'api'} api answered ${response.status} (${errorCode(text)})`,
         );
       }
-      const parsed = JSON.parse(text) as Record<string, unknown>;
-      if (typeof parsed['id'] !== 'string' || typeof parsed['amount'] !== 'number') {
-        throw new RazorpayError('UPSTREAM', 'razorpay order response had no id or amount');
+      const parsed = JSON.parse(text) as unknown;
+      if (typeof parsed !== 'object' || parsed === null) {
+        throw new RazorpayError('UPSTREAM', 'razorpay answered with something other than JSON');
       }
-      return {
-        id: parsed['id'],
-        amountPaise: parsed['amount'],
-        currency: typeof parsed['currency'] === 'string' ? parsed['currency'] : 'INR',
-        status: typeof parsed['status'] === 'string' ? parsed['status'] : 'created',
-      };
+      return parsed as Record<string, unknown>;
     } catch (error) {
       if (error instanceof RazorpayError) throw error;
       if (controller.signal.aborted) {
@@ -121,6 +198,29 @@ export class RazorpayClient {
       clearTimeout(timer);
     }
   }
+}
+
+function parsePayment(raw: Record<string, unknown>): RazorpayPayment | null {
+  if (typeof raw['id'] !== 'string' || typeof raw['amount'] !== 'number') return null;
+  return {
+    id: raw['id'],
+    orderId: typeof raw['order_id'] === 'string' ? raw['order_id'] : null,
+    amountPaise: raw['amount'],
+    status: typeof raw['status'] === 'string' ? raw['status'] : 'unknown',
+    amountRefundedPaise: typeof raw['amount_refunded'] === 'number' ? raw['amount_refunded'] : 0,
+    currency: typeof raw['currency'] === 'string' ? raw['currency'] : 'INR',
+    errorCode: typeof raw['error_code'] === 'string' ? raw['error_code'] : null,
+  };
+}
+
+function parseRefund(raw: Record<string, unknown>): RazorpayRefund | null {
+  if (typeof raw['id'] !== 'string' || typeof raw['payment_id'] !== 'string') return null;
+  return {
+    id: raw['id'],
+    paymentId: raw['payment_id'],
+    amountPaise: typeof raw['amount'] === 'number' ? raw['amount'] : 0,
+    status: typeof raw['status'] === 'string' ? raw['status'] : 'pending',
+  };
 }
 
 /** The checkout callback's signature: HMAC-SHA256 of `order_id|payment_id` with the key secret. */
@@ -181,6 +281,15 @@ export interface RazorpayWebhookEvent {
   paymentId: string | null;
   amountPaise: number | null;
   paymentStatus: string | null;
+  /** On payment.failed: Razorpay's error code and description, when given. */
+  errorCode: string | null;
+  errorDescription: string | null;
+  /** On refund.* events (AMENDMENT-029). */
+  refundId: string | null;
+  refundAmountPaise: number | null;
+  refundStatus: string | null;
+  /** The payment's running refunded total, when the payment entity carries it. */
+  amountRefundedPaise: number | null;
 }
 
 export function parseWebhookEvent(rawBody: string): RazorpayWebhookEvent | null {
@@ -195,17 +304,27 @@ export function parseWebhookEvent(rawBody: string): RazorpayWebhookEvent | null 
   const event = typeof root['event'] === 'string' ? root['event'] : null;
   if (!event) return null;
   const payload = (root['payload'] ?? {}) as Record<string, unknown>;
-  const payment = ((payload['payment'] as Record<string, unknown> | undefined)?.['entity'] ??
-    null) as Record<string, unknown> | null;
-  const order = ((payload['order'] as Record<string, unknown> | undefined)?.['entity'] ??
-    null) as Record<string, unknown> | null;
+  const entity = (key: string) =>
+    ((payload[key] as Record<string, unknown> | undefined)?.['entity'] ?? null) as Record<
+      string,
+      unknown
+    > | null;
+  const payment = entity('payment');
+  const order = entity('order');
+  const refund = entity('refund');
   const str = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v : null);
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   return {
     event,
     orderId: str(payment?.['order_id']) ?? str(order?.['id']),
-    paymentId: str(payment?.['id']),
+    paymentId: str(payment?.['id']) ?? str(refund?.['payment_id']),
     amountPaise: num(payment?.['amount']) ?? num(order?.['amount_paid']) ?? num(order?.['amount']),
     paymentStatus: str(payment?.['status']),
+    errorCode: str(payment?.['error_code']),
+    errorDescription: str(payment?.['error_description']),
+    refundId: str(refund?.['id']),
+    refundAmountPaise: num(refund?.['amount']),
+    refundStatus: str(refund?.['status']),
+    amountRefundedPaise: num(payment?.['amount_refunded']),
   };
 }

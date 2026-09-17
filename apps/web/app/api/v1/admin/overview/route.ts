@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 /** ADMIN-01: the platform dashboard's numbers. */
 export async function GET(request: Request) {
-  const auth = await requireAdmin(request);
+  const auth = await requireAdmin(request, { allowViewer: true });
   if (!auth.ok) return auth.response;
   return NextResponse.json(await loadOverview(db()));
 }

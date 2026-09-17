@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import styles from './CustomerReview.module.css';
+import { ReviewFlowIcon } from './ReviewFlowIcon';
 
 /**
  * REV-02 and REV-03: edit, regenerate, confirm, copy, continue.
@@ -55,6 +57,13 @@ export function DraftEditor(props: DraftEditorProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const tooLong = draft.length > MAX_REVIEW_CHARS;
   const canCopy = confirmed && draft.trim().length > 0 && !tooLong;
+  const copyLabel = (
+    <span className={styles.buttonContent}>
+      <ReviewFlowIcon name="copy" />
+      <span>Copy &amp; open {platformLabel}</span>
+      <ReviewFlowIcon name="arrow" />
+    </span>
+  );
 
   useEffect(() => {
     if (copyStatus !== 'failed') return;
@@ -67,105 +76,124 @@ export function DraftEditor(props: DraftEditorProps) {
   }, [copyStatus]);
 
   return (
-    <div className="stack">
-      <label className="muted" htmlFor="review-draft">
+    <div className={styles.editor}>
+      <label className={styles.editorHeading} htmlFor="review-draft">
+        <ReviewFlowIcon name="edit" />
         Your review — edit anything you like
       </label>
       <textarea
         ref={editorRef}
         id="review-draft"
+        className={styles.textarea}
         value={draft}
         maxLength={MAX_REVIEW_CHARS + 200}
+        aria-describedby="review-draft-count"
+        aria-invalid={tooLong || undefined}
         onChange={(event) => props.onChange(event.target.value)}
       />
-      <p className="muted" aria-live="polite">
+      <p
+        id="review-draft-count"
+        className={`${styles.counter}${tooLong ? ` ${styles.counterError}` : ''}`}
+        aria-live="polite"
+      >
         {draft.length} / {MAX_REVIEW_CHARS} characters
         {tooLong && ' — please shorten before copying'}
       </p>
 
-      <div className="confirm">
+      <label className={styles.confirm} htmlFor="genuine-experience" data-confirmed={confirmed}>
         <input
           id="genuine-experience"
           type="checkbox"
           checked={confirmed}
           onChange={(event) => props.onConfirmChange(event.target.checked)}
         />
-        <label htmlFor="genuine-experience">
-          I confirm this draft reflects my genuine experience.
-        </label>
+        <span>I confirm this draft reflects my genuine experience.</span>
+      </label>
+
+      <div className={styles.actions}>
+        <button type="button" className={styles.secondaryButton} onClick={props.onRegenerate}>
+          <span className={styles.buttonContent}>
+            <ReviewFlowIcon name="shuffle" />
+            New review
+          </span>
+        </button>
+
+        {reviewUrl ? (
+          canCopy ? (
+            <a
+              className={styles.primaryButton}
+              href={reviewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => {
+                if (!props.onCopy()) {
+                  // No clipboard to write to. Sending them to the platform now would be sending
+                  // them with nothing to paste; the manual path renders below instead.
+                  event.preventDefault();
+                  return;
+                }
+                // Recorded immediately before navigation, never after — the tab is leaving.
+                props.onOpenGoogle();
+              }}
+            >
+              {copyLabel}
+            </a>
+          ) : (
+            /*
+             * A disabled anchor is not a thing — `aria-disabled` still leaves it clickable, and
+             * removing href turns it into something a keyboard cannot reach predictably. Rendering
+             * a real disabled button instead keeps the gate honest and the control announced
+             * correctly (AC-037).
+             */
+            <button type="button" className={styles.primaryButton} disabled>
+              {copyLabel}
+            </button>
+          )
+        ) : (
+          /* No destination configured, so there is nothing to open. Copying is still worth
+           offering — the customer can paste it wherever they were going to write. */
+          <button
+            type="button"
+            className={styles.primaryButton}
+            disabled={!canCopy}
+            onClick={() => props.onCopy()}
+          >
+            <span className={styles.buttonContent}>
+              <ReviewFlowIcon name="copy" />
+              {copyStatus === 'copied' ? 'Copy again' : 'Copy review'}
+            </span>
+          </button>
+        )}
       </div>
 
-      <button type="button" className="btn btn-secondary" onClick={props.onRegenerate}>
-        New review
-      </button>
-
-      {reviewUrl ? (
-        canCopy ? (
-          <a
-            className="btn btn-primary"
-            href={reviewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(event) => {
-              if (!props.onCopy()) {
-                // No clipboard to write to. Sending them to the platform now would be sending
-                // them with nothing to paste; the manual path renders below instead.
-                event.preventDefault();
-                return;
-              }
-              // Recorded immediately before navigation, never after — the tab is leaving.
-              props.onOpenGoogle();
-            }}
-          >
-            Copy &amp; open {platformLabel}
-          </a>
-        ) : (
-          /*
-           * A disabled anchor is not a thing — `aria-disabled` still leaves it clickable, and
-           * removing href turns it into something a keyboard cannot reach predictably. Rendering
-           * a real disabled button instead keeps the gate honest and the control announced
-           * correctly (AC-037).
-           */
-          <button type="button" className="btn btn-primary" disabled>
-            Copy &amp; open {platformLabel}
-          </button>
-        )
-      ) : (
-        /* No destination configured, so there is nothing to open. Copying is still worth
-           offering — the customer can paste it wherever they were going to write. */
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!canCopy}
-          onClick={() => props.onCopy()}
-        >
-          {copyStatus === 'copied' ? 'Copy again' : 'Copy review'}
-        </button>
+      {!confirmed && (
+        <p className={styles.helper}>Tick the box above to copy your review and continue.</p>
       )}
 
-      {!confirmed && <p className="muted">Tick the box above to copy your review and continue.</p>}
-
       {copyStatus === 'copied' && (
-        <p className="muted" aria-live="polite">
+        <p className={styles.successNotice} aria-live="polite">
           Copied. Paste it on {platformLabel} — you choose your own star rating there.
         </p>
       )}
 
       {copyStatus === 'failed' && (
         <>
-          <p className="notice notice-error" role="alert">
+          <p className={styles.errorNotice} role="alert">
             Your browser could not copy automatically. The full review is selected; use your
             device&apos;s Copy command, then open {platformLabel}.
           </p>
           {reviewUrl && (
             <a
-              className="btn btn-secondary"
+              className={styles.secondaryButton}
               href={reviewUrl}
               target="_blank"
               rel="noopener noreferrer"
               onClick={props.onOpenGoogle}
             >
-              Open {platformLabel}
+              <span className={styles.buttonContent}>
+                Open {platformLabel}
+                <ReviewFlowIcon name="arrow" />
+              </span>
             </a>
           )}
         </>

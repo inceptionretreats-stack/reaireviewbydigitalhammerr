@@ -2,20 +2,27 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '@ai-review/db';
 import { loginRequest } from '@ai-review/contracts';
-import { privacyHash } from '@ai-review/core';
+import {
+  ADMIN_SESSION_TTL_MS,
+  MFA_PENDING_TTL_MS,
+  isAdminRole,
+  privacyHash,
+} from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { verifyCsrf } from '@/lib/csrf';
 import { passwordHasher } from '@/lib/auth-helpers';
 import {
+  adminMfaRequired,
   clearSessionCookie,
   getSession,
-  landingPathFor,
+  nextPathAfterLogin,
   sessionService,
   setSessionCookie,
 } from '@/lib/session';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/auth/login — AUTH-02.
@@ -32,7 +39,11 @@ import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
  *
  * AUTH-02-01 / uniformity: every failure returns the same code and message. A response that
  * distinguished "no such account" from "wrong password" would turn this endpoint into an
- * account enumerator.
+ * account enumerator. A disabled admin account answers exactly the same way, for the same reason.
+ *
+ * AMENDMENT-027: an admin role gets a ten-minute *pending* session that can reach only the MFA
+ * screens; the challenge (or first enrolment) is what turns it into a real admin session.
+ * Remember-me is ignored for admins — twelve hours is the ceiling.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrf = verifyCsrf(request);
@@ -69,6 +80,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       role: users.role,
       passwordHash: users.passwordHash,
       lockedUntil: users.lockedUntil,
+      disabledAt: users.disabledAt,
+      mfaEnabledAt: users.mfaEnabledAt,
     })
     .from(users)
     .where(and(eq(users.email, email), isNull(users.deletedAt)))
@@ -81,8 +94,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const passwordMatches = await passwordHasher().verify(hashToCheck, password);
 
   const locked = account?.lockedUntil != null && account.lockedUntil.getTime() > Date.now();
+  const disabled = account?.disabledAt != null;
 
-  if (!account || !passwordMatches || locked) {
+  if (!account || !passwordMatches || locked || disabled) {
     const failure = await limiter.loginFailure(subject);
 
     if (account) {
@@ -94,6 +108,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Deliberately the same response whether the account is missing, the password is wrong, or
     // the account is locked. Only the Retry-After differs, and only once the limiter trips.
+    recordActivity(
+      request,
+      { userId: account?.id ?? null },
+      {
+        action: 'auth.login',
+        outcome: 'FAILURE',
+        metadata: {
+          reason: !account
+            ? 'NO_ACCOUNT'
+            : disabled
+              ? 'DISABLED'
+              : locked
+                ? 'LOCKED'
+                : 'WRONG_PASSWORD',
+        },
+      },
+    );
     return apiError('AUTH_INVALID_CREDENTIALS', 'That email or password is not correct.', {
       ...(isDenied(failure) ? { retryAfterSeconds: failure.retryAfterSeconds } : {}),
     });
@@ -118,6 +149,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
      */
     ipHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
     rememberMe: rememberMe ?? false,
+    // A pending ten-minute session only while a code is still owed; with the switch off the
+    // admin gets the twelve-hour session straight away.
+    ...(isAdminRole(account.role)
+      ? { ttlMs: adminMfaRequired() ? MFA_PENDING_TTL_MS : ADMIN_SESSION_TTL_MS }
+      : {}),
   });
 
   await setSessionCookie(session.token, session.expiresAt);
@@ -127,7 +163,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() })
     .where(eq(users.id, account.id));
 
-  return NextResponse.json({ next: landingPathFor(account.role) });
+  recordActivity(
+    request,
+    { userId: account.id },
+    { action: 'auth.login', metadata: { role: account.role, remember_me: rememberMe ?? false } },
+  );
+  const next = nextPathAfterLogin({
+    role: account.role,
+    mfaEnabledAt: account.mfaEnabledAt,
+    mfaVerifiedAt: null,
+  });
+  return NextResponse.json({
+    next,
+    mfa:
+      !isAdminRole(account.role) || !adminMfaRequired()
+        ? null
+        : account.mfaEnabledAt
+          ? 'challenge'
+          : 'enrol',
+  });
 }
 
 export async function DELETE(): Promise<NextResponse> {

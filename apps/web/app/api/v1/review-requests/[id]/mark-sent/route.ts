@@ -9,6 +9,7 @@ import {
   markSent,
   recordMarkedSentEvent,
 } from '../../service';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/review-requests/{id}/mark-sent — Flow F step 8.
@@ -83,6 +84,15 @@ export async function POST(
     requestId: existing.id,
   });
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'review_request.mark_sent',
+      targetType: 'review_request',
+      targetId: existing.id,
+    },
+  );
   return NextResponse.json({
     id: existing.id,
     marked_sent_at: stampedAt.toISOString(),

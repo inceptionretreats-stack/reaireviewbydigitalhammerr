@@ -43,6 +43,13 @@
       "when": 1789132552207,
       "tag": "0005_entitlement_source_and_guidance",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789543188175,
+      "tag": "0006_admin_mfa_activity_payments",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/require-tenant';
 import { isModeId, modeNotFound, refuseFrozenTenant } from '../../guards';
 import { activateMode, toWireMode } from '../../mode-service';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/ai/modes/{id}/activate — the Activate action of AI-02.
@@ -38,6 +39,16 @@ export async function POST(
   const result = await activateMode(db(), auth.context.businessId, id);
   if (!result.ok) return activationFailure(result.reason);
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'ai.mode.activate',
+      targetType: 'review_mode',
+      targetId: id,
+      metadata: { previous_active_mode_id: result.previousActiveModeId },
+    },
+  );
   return NextResponse.json({
     active_mode: toWireMode(result.mode),
     // Named for the same reason `/api/v1/business` returns `previous_slug`: the owner should be

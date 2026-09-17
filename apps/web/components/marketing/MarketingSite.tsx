@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { QrStandeePreview } from '@/components/qr/QrStandeePreview';
 import type { LandingDemo } from '@/lib/landing-demo';
+import { HeroReviewVideo } from './HeroReviewVideo';
 import { MarketingSectionNav, type MarketingSectionLink } from './MarketingSectionNav';
 import styles from './MarketingSite.module.css';
 
@@ -231,8 +232,8 @@ export function ReviewerVisual({ demo }: { demo?: LandingDemo | null }) {
       <div className={styles.heroImageSurface} data-hero-media="image">
         <Image
           className={styles.heroImage}
-          src="/marketing/customer-review-hero-v4.png"
-          alt="Customer showing an editable Ai-written review draft on her phone"
+          src="/marketing/hero-review-walkthrough-v3-poster.png"
+          alt="A friendly Ai robot guiding the review journey beside a complete upright phone"
           fill
           preload
           sizes="(max-width: 820px) calc(100vw - 36px), (max-width: 1100px) 58vw, 800px"
@@ -257,6 +258,14 @@ export function ReviewerVisual({ demo }: { demo?: LandingDemo | null }) {
           </Link>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+export function HeroVideoVisual() {
+  return (
+    <div className={styles.heroVideoVisual} data-hero-visual>
+      <HeroReviewVideo />
     </div>
   );
 }

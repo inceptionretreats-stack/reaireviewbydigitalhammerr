@@ -268,6 +268,21 @@ export function seedId(name: string): string {
 
 /** Pinned so the safety guard can tell the demo tenant apart from somebody's real one. */
 export const DEMO_BUSINESS_ID = seedId('business:demo-south-cafe');
+/** Display branding can change without re-keying the tenant or invalidating its printed QRs. */
+export const DEMO_BUSINESS_NAME = 'Digital Hammerr';
+/** Current agency example; the delivered spec and stable demo identifiers remain frozen. */
+export const DEMO_BUSINESS_PROFILE = {
+  category: 'Digital Marketing Agency',
+  description: 'Digital marketing, app and website development, SEO and graphic design.',
+  services: [
+    'Digital marketing',
+    'App development',
+    'Website development',
+    'SEO',
+    'Graphic design',
+  ],
+  contextTerms: ['Digital marketing', 'Websites and apps', 'SEO', 'Graphic design'],
+};
 
 // ---------------------------------------------------------------------------------------------
 // Safety
@@ -444,9 +459,12 @@ export function buildSeedPlan(input: SeedPlanInput): SeedPlanResult {
   const business: typeof businesses.$inferInsert = {
     id: businessId,
     ownerUserId: ownerId,
-    name: doc.name,
-    category: doc.category,
-    description: doc.description ?? null,
+    name: businessId === DEMO_BUSINESS_ID ? DEMO_BUSINESS_NAME : doc.name,
+    category: businessId === DEMO_BUSINESS_ID ? DEMO_BUSINESS_PROFILE.category : doc.category,
+    description:
+      businessId === DEMO_BUSINESS_ID
+        ? DEMO_BUSINESS_PROFILE.description
+        : (doc.description ?? null),
     city: doc.city ?? null,
     state: doc.state ?? null,
     countryCode: 'IN',
@@ -504,12 +522,16 @@ export function buildSeedPlan(input: SeedPlanInput): SeedPlanResult {
 
   const aiContext: typeof aiBusinessContexts.$inferInsert = {
     businessId,
-    summary: doc.description ?? null,
+    summary: business.description,
     // D-025, AC-010: services and terms are hints for the model. Nothing downstream may treat
     // them as mandatory output, which is why they are stored flat and unranked — there is no
     // "required term" to express here.
-    services: doc.ai_context.services,
-    contextTerms: doc.ai_context.context_terms,
+    services:
+      businessId === DEMO_BUSINESS_ID ? DEMO_BUSINESS_PROFILE.services : doc.ai_context.services,
+    contextTerms:
+      businessId === DEMO_BUSINESS_ID
+        ? DEMO_BUSINESS_PROFILE.contextTerms
+        : doc.ai_context.context_terms,
     // CHANGE-003. Stated rather than left to the column default, so the demo tenant's language
     // is a decision in the seed and not an accident of the schema.
     draftLanguage: 'hinglish',

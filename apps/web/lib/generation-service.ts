@@ -266,3 +266,33 @@ export async function loadPlan(db: Database, businessId: string): Promise<'FREE'
   if (row.startsAt.getTime() > now || row.expiresAt.getTime() <= now) return 'FREE';
   return 'PRO';
 }
+
+/**
+ * AMENDMENT-030 — the admin's Ai controls for a business, read before the limiter runs:
+ * a suspension refuses the request outright, a live throttle becomes a limiter dimension.
+ */
+export async function loadAiControls(
+  db: Database,
+  businessId: string,
+): Promise<{ suspended: boolean; throttle: { perHour: number; untilMs: number } | undefined }> {
+  const [row] = await db
+    .select({
+      aiSuspendedAt: businesses.aiSuspendedAt,
+      aiThrottleUntil: businesses.aiThrottleUntil,
+      aiThrottlePerHour: businesses.aiThrottlePerHour,
+    })
+    .from(businesses)
+    .where(eq(businesses.id, businessId))
+    .limit(1);
+  const live =
+    row?.aiThrottleUntil !== null &&
+    row?.aiThrottleUntil !== undefined &&
+    row.aiThrottleUntil.getTime() > Date.now() &&
+    row.aiThrottlePerHour !== null;
+  return {
+    suspended: row?.aiSuspendedAt !== null && row?.aiSuspendedAt !== undefined,
+    throttle: live
+      ? { perHour: row!.aiThrottlePerHour!, untilMs: row!.aiThrottleUntil!.getTime() }
+      : undefined,
+  };
+}

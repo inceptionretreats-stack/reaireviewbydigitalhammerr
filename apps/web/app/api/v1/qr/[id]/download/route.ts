@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
 import { renderQrCardPng, renderQrCardSvg, type QrCardBranding } from '@/lib/qr-card';
 import { contentDisposition, parseFormat, type QrFormat } from './filename';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * GET /api/v1/qr/{id}/download?format=svg|png — the Download SVG / Download PNG actions of QR-01.
@@ -95,6 +96,11 @@ export async function GET(
     return apiError('INTERNAL_ERROR', 'We could not prepare that QR image. Please try again.');
   }
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    { action: 'qr.download', targetType: 'qr_code', targetId: id, metadata: { format } },
+  );
   return imageResponse(rendered, source.sourceLabel, source.code);
 }
 

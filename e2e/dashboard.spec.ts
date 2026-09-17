@@ -18,7 +18,7 @@ const OWNER = {
 };
 
 const SCREENS = [
-  { path: '/app', id: 'DASH-01', heading: /demo south cafe/i },
+  { path: '/app', id: 'DASH-01', heading: /digital hammerr/i },
   { path: '/app/ai-review', id: 'AI-01', heading: /drafts are built from/i },
   { path: '/app/review-modes', id: 'AI-02', heading: /what your drafts lean on/i },
   { path: '/app/qr', id: 'QR-01', heading: /qr codes/i },
@@ -164,15 +164,19 @@ test.describe('business dashboard', () => {
     await page.goto('/app/qr');
 
     const brandedPreview = page.locator('figure[aria-label^="QR card"]').first();
-    await expect(brandedPreview.getByText('Demo South Cafe')).toBeVisible();
-    await expect(brandedPreview.getByText('Digital Hammerr')).toBeVisible();
+    await expect(brandedPreview.locator('[data-qr-card-part="name"]')).toHaveText(
+      'Digital Hammerr',
+    );
+    await expect(brandedPreview.locator('[data-qr-card-part="credit"]')).toContainText(
+      'Digital Hammerr',
+    );
     await expect(brandedPreview.getByRole('img', { name: /qr code/i })).toBeVisible();
     await expect(brandedPreview.locator('[data-qr-card-part]')).toHaveCount(3);
     expect(
       await brandedPreview.evaluate((element) =>
         (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
       ),
-    ).toBe('Demo South Cafe Ai Review by Digital Hammerr');
+    ).toBe('Digital Hammerr Ai Review by Digital Hammerr');
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -194,7 +198,8 @@ test.describe('business dashboard', () => {
     const markup = await svg.text();
     expect(markup).toContain('<svg');
     expect(markup).toContain('viewBox="0 0 900 1350"');
-    expect(markup).toContain('Demo South Cafe');
+    expect(markup).toContain('Digital Hammerr');
+    expect(markup).not.toContain('Demo South Cafe');
     expect(markup).toContain('Ai Review by Digital Hammerr');
     // Outlined glyphs, never text: the PNG twin is rasterised on a host with no fonts.
     expect(markup).not.toMatch(/<text\b/);

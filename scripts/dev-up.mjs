@@ -413,8 +413,9 @@ async function demoQrCode() {
     const client = new pg.Client({ connectionString: envValue('DATABASE_URL') });
     await client.connect();
     const { rows } = await client.query(
-      `SELECT q.code FROM qr_codes q JOIN businesses b ON b.id = q.business_id
-       WHERE b.name = 'Demo South Cafe' AND q.status = 'ACTIVE' ORDER BY q.created_at LIMIT 1`,
+      `SELECT q.code FROM qr_codes q JOIN business_slugs s ON s.business_id = q.business_id
+       WHERE s.slug = 'demo-south-cafe' AND s.is_primary = true
+       AND q.status = 'ACTIVE' ORDER BY q.created_at, q.id LIMIT 1`,
     );
     await client.end();
     return rows[0]?.code ?? null;

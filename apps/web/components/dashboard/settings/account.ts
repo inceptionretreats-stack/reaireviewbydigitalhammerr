@@ -35,6 +35,13 @@ export interface AccountSettings {
     /** AMENDMENT-004. The timezone any date on this screen is formatted in (AC-026). */
     timezone: string;
   };
+  /** AMENDMENT-029. The buyer side of the next invoice; '' where nothing has been given. */
+  billing: {
+    billingLegalName: string;
+    gstin: string;
+    billingStateCode: string;
+    billingAddress: string;
+  };
   /** Live sessions other than this one, for SET-01-02's resting state. */
   otherLiveSessions: number;
 }
@@ -71,6 +78,10 @@ export async function loadAccountSettings(
         status: businesses.status,
         publishedAt: businesses.publishedAt,
         timezone: businesses.timezone,
+        billingLegalName: businesses.billingLegalName,
+        gstin: businesses.gstin,
+        billingStateCode: businesses.billingStateCode,
+        billingAddress: businesses.billingAddress,
       })
       .from(businesses)
       .where(eq(businesses.id, businessId))
@@ -91,7 +102,18 @@ export async function loadAccountSettings(
       email: account.email,
       mobile: account.mobile ?? '',
     },
-    business,
+    business: {
+      name: business.name,
+      status: business.status,
+      publishedAt: business.publishedAt,
+      timezone: business.timezone,
+    },
+    billing: {
+      billingLegalName: business.billingLegalName ?? '',
+      gstin: business.gstin ?? '',
+      billingStateCode: business.billingStateCode ?? '',
+      billingAddress: business.billingAddress ?? '',
+    },
     otherLiveSessions,
   };
 }

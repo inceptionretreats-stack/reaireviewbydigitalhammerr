@@ -7,6 +7,7 @@ import { requireTenant } from '@/lib/require-tenant';
 import { isDenied, rateLimiter } from '@/lib/rate-limit';
 import { loadGenerationContext, providerKeys, selectProvider } from '@/lib/generation-service';
 import { previewCheck } from './preview-limit';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/ai/test-preview — ONB-04 "Generate preview" and AI-01 "Test preview".
@@ -86,6 +87,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const text = result.output.review_text.trim();
     const compliance = checkOutputCompliance(text);
 
+    recordActivity(
+      request,
+      { session: auth.context.session, businessId: auth.context.businessId },
+      {
+        action: 'ai.test_preview',
+        metadata: {
+          prompt_version: context.promptVersion.version,
+          compliance_passed: compliance.passed,
+        },
+      },
+    );
     return NextResponse.json({
       review_text: text,
       prompt_version: context.promptVersion.version,

@@ -5,6 +5,7 @@ import { normalizePhone } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * GET/PUT /api/v1/business/links — ONB-03, and the section list behind PROFILE-01.
@@ -161,6 +162,16 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       .where(eq(businesses.id, businessId));
   });
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'business.links.replace',
+      targetType: 'business',
+      targetId: businessId,
+      metadata: { sections: DEFAULT_SECTIONS.length },
+    },
+  );
   return NextResponse.json({ sections: DEFAULT_SECTIONS.length });
 }
 

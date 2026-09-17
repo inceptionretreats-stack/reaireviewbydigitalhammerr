@@ -10,10 +10,14 @@ test.describe('public business link page', () => {
   test('shows the business identity, ordered actions, and Digital Hammerr brand', async ({
     page,
   }) => {
-    await expect(page.getByRole('heading', { name: 'Demo South Cafe' })).toBeVisible();
-    await expect(page.getByText('Demo business used only in staging tests.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Digital Hammerr', exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Digital marketing, app and website development, SEO and graphic design.', {
+        exact: true,
+      }),
+    ).toBeVisible();
 
-    const navigation = page.getByRole('navigation', { name: /links for demo south cafe/i });
+    const navigation = page.getByRole('navigation', { name: /links for digital hammerr/i });
     const businessLinks = navigation.getByRole('link');
     await expect(businessLinks).toHaveText([
       'Review us on Google',
@@ -50,7 +54,9 @@ test.describe('public business link page', () => {
     await expect(privateFeedback).not.toHaveAttribute('target', /.+/);
     await expect(navigation.getByRole('link', { name: 'Send private feedback' })).toHaveCount(0);
 
-    await expect(page.getByText('Digital Hammerr', { exact: true })).toBeVisible();
+    await expect(
+      page.locator('article footer').getByText('Digital Hammerr', { exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole('link', { name: /digital hammerr/i })).toHaveCount(0);
 
     await expect(page.locator('[type="radio"]')).toHaveCount(0);
@@ -63,7 +69,7 @@ test.describe('public business link page', () => {
 
     await expect(page).toHaveURL(new RegExp(`/${SLUG}/feedback$`));
     await expect(
-      page.getByRole('heading', { name: 'Private feedback for Demo South Cafe' }),
+      page.getByRole('heading', { name: 'Private feedback for Digital Hammerr' }),
     ).toBeVisible();
     await expect(page.getByRole('textbox', { name: /like the business to know/i })).toBeVisible();
   });
@@ -89,7 +95,7 @@ test.describe('public business link page', () => {
       expect(actionHeights.length).toBeGreaterThan(0);
       expect(Math.min(...actionHeights)).toBeGreaterThanOrEqual(44);
 
-      const brand = page.getByText('Digital Hammerr', { exact: true });
+      const brand = page.locator('article footer').getByText('Digital Hammerr', { exact: true });
       await brand.scrollIntoViewIfNeeded();
       await expect(brand).toBeVisible();
     });

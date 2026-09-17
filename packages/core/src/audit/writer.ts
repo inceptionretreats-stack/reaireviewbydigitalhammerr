@@ -9,6 +9,10 @@ import type { Executor } from '../db-executor';
  *
  * High-risk actions require a reason (ADMIN_REASON_REQUIRED, 23_API_Error_Codes.md), enforced
  * here rather than at each call site so it cannot be forgotten one endpoint at a time.
+ *
+ * AMENDMENT-029: some mutations have no admin behind them — the nightly expiry sweep, a refund
+ * that someone started in the Razorpay dashboard. Those are recorded with `actorType: 'SYSTEM'`
+ * and no actor. Every other row must name a person; the database CHECK enforces the same rule.
  */
 
 export const HIGH_RISK_ACTIONS = new Set([
@@ -17,14 +21,30 @@ export const HIGH_RISK_ACTIONS = new Set([
   'business.entitlement.adjust',
   'business.quota.reset',
   'business.impersonate',
+  'business.ai.suspend',
+  'business.ai.restore',
+  'business.ai.throttle',
+  'business.ai.unthrottle',
+  'business.warn',
   'prompt_version.activate',
   'prompt_version.rollback',
   'platform_settings.update',
   'user.role.change',
+  'user.mfa.reset',
+  'user.disable',
+  'user.enable',
+  'user.invite.create',
+  'payment.refund',
+  'payment.reconcile',
+  'payment.mark_failed',
 ]);
 
+export type AuditActorType = 'ADMIN' | 'SYSTEM';
+
 export interface AuditEntry {
-  actorUserId: string;
+  /** The person. Null only for a SYSTEM action. */
+  actorUserId: string | null;
+  actorType?: AuditActorType;
   action: string;
   businessId?: string | null;
   targetType?: string | null;
@@ -42,6 +62,13 @@ export class AuditReasonRequiredError extends Error {
   }
 }
 
+export class AuditActorRequiredError extends Error {
+  constructor(action: string) {
+    super(`Action ${action} is not a system action and requires an actor`);
+    this.name = 'AuditActorRequiredError';
+  }
+}
+
 export class AuditWriter {
   constructor(private readonly db: Executor) {}
 
@@ -49,9 +76,14 @@ export class AuditWriter {
     if (HIGH_RISK_ACTIONS.has(entry.action) && !entry.reason?.trim()) {
       throw new AuditReasonRequiredError(entry.action);
     }
+    const actorType = entry.actorType ?? 'ADMIN';
+    if (actorType !== 'SYSTEM' && !entry.actorUserId) {
+      throw new AuditActorRequiredError(entry.action);
+    }
 
     await this.db.insert(adminAuditLogs).values({
       actorUserId: entry.actorUserId,
+      actorType,
       businessId: entry.businessId ?? null,
       action: entry.action,
       reason: entry.reason ?? null,

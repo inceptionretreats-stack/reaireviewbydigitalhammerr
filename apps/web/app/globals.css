@@ -38,13 +38,21 @@ body {
     radial-gradient(circle at 96% 4%, rgb(234 67 53 / 6%), transparent 22rem),
     radial-gradient(circle at 88% 96%, rgb(52 168 83 / 6%), transparent 24rem), var(--bg);
   color: var(--text);
-  font:
-    16px/1.55 system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.65;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  letter-spacing: normal;
 }
 
 .shell {
@@ -282,13 +290,13 @@ a:focus-visible {
 .app-brand-copy {
   display: flex;
   flex-direction: column;
-  line-height: 1.05;
+  line-height: 1.2;
 }
 
 .app-brand-copy strong {
   font-size: 1.12rem;
-  font-weight: 850;
-  letter-spacing: -0.035em;
+  font-weight: 650;
+  letter-spacing: -0.02em;
 }
 
 .app-brand-copy small {
@@ -303,7 +311,7 @@ a:focus-visible {
   margin: 1.9rem 0 0.6rem 0.75rem;
   color: #7a8798;
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: 650;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -328,7 +336,7 @@ a:focus-visible {
   color: #0b1f33;
   font: inherit;
   font-size: 0.86rem;
-  font-weight: 750;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -496,7 +504,7 @@ a:focus-visible {
 }
 
 .app-topbar-copy span {
-  font-weight: 800;
+  font-weight: 650;
 }
 
 .app-topbar-copy small {
@@ -522,9 +530,9 @@ a:focus-visible {
 .app-main h1 {
   color: #0b1f33;
   font-size: clamp(1.8rem, 3vw, 2.55rem);
-  font-weight: 850;
-  letter-spacing: -0.045em;
-  line-height: 1.08;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .app-main h1::after {
@@ -572,7 +580,7 @@ a:focus-visible {
   align-items: center;
   gap: 0.55rem;
   color: #0b1f33;
-  font-weight: 800;
+  font-weight: 650;
 }
 
 .app-shell .ui-card > div:first-child h2::before,
@@ -613,8 +621,8 @@ a:focus-visible {
   margin-top: 0.35rem;
   color: #0b1f33;
   font-size: clamp(2rem, 4vw, 2.65rem);
-  font-weight: 850;
-  letter-spacing: -0.04em;
+  font-weight: 650;
+  letter-spacing: -0.02em;
 }
 
 .app-shell .ui-button,
@@ -733,7 +741,7 @@ a:focus-visible {
 .onboarding-topbar a {
   border-radius: 8px;
   color: #1967d2;
-  font-weight: 800;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -844,7 +852,7 @@ a:focus-visible {
   background: #f3f6fa;
   color: #68778c;
   font-size: 0.82rem;
-  font-weight: 850;
+  font-weight: 650;
 }
 
 [data-step-state='current'] .onboarding-progress-marker {
@@ -864,7 +872,7 @@ a:focus-visible {
   max-width: 100%;
   min-height: 2.5em;
   font-size: 0.67rem;
-  font-weight: 750;
+  font-weight: 650;
   line-height: 1.25;
   text-wrap: balance;
 }
@@ -885,7 +893,7 @@ a:focus-visible {
   margin: 0;
   color: #1967d2;
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 650;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -894,9 +902,9 @@ a:focus-visible {
   margin: 0;
   color: #0b1f33;
   font-size: clamp(1.8rem, 4vw, 2.7rem);
-  font-weight: 850;
-  letter-spacing: -0.045em;
-  line-height: 1.08;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .onboarding-heading > p:last-child:not(.onboarding-step-count) {
@@ -1080,9 +1088,9 @@ a:focus-visible {
     margin: 0;
     color: #0b1f33;
     font-size: 2.35rem;
-    font-weight: 850;
-    letter-spacing: -0.05em;
-    line-height: 1.04;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
   }
 
   .onboarding-story p {

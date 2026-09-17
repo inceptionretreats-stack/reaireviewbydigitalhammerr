@@ -21,6 +21,7 @@ import {
   recordPreparedEvent,
   whatsAppLinkFor,
 } from './service';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/review-requests — Flow F step 5's "Message Prepared", and the only place a tracked
@@ -163,6 +164,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     templateId,
   });
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'review_request.create',
+      targetType: 'review_request',
+      targetId: created.id,
+      metadata: { customer_id: customer.id },
+    },
+  );
   return NextResponse.json(
     {
       id: created.id,

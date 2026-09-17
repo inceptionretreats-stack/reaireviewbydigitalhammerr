@@ -13,12 +13,21 @@
  * The password is hashed the way the application hashes it — same algorithm, same pepper from
  * HASH_PEPPER — so the login form accepts it. Run it with the same .env the app runs with.
  *
- * MFA is mandatory for admin accounts in 19_Admin_Panel_Spec and is not built yet (E13). Until
- * it is, do not create an admin account on a deployment reachable from the public internet.
+ * MFA (AMENDMENT-027) is enforced at first sign-in: the account created here is sent to enrol an
+ * authenticator app before it can reach /admin, so it is safe to run against production. For a
+ * break-glass or an automated test, `--totp-secret <base32>` arms a known secret directly and
+ * skips enrolment; that needs APP_ENCRYPTION_KEY, the key the secret is sealed under.
  */
 import { createHash } from 'node:crypto';
 import pg from 'pg';
-import { PasswordHasher, validatePasswordStrength } from '@ai-review/core';
+import {
+  MfaService,
+  PasswordHasher,
+  SecretBox,
+  base32Decode,
+  validatePasswordStrength,
+} from '@ai-review/core';
+import { createDatabase } from '@ai-review/db';
 
 const args = process.argv.slice(2);
 const opt = (name) => {
@@ -30,6 +39,7 @@ const password = opt('password');
 const fullName = opt('name')?.trim() || 'Platform admin';
 const reason =
   opt('reason')?.trim() || 'Platform admin account created with scripts/create-admin.mjs';
+const totpSecret = opt('totp-secret')?.trim();
 
 if (!email || !password) {
   console.error(
@@ -46,18 +56,22 @@ if (!strength.ok) {
   console.error(`Password rejected by the product's own rules: ${strength.reason}`);
   process.exit(1);
 }
-const { DATABASE_URL, HASH_PEPPER, NODE_ENV } = process.env;
+const { DATABASE_URL, HASH_PEPPER, APP_ENCRYPTION_KEY } = process.env;
 if (!DATABASE_URL || !HASH_PEPPER) {
   console.error('DATABASE_URL and HASH_PEPPER are required — run with --env-file=.env.');
   process.exit(1);
 }
-if (NODE_ENV === 'production') {
-  console.error(
-    'Refusing in production: admin MFA (19_Admin_Panel_Spec) is not built yet, and an admin\n' +
-      'account without it must not exist on a public deployment. Set NODE_ENV to something else\n' +
-      'only if this database is not reachable from the internet.',
-  );
-  process.exit(2);
+if (totpSecret) {
+  if (!APP_ENCRYPTION_KEY) {
+    console.error('--totp-secret needs APP_ENCRYPTION_KEY, the key the secret is sealed under.');
+    process.exit(1);
+  }
+  try {
+    if (base32Decode(totpSecret).length < 10) throw new Error('too short');
+  } catch {
+    console.error('--totp-secret must be a base32 key of at least 80 bits.');
+    process.exit(1);
+  }
 }
 
 const passwordHash = await new PasswordHasher({ pepper: HASH_PEPPER }).hash(password);
@@ -102,8 +116,23 @@ try {
     ],
   );
   await client.query('COMMIT');
+
+  if (totpSecret) {
+    const db = createDatabase({ connectionString: DATABASE_URL, poolMin: 1, poolMax: 2 });
+    await new MfaService(db, {
+      box: new SecretBox(APP_ENCRYPTION_KEY),
+      pepper: HASH_PEPPER,
+      issuer: process.env.MFA_ISSUER || 'Ai Review by Digital Hammerr',
+    }).installSecret(userId, totpSecret);
+    await db.$client.end();
+  }
+
   console.log(`\n  ${existing[0] ? 'Updated' : 'Created'} admin ${email}`);
-  console.log('  Sign in at /login — an admin lands on /admin.');
+  console.log(
+    totpSecret
+      ? '  Authenticator armed from --totp-secret. Sign in at /login, then enter a code.'
+      : '  Sign in at /login — the first sign-in sets up an authenticator app, then lands on /admin.',
+  );
   console.log(
     `  Password fingerprint (not the password): ${createHash('sha256').update(password).digest('hex').slice(0, 8)}\n`,
   );

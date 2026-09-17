@@ -3,10 +3,15 @@ import {
   ipSessionSetKey,
   loginFailureCheck,
   loginSuccessCheck,
+  mfaFailureCheck,
+  mfaSuccessCheck,
+  adminThrottleCheck,
+  type AdminThrottle,
   publicFeedbackCheck,
   publicGenerationCheck,
   sessionMember,
   type LoginSubject,
+  type MfaSubject,
   type PublicFeedbackSubject,
   type PublicGenerationSubject,
   type RateLimitConfig,
@@ -131,6 +136,11 @@ export class RateLimiter {
     return this.consume(publicGenerationCheck(subject, distinctSessions, this.config));
   }
 
+  /** AMENDMENT-030: the admin throttle on its own, for a request with no anonymous session. */
+  businessThrottle(businessId: string, throttle: AdminThrottle): Promise<RateLimitDecision> {
+    return this.consume(adminThrottleCheck(businessId, throttle));
+  }
+
   /** Private-feedback submission (E8-02). Two dimensions, one atomic decision. */
   publicFeedback(subject: PublicFeedbackSubject): Promise<RateLimitDecision> {
     return this.consume(publicFeedbackCheck(subject, this.config));
@@ -152,6 +162,19 @@ export class RateLimiter {
    */
   loginSuccess(subject: LoginSubject): Promise<void> {
     return this.forgive(loginSuccessCheck(subject, this.config));
+  }
+
+  /** AMENDMENT-027: inspected before a code is checked, so a locked session never reaches the HMAC. */
+  mfaAttempt(subject: MfaSubject): Promise<RateLimitDecision> {
+    return this.inspect(mfaFailureCheck(subject, this.config));
+  }
+
+  mfaFailure(subject: MfaSubject): Promise<RateLimitDecision> {
+    return this.consume(mfaFailureCheck(subject, this.config));
+  }
+
+  mfaSuccess(subject: MfaSubject): Promise<void> {
+    return this.forgive(mfaSuccessCheck(subject, this.config));
   }
 
   private async countDistinctSessions(

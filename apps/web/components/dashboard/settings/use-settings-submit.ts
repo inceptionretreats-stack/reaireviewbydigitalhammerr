@@ -18,7 +18,7 @@ import type { SubmitFailure, SubmitState } from '../../auth/use-form-submit';
  * to highlight.
  */
 
-export type SettingsMethod = 'POST' | 'PATCH';
+export type SettingsMethod = 'POST' | 'PATCH' | 'PUT';
 
 export interface SettingsSubmit {
   state: SubmitState;

@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
 import { readReviewDestinationBody } from './body';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * GET/PUT /api/v1/business/review-destination — ONB-02, and the edit path AC-017 requires.
@@ -124,6 +125,16 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       .where(eq(businesses.id, businessId));
   });
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'business.review_destination.update',
+      targetType: 'business',
+      targetId: businessId,
+      metadata: { host: validation.host, kind: validation.kind },
+    },
+  );
   return NextResponse.json({
     url: validation.url,
     host: validation.host,

@@ -310,4 +310,37 @@ describe('PlatformSettingsService', () => {
       }),
     ).rejects.toThrow(/whole number/);
   });
+  it('keeps digits-only text settings as text across the jsonb round trip, and validates the rest', async () => {
+    const service = new PlatformSettingsService(db);
+    try {
+      await service.update({
+        actor: { userId: adminId },
+        reason: 'Seller details for invoices',
+        changes: {
+          seller_state_code: '29',
+          seller_sac_code: '998314',
+          invoice_prefix: 'INV2026',
+          seller_gstin: '29ABCDE1234F1Z5',
+        },
+      });
+      const values = await service.values();
+      expect(values.seller_state_code).toBe('29');
+      expect(values.seller_sac_code).toBe('998314');
+      expect(values.invoice_prefix).toBe('INV2026');
+      expect(values.seller_gstin).toBe('29ABCDE1234F1Z5');
+
+      const refused = (changes: Record<string, unknown>) =>
+        service.update({ actor: { userId: adminId }, reason: 'x', changes });
+      await expect(refused({ seller_gstin: '29ABCDE1234F1Y5' })).rejects.toThrow(/expected format/);
+      await expect(refused({ seller_gstin: 'nope' })).rejects.toThrow(/15 to 15/);
+      await expect(refused({ invoice_prefix: 'dh' })).rejects.toThrow(/expected format/);
+      await expect(refused({ gst_rate_bps: 12_000 })).rejects.toThrow(/whole number/);
+    } finally {
+      // Global state other suites read — always put back, even when an assertion above fails.
+      await pool.query(
+        `DELETE FROM platform_settings
+          WHERE key IN ('seller_state_code', 'seller_sac_code', 'invoice_prefix', 'seller_gstin')`,
+      );
+    }
+  });
 });

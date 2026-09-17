@@ -1,12 +1,17 @@
 import { createHash } from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
 import {
+  businesses,
   payments,
   paymentWebhookEvents,
   subscriptions,
+  users,
   type Database,
   type Payment,
 } from '@ai-review/db';
+import { PlatformSettingsService } from '../platform/settings';
+import { allocateInvoiceNumber, buildInvoiceSnapshot } from './invoice-service';
+import { PaymentAdminService } from './payment-admin-service';
 import { SubscriptionService } from './subscription-service';
 import {
   parseWebhookEvent,
@@ -67,6 +72,8 @@ export interface WebhookOutcome {
   activated: boolean;
   /** The business whose payment this was, when the event reached a payment row. */
   businessId?: string;
+  /** Our payments.id, when the event reached a payment row. */
+  paymentId?: string;
   error?: string;
 }
 
@@ -134,7 +141,7 @@ export class CheckoutService {
     ) {
       throw new CheckoutError('PAYMENT_VERIFICATION_FAILED', 'checkout signature did not verify');
     }
-    return this.settle({
+    return this.settleOrder({
       orderId: input.orderId,
       providerPaymentId: input.paymentId,
       expectedBusinessId: input.businessId,
@@ -192,50 +199,119 @@ export class CheckoutService {
       ledgerId = existing.id;
     }
 
-    const finish = async (outcome: WebhookOutcome, error?: string) => {
+    // The ledger row carries the payment it landed on and how it ended (AMENDMENT-029), so
+    // the admin's webhook screen needs no payload to say what happened.
+    const finish = async (outcome: WebhookOutcome, error?: string, paymentRowId?: string) => {
       await this.db
         .update(paymentWebhookEvents)
-        .set({ processedAt: new Date(), processingError: error ?? null })
+        .set({
+          processedAt: new Date(),
+          processingError: error ?? null,
+          outcome: outcome.status,
+          ...(paymentRowId ? { paymentId: paymentRowId } : {}),
+        })
         .where(eq(paymentWebhookEvents.id, ledgerId));
       return outcome;
+    };
+    const paymentRowFor = async (orderId: string | null, providerPaymentId: string | null) => {
+      if (orderId) {
+        const [row] = await this.db
+          .select({ id: payments.id })
+          .from(payments)
+          .where(eq(payments.providerOrderId, orderId))
+          .limit(1);
+        if (row) return row.id;
+      }
+      if (providerPaymentId) {
+        const [row] = await this.db
+          .select({ id: payments.id })
+          .from(payments)
+          .where(eq(payments.providerPaymentId, providerPaymentId))
+          .limit(1);
+        if (row) return row.id;
+      }
+      return undefined;
     };
 
     try {
       if (event.event === 'payment.captured' || event.event === 'order.paid') {
         if (!event.orderId)
           return finish({ status: 'ignored', event: event.event, activated: false });
-        const { activated, payment } = await this.settle({
+        const { activated, payment } = await this.settleOrder({
           orderId: event.orderId,
           providerPaymentId: event.paymentId,
           expectedBusinessId: null,
           amountPaise: event.amountPaise,
           reference: { source: 'webhook', event: event.event, event_id: providerEventId },
         });
-        return finish({
-          status: 'processed',
-          event: event.event,
-          activated,
-          businessId: payment.businessId,
-        });
+        return finish(
+          {
+            status: 'processed',
+            event: event.event,
+            activated,
+            businessId: payment.businessId,
+            paymentId: payment.id,
+          },
+          undefined,
+          payment.id,
+        );
       }
       if (event.event === 'payment.failed' && event.orderId) {
+        const reason = [event.errorCode, event.errorDescription].filter(Boolean).join(': ');
         const [failed] = await this.db
           .update(payments)
           .set({
             status: 'FAILED',
             providerPaymentId: event.paymentId,
+            failureReason: reason ? reason.slice(0, 500) : null,
+            updatedAt: new Date(),
             rawReference: { source: 'webhook', event: event.event, event_id: providerEventId },
           })
           .where(and(eq(payments.providerOrderId, event.orderId), eq(payments.status, 'CREATED')))
-          .returning({ businessId: payments.businessId });
-        return finish({
-          status: 'processed',
-          event: event.event,
-          activated: false,
-          ...(failed ? { businessId: failed.businessId } : {}),
-        });
+          .returning({ id: payments.id, businessId: payments.businessId });
+        return finish(
+          {
+            status: 'processed',
+            event: event.event,
+            activated: false,
+            ...(failed ? { businessId: failed.businessId } : {}),
+          },
+          undefined,
+          failed?.id ?? (await paymentRowFor(event.orderId, event.paymentId)),
+        );
       }
-      return finish({ status: 'ignored', event: event.event, activated: false });
+      if (event.event.startsWith('refund.') && event.refundId && event.paymentId) {
+        // A refund made from the Razorpay dashboard, or the settlement of one this product
+        // asked for. Either way the ledger names the payment.
+        const applied = await new PaymentAdminService(this.db).applyProviderRefund({
+          providerPaymentId: event.paymentId,
+          providerRefundId: event.refundId,
+          amountPaise: event.refundAmountPaise ?? 0,
+          providerStatus: event.refundStatus ?? event.event.replace('refund.', ''),
+          eventId: providerEventId,
+        });
+        if (!applied) return finish({ status: 'ignored', event: event.event, activated: false });
+        const [owner] = await this.db
+          .select({ businessId: payments.businessId })
+          .from(payments)
+          .where(eq(payments.id, applied.paymentId))
+          .limit(1);
+        return finish(
+          {
+            status: applied.applied ? 'processed' : 'duplicate',
+            event: event.event,
+            activated: false,
+            ...(owner ? { businessId: owner.businessId } : {}),
+          },
+          undefined,
+          applied.paymentId,
+        );
+      }
+      return finish(
+        { status: 'ignored', event: event.event, activated: false },
+        undefined,
+        await paymentRowFor(event.orderId, event.paymentId),
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (error instanceof CheckoutError) {
@@ -245,6 +321,7 @@ export class CheckoutService {
         return finish(
           { status: 'failed', event: event.event, activated: false, error: error.code },
           `${error.code}: ${message}`,
+          await paymentRowFor(event.orderId, event.paymentId),
         );
       }
       // Anything else — the database going away mid-settle — is worth a retry, so the ledger
@@ -267,14 +344,20 @@ export class CheckoutService {
   /**
    * One place that turns a paid order into a Pro year, exactly once. The payment row is locked;
    * a CAPTURED row returns without activating — that is the idempotency AC-015 asks for.
+   *
+   * Public so an admin can reconcile a payment Razorpay captured but never told us about
+   * (AMENDMENT-029): the same path, the same checks, the same invoice.
    */
-  private async settle(input: {
+  async settleOrder(input: {
     orderId: string;
     providerPaymentId: string | null;
     expectedBusinessId: string | null;
     amountPaise: number | null;
     reference: Record<string, unknown>;
   }): Promise<{ payment: Payment; activated: boolean }> {
+    // Read before the transaction: the seller's details do not change mid-settle, and the
+    // settings service reads through the pool.
+    const seller = await new PlatformSettingsService(this.db).values();
     return this.db.transaction(async (tx) => {
       const [payment] = await tx
         .select()
@@ -310,7 +393,18 @@ export class CheckoutService {
       });
       // The period this payment bought, kept on the payment itself: the subscription row only
       // ever shows the current period, and a receipt for last year's payment must still say
-      // what last year's payment covered.
+      // what last year's payment covered. The invoice is issued in the same statement — number,
+      // tax split and both parties as they were at the moment of sale — and only when the row
+      // has none yet, so a later price or GST change never rewrites it (ADMIN-04-02).
+      const paidAt = captured!.paidAt ?? new Date();
+      const invoice = captured!.invoiceNumber
+        ? {}
+        : await this.issueInvoice(tx, {
+            businessId: payment.businessId,
+            grossPaise: payment.amountPaise,
+            paidAt,
+            seller,
+          });
       const [receipted] = await tx
         .update(payments)
         .set({
@@ -319,10 +413,52 @@ export class CheckoutService {
             period_starts_at: activated.startsAt?.toISOString() ?? null,
             period_expires_at: activated.expiresAt?.toISOString() ?? null,
           },
+          ...invoice,
         })
         .where(eq(payments.id, payment.id))
         .returning();
       return { payment: receipted!, activated: true };
     });
+  }
+
+  private async issueInvoice(
+    tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+    input: {
+      businessId: string;
+      grossPaise: number;
+      paidAt: Date;
+      seller: Awaited<ReturnType<PlatformSettingsService['values']>>;
+    },
+  ) {
+    const [buyer] = await tx
+      .select({
+        businessName: businesses.name,
+        billingLegalName: businesses.billingLegalName,
+        gstin: businesses.gstin,
+        stateCode: businesses.billingStateCode,
+        address: businesses.billingAddress,
+        email: users.email,
+      })
+      .from(businesses)
+      .innerJoin(users, eq(users.id, businesses.ownerUserId))
+      .where(eq(businesses.id, input.businessId))
+      .limit(1);
+    if (!buyer) throw new CheckoutError('ORDER_NOT_FOUND', 'no business for that payment');
+    const snapshot = buildInvoiceSnapshot({
+      seller: input.seller,
+      buyer: { businessId: input.businessId, ...buyer },
+      grossPaise: input.grossPaise,
+    });
+    const invoiceNumber = await allocateInvoiceNumber(tx, {
+      prefix: input.seller.invoice_prefix,
+      at: input.paidAt,
+    });
+    return {
+      invoiceNumber,
+      invoiceIssuedAt: input.paidAt,
+      taxBreakdown: snapshot.tax,
+      sellerSnapshot: snapshot.seller,
+      buyerSnapshot: snapshot.buyer,
+    };
   }
 }

@@ -18,9 +18,12 @@ export async function GET(request: Request) {
   return NextResponse.json({ settings: await new PlatformSettingsService(db()).readAll() });
 }
 
-/** "Versioned platform settings update" — one audit row per save, before/after per key. */
+/**
+ * "Versioned platform settings update" — one audit row per save, before/after per key.
+ * AMENDMENT-027: a high-risk action, so a fresh MFA code is demanded (step-up).
+ */
 export async function PATCH(request: Request) {
-  const auth = await requireAdmin(request);
+  const auth = await requireAdmin(request, { stepUp: true });
   if (!auth.ok) return auth.response;
 
   let raw: unknown;

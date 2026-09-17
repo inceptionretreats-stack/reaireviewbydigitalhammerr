@@ -13,6 +13,7 @@ import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
 import { isShell } from '@/lib/auth-helpers';
+import { recordActivity } from '@/lib/activity';
 
 /** Flow A step 10 names it. It appears in analytics as the source label, so it must read well. */
 const DEFAULT_QR_LABEL = 'Main QR';
@@ -134,6 +135,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return reserveQrCode(tx, businessId);
   });
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'business.publish',
+      targetType: 'business',
+      targetId: businessId,
+      metadata: { slug: publishedSlug },
+    },
+  );
   return NextResponse.json({
     status: 'ACTIVE',
     slug: publishedSlug,

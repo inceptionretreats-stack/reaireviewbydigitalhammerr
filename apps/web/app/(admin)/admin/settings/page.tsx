@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { getSession } from '@/lib/session';
+import { redirect } from 'next/navigation';
 import { PlatformSettingsService } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { PlatformSettingsForm } from '@/components/admin/PlatformSettingsForm';
@@ -8,6 +10,10 @@ export const dynamic = 'force-dynamic';
 
 /** ADMIN-04. */
 export default async function AdminSettingsPage() {
+  // 05_RBAC: a support viewer may not see the system prompt or change platform settings.
+  const viewerCheck = await getSession();
+  if (viewerCheck?.role !== 'SUPER_ADMIN') redirect('/admin');
+
   const settings = await new PlatformSettingsService(db()).readAll();
   return (
     <div className="stack">

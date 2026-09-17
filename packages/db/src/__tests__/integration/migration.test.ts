@@ -170,6 +170,79 @@ describe('migration 0000', () => {
     expect(rows).toEqual([{ tgname: 'trg_reset_pro_quota_on_period_change' }]);
   });
 
+  /**
+   * Migration 0006 (AMENDMENT-027/028/029/030): the admin MFA, activity, payment-control and
+   * abuse objects. Checked by name so a hand-edited snapshot cannot quietly drop one.
+   */
+  it('adds the admin MFA, activity and payment-control objects', async () => {
+    const tables = await pool.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
+         AND table_name IN ('mfa_recovery_codes','user_activity_logs','payment_refunds',
+                            'invoice_sequences','subscription_reminders')
+       ORDER BY table_name`,
+    );
+    expect(tables.rows.map((r) => r.table_name)).toEqual([
+      'invoice_sequences',
+      'mfa_recovery_codes',
+      'payment_refunds',
+      'subscription_reminders',
+      'user_activity_logs',
+    ]);
+
+    const columns = await pool.query(
+      `SELECT table_name, column_name, is_nullable FROM information_schema.columns
+        WHERE table_schema = 'public' AND (
+          (table_name = 'users' AND column_name IN ('mfa_last_used_step','disabled_at'))
+          OR (table_name = 'sessions' AND column_name = 'mfa_verified_at')
+          OR (table_name = 'admin_audit_logs' AND column_name IN ('actor_user_id','actor_type'))
+          OR (table_name = 'payments' AND column_name IN ('invoice_number','refunded_paise','tax_breakdown'))
+          OR (table_name = 'businesses' AND column_name IN ('gstin','ai_suspended_at','ai_throttle_until'))
+          OR (table_name = 'payment_webhook_events' AND column_name IN ('payment_id','outcome'))
+        ) ORDER BY table_name, column_name`,
+    );
+    expect(columns.rows.map((r) => `${r.table_name}.${r.column_name}:${r.is_nullable}`)).toEqual([
+      'admin_audit_logs.actor_type:NO',
+      'admin_audit_logs.actor_user_id:YES',
+      'businesses.ai_suspended_at:YES',
+      'businesses.ai_throttle_until:YES',
+      'businesses.gstin:YES',
+      'payment_webhook_events.outcome:YES',
+      'payment_webhook_events.payment_id:YES',
+      'payments.invoice_number:YES',
+      'payments.refunded_paise:NO',
+      'payments.tax_breakdown:YES',
+      'sessions.mfa_verified_at:YES',
+      'users.disabled_at:YES',
+      'users.mfa_last_used_step:YES',
+    ]);
+
+    const checks = await pool.query(
+      `SELECT conname FROM pg_constraint WHERE contype='c' AND conname IN
+       ('ck_audit_actor_present','ck_activity_outcome','ck_refund_within_amount',
+        'ck_refund_amount_positive','ck_refund_status','ck_reminder_kind') ORDER BY conname`,
+    );
+    expect(checks.rows.map((r) => r.conname)).toEqual([
+      'ck_activity_outcome',
+      'ck_audit_actor_present',
+      'ck_refund_amount_positive',
+      'ck_refund_status',
+      'ck_refund_within_amount',
+      'ck_reminder_kind',
+    ]);
+
+    // A system row needs no actor; an admin row without one is refused by the database itself.
+    await expect(
+      pool.query(
+        `INSERT INTO admin_audit_logs (actor_user_id, actor_type, action) VALUES (NULL, 'ADMIN', 'x')`,
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+    const system = await pool.query(
+      `INSERT INTO admin_audit_logs (actor_user_id, actor_type, action, reason)
+       VALUES (NULL, 'SYSTEM', 'migration.test', 'integration test') RETURNING id`,
+    );
+    await pool.query('DELETE FROM admin_audit_logs WHERE id = $1', [system.rows[0].id]);
+  });
+
   it('exposes the partition-management function the worker calls', async () => {
     const { rows } = await pool.query(
       `SELECT proname FROM pg_proc WHERE proname = 'ensure_analytics_events_partition'`,

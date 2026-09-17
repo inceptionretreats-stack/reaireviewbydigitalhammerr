@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDatabase, type Database } from '@ai-review/db';
 import { CheckoutError, CheckoutService } from '../../billing/checkout-service';
 import { RazorpayClient, signCheckout, signWebhookBody } from '../../billing/razorpay';
+import { PlatformSettingsService } from '../../platform/settings';
 
 /**
  * The paid path onto Pro against the real schema (AC-015, AC-016). Razorpay itself is a fake
@@ -24,7 +25,7 @@ describe('CheckoutService', () => {
       keyId: 'rzp_test_fake',
       keySecret: secrets.keySecret,
       fetchImpl: async (_url, init) => {
-        const body = JSON.parse(init.body) as { amount: number; currency: string };
+        const body = JSON.parse(init.body ?? '{}') as { amount: number; currency: string };
         orderCounter += 1;
         return {
           ok: true,
@@ -70,6 +71,12 @@ describe('CheckoutService', () => {
     );
     await pool.query(
       `DELETE FROM payment_webhook_events WHERE provider_event_id LIKE 'evt_checkout_test_%'`,
+    );
+    // The invoice test writes platform-settings audit rows as the fixture owner.
+    await pool.query(
+      `DELETE FROM admin_audit_logs WHERE actor_user_id IN (SELECT id FROM users WHERE email LIKE $1)
+         OR business_id IN (SELECT id FROM businesses WHERE owner_user_id IN (SELECT id FROM users WHERE email LIKE $1))`,
+      ['checkout-%@example.test'],
     );
     await pool.query('DELETE FROM users WHERE email LIKE $1', ['checkout-%@example.test']);
     await pool.end();
@@ -164,7 +171,7 @@ describe('CheckoutService', () => {
     const eventId = `evt_checkout_test_${randomUUID()}`;
     const webhook = capturedWebhook(started.orderId, razorpayPaymentId, 99900, eventId);
     const first = await service.handleWebhook(webhook);
-    expect(first).toEqual({
+    expect(first).toMatchObject({
       status: 'processed',
       event: 'payment.captured',
       activated: false,
@@ -203,7 +210,7 @@ describe('CheckoutService', () => {
         `evt_checkout_test_${randomUUID()}`,
       ),
     );
-    expect(outcome).toEqual({
+    expect(outcome).toMatchObject({
       status: 'processed',
       event: 'payment.captured',
       activated: true,
@@ -327,7 +334,7 @@ describe('CheckoutService', () => {
       [businessId, orderId],
     );
     // The same event id again: not a duplicate, because the first attempt did not succeed.
-    expect(await service.handleWebhook(webhook)).toEqual({
+    expect(await service.handleWebhook(webhook)).toMatchObject({
       status: 'processed',
       event: 'payment.captured',
       activated: true,
@@ -415,5 +422,91 @@ describe('CheckoutService', () => {
     expect(year2.starts_at!.getTime()).toBe(year1.expires_at!.getTime());
     expect(year2.expires_at!.getTime()).toBeGreaterThan(year1.expires_at!.getTime());
     expect(await service.history(businessId)).toHaveLength(2);
+  });
+  it('issues a numbered invoice once, frozen at the sale, and numbers concurrent sales consecutively', async () => {
+    const service = new CheckoutService(db);
+    // A registered seller, so the split is real; restored afterwards so other suites see defaults.
+    const settings = new PlatformSettingsService(db);
+    await pool.query(
+      `UPDATE businesses SET billing_legal_name = 'Checkout Co Pvt Ltd', gstin = '27AAAAA0000A1Z5',
+         billing_state_code = '27', billing_address = '12 Marine Drive' WHERE id = $1`,
+      [businessId],
+    );
+    await settings.update({
+      actor: { userId: ownerId },
+      reason: 'invoice test',
+      changes: {
+        seller_gstin: '29ABCDE1234F1Z5',
+        seller_state_code: '29',
+        seller_address: '1 Main Road',
+      },
+    });
+    try {
+      const starts = await Promise.all(
+        Array.from({ length: 6 }, () =>
+          service.startCheckout({ businessId, client: fakeRazorpay(), amountPaise: 99900 }),
+        ),
+      );
+      // Six sales settling at once come out with six consecutive numbers.
+      const real = await Promise.all(
+        starts.map((s, i) => {
+          const paymentId = `pay_real_${i}_${randomUUID().slice(0, 6)}`;
+          return service.completeCheckout({
+            businessId,
+            orderId: s.orderId,
+            paymentId,
+            signature: signCheckout(s.orderId, paymentId, secrets.keySecret),
+            secrets,
+          });
+        }),
+      );
+      const numbers = real.map((r) => r.payment.invoiceNumber!).sort();
+      expect(numbers).toHaveLength(6);
+      expect(new Set(numbers).size).toBe(6);
+      const seqs = numbers.map((n) => Number(n.split('/')[2])).sort((a, b) => a - b);
+      expect(seqs[5]! - seqs[0]!).toBe(5);
+      expect(numbers[0]).toMatch(/^DH\/\d{4}-\d{2}\/\d{6}$/);
+
+      const first = real[0]!.payment;
+      expect(first.invoiceIssuedAt).toBeInstanceOf(Date);
+      expect(first.taxBreakdown).toMatchObject({
+        gst_applicable: true,
+        igst_paise: 15_239,
+        supply: 'INTER_STATE',
+        place_of_supply_state_code: '27',
+      });
+      expect(first.sellerSnapshot).toMatchObject({
+        gstin: '29ABCDE1234F1Z5',
+        address: '1 Main Road',
+      });
+      expect(first.buyerSnapshot).toMatchObject({
+        name: 'Checkout Co Pvt Ltd',
+        gstin: '27AAAAA0000A1Z5',
+        state_code: '27',
+      });
+
+      // A redelivered webhook for a settled order changes nothing on the invoice.
+      const again = await service.handleWebhook(
+        capturedWebhook(
+          starts[0]!.orderId,
+          first.providerPaymentId!,
+          99900,
+          `evt_checkout_test_inv_${randomUUID()}`,
+        ),
+      );
+      expect(again.status).toBe('processed');
+      const { rows } = await pool.query(
+        'SELECT invoice_number, tax_breakdown FROM payments WHERE id = $1',
+        [first.id],
+      );
+      expect(rows[0].invoice_number).toBe(first.invoiceNumber);
+      expect(rows[0].tax_breakdown).toEqual(first.taxBreakdown);
+    } finally {
+      // Global rows other suites read: removed outright rather than rewritten, so nothing is
+      // left attributed to the fixture owner (platform_settings.updated_by is a FK).
+      await pool.query(
+        `DELETE FROM platform_settings WHERE key IN ('seller_gstin', 'seller_state_code', 'seller_address')`,
+      );
+    }
   });
 });

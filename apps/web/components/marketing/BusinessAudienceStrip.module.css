@@ -1,0 +1,144 @@
+.strip {
+  --audience-gap: 34px;
+
+  min-width: 0;
+  padding: 26px 0;
+  overflow: hidden;
+  border-block: 1px solid transparent;
+  background:
+    linear-gradient(105deg, #f4f8ff, #fffcf3 45%, #f1faf5) padding-box,
+    linear-gradient(
+        90deg,
+        rgb(66 133 244 / 35%),
+        rgb(234 67 53 / 22%),
+        rgb(251 188 5 / 35%),
+        rgb(52 168 83 / 30%)
+      )
+      border-box;
+}
+
+.viewport:focus-visible {
+  outline: 2px solid #1967d2;
+  outline-offset: -2px;
+}
+
+.viewport {
+  width: 100%;
+  min-width: 0;
+  padding-block: 4px;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000000 5%, #000000 95%, transparent);
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  animation: businessScroll 180s linear infinite;
+}
+
+.list {
+  display: flex;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+  padding-inline-end: var(--audience-gap);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--audience-gap);
+  list-style: none;
+}
+
+.businessName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--audience-gap);
+  color: #1e293b;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.businessName::after {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background: #4285f4;
+  content: '';
+  transform: rotate(45deg);
+}
+
+.businessName:nth-child(4n + 2)::after {
+  background: #ea4335;
+}
+
+.businessName:nth-child(4n + 3)::after {
+  background: #fbbc05;
+}
+
+.businessName:nth-child(4n)::after {
+  background: #34a853;
+}
+
+.viewport:hover .track,
+.viewport:focus-within .track {
+  animation-play-state: paused;
+}
+
+@keyframes businessScroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 600px) {
+  .strip {
+    --audience-gap: 24px;
+
+    padding: 22px 0;
+  }
+
+  .businessName {
+    font-size: 19px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list[aria-hidden='true'] {
+    display: none;
+  }
+
+  .viewport {
+    overflow-x: auto;
+    mask-image: none;
+  }
+
+  .track {
+    animation: none;
+  }
+
+  .list {
+    padding-inline: 24px;
+  }
+}
+
+@media (forced-colors: active) {
+  .strip {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+
+  .businessName {
+    color: CanvasText;
+  }
+
+  .viewport {
+    mask-image: none;
+  }
+
+  .businessName::after {
+    background: CanvasText;
+  }
+}

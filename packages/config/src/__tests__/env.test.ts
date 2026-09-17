@@ -14,6 +14,7 @@ const valid: NodeJS.ProcessEnv = {
   OPENAI_DEFAULT_MODEL: 'gpt-5.6-luna',
   S3_BUCKET: 'ai-review-assets',
   EMAIL_FROM: 'no-reply@digitalhammerr.com',
+  CRON_SECRET: 'e'.repeat(32),
 };
 
 describe('loadEnv', () => {
@@ -26,6 +27,13 @@ describe('loadEnv', () => {
     expect(env.PRO_ANNUAL_PRICE_PAISE).toBe(99900);
     expect(env.DEFAULT_TIMEZONE).toBe('Asia/Kolkata');
     expect(env.AI_MAX_OUTPUT_TOKENS).toBe(220);
+  });
+
+  it('requires admin MFA unless the switch is exactly "false" (AMENDMENT-027)', () => {
+    expect(loadEnv(valid).ADMIN_MFA_REQUIRED).toBe(true);
+    expect(loadEnv({ ...valid, ADMIN_MFA_REQUIRED: 'false' }).ADMIN_MFA_REQUIRED).toBe(false);
+    expect(loadEnv({ ...valid, ADMIN_MFA_REQUIRED: 'true' }).ADMIN_MFA_REQUIRED).toBe(true);
+    expect(() => loadEnv({ ...valid, ADMIN_MFA_REQUIRED: 'no' })).toThrow(EnvValidationError);
   });
 
   it('coerces numeric strings from the environment', () => {

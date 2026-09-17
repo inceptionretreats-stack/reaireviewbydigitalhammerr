@@ -6,6 +6,7 @@ import { businessIdentityRequest } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * GET/PATCH /api/v1/business — ONB-01 and the identity half of PROFILE-01.
@@ -102,6 +103,19 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     })
     .where(eq(businesses.id, businessId));
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'business.update',
+      targetType: 'business',
+      targetId: businessId,
+      metadata: {
+        slug: claim.slug,
+        slug_changed: claim.previousSlug !== null && claim.previousSlug !== claim.slug,
+      },
+    },
+  );
   return NextResponse.json({
     slug: claim.slug,
     previous_slug: claim.previousSlug,

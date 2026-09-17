@@ -11,6 +11,7 @@ import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { sessionService, setSessionCookie } from '@/lib/session';
 import { parsePasswordChange } from '../schema';
 import { countOtherLiveSessions, reportableRevoked } from '../session-count';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * POST /api/v1/account/password — "Change password" on SET-01.
@@ -212,6 +213,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     console.error('[account] session sweep after password change failed', redactError(error));
   }
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'auth.password.change',
+      targetType: 'user',
+      targetId: userId,
+      metadata: { other_sessions_signed_out: sweep?.signedOut ?? 0 },
+    },
+  );
   return NextResponse.json({
     message: sweep
       ? 'Your password has been changed.'

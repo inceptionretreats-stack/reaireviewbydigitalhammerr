@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { getSession } from '@/lib/session';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { desc } from 'drizzle-orm';
 import { aiPromptVersions } from '@ai-review/db';
@@ -11,6 +13,10 @@ export const dynamic = 'force-dynamic';
 
 /** ADMIN-03. The table is the spec's column list; each version opens in its editor. */
 export default async function AdminAiPage() {
+  // 05_RBAC: a support viewer may not see the system prompt or change platform settings.
+  const viewerCheck = await getSession();
+  if (viewerCheck?.role !== 'SUPER_ADMIN') redirect('/admin');
+
   const versions = await db()
     .select()
     .from(aiPromptVersions)

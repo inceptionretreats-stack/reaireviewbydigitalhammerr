@@ -1,197 +1,236 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import styles from './MarketingSite.module.css';
 
 const VIDEO_CONFIG = {
-  startSeconds: 1.25,
-  endSeconds: 8,
-  source: '/marketing/ai-review-story-v2.webm',
-  poster: '/marketing/ai-review-story-v2-poster.png',
-  controlLabel: 'review journey animation',
+  source: '/marketing/ai-review-customer-journey-v2-minimal-overlay.mp4',
+  poster: '/marketing/ai-review-customer-journey-v2-minimal-overlay-poster.png',
 } as const;
 
-function getShapeSubtitleOpacity(currentTime: number) {
-  if (currentTime < 2.85 || currentTime > 6) return 0;
-  if (currentTime < 3.1) return (currentTime - 2.85) / 0.25;
-  if (currentTime <= 5.5) return 1;
-  return (6 - currentTime) / 0.5;
-}
-
 export function ReviewStoryVideo() {
+  const captionId = useId();
   const videoRef = useRef<HTMLVideoElement>(null);
   const isInViewportRef = useRef(false);
   const isIntentionallyPausedRef = useRef(false);
   const prefersReducedMotionRef = useRef(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [shapeSubtitleOpacity, setShapeSubtitleOpacity] = useState(0);
+  const hasMediaErrorRef = useRef(false);
+  const loadAttemptRef = useRef(0);
+  const syncPlaybackRef = useRef<() => void>(() => undefined);
+  const [autoPlayAllowed, setAutoPlayAllowed] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [hasMediaError, setHasMediaError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [isMuted, setIsMuted] = useState(true);
+
+  const retryMedia = useCallback(() => {
+    if (
+      !hasMediaErrorRef.current ||
+      !isInViewportRef.current ||
+      document.hidden ||
+      prefersReducedMotionRef.current ||
+      isIntentionallyPausedRef.current
+    ) {
+      return;
+    }
+
+    hasMediaErrorRef.current = false;
+    loadAttemptRef.current += 1;
+    setHasMediaError(false);
+    setLoadAttempt(loadAttemptRef.current);
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
-
-    const moveToCleanStart = () => {
-      if (
-        video.readyState >= HTMLMediaElement.HAVE_METADATA &&
-        (video.currentTime < VIDEO_CONFIG.startSeconds ||
-          video.currentTime >= VIDEO_CONFIG.endSeconds)
-      ) {
-        video.currentTime = VIDEO_CONFIG.startSeconds;
-      }
-    };
+    prefersReducedMotionRef.current = motionPreference.matches;
+    setPrefersReducedMotion(motionPreference.matches);
 
     const syncPlayback = () => {
-      moveToCleanStart();
-
-      if (
-        prefersReducedMotionRef.current ||
-        !isInViewportRef.current ||
-        document.hidden ||
-        isIntentionallyPausedRef.current
-      ) {
+      const canPlay =
+        !prefersReducedMotionRef.current &&
+        isInViewportRef.current &&
+        !document.hidden &&
+        !isIntentionallyPausedRef.current &&
+        !hasMediaErrorRef.current;
+      setAutoPlayAllowed(canPlay);
+      if (!canPlay) {
         video.pause();
         return;
       }
-
-      void video.play().catch(() => {
-        setIsPlaying(false);
-      });
+      void video.play().catch(() => undefined);
     };
+    syncPlaybackRef.current = syncPlayback;
 
     const handleMotionPreferenceChange = () => {
       prefersReducedMotionRef.current = motionPreference.matches;
-      if (motionPreference.matches && video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-        video.currentTime = VIDEO_CONFIG.startSeconds;
-      }
+      setPrefersReducedMotion(motionPreference.matches);
       syncPlayback();
     };
-
-    const handleVisibilityChange = () => syncPlayback();
-
+    const handleVisibilityChange = () => {
+      if (!document.hidden) retryMedia();
+      syncPlayback();
+    };
+    const handleOnline = () => {
+      retryMedia();
+      syncPlayback();
+    };
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
+        const wasInViewport = isInViewportRef.current;
         isInViewportRef.current = entry.isIntersecting && entry.intersectionRatio >= 0.25;
+        if (!wasInViewport && isInViewportRef.current) retryMedia();
         syncPlayback();
       },
       { threshold: [0, 0.25] },
     );
 
-    prefersReducedMotionRef.current = motionPreference.matches;
     video.addEventListener('loadedmetadata', syncPlayback);
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
     motionPreference.addEventListener('change', handleMotionPreferenceChange);
     observer.observe(video);
-
-    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-      syncPlayback();
+    if (video.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+      hasMediaErrorRef.current = true;
+      setHasMediaError(true);
+      setAutoPlayAllowed(false);
+      video.pause();
     }
 
     return () => {
       observer.disconnect();
       video.removeEventListener('loadedmetadata', syncPlayback);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
       motionPreference.removeEventListener('change', handleMotionPreferenceChange);
+      syncPlaybackRef.current = () => undefined;
       video.pause();
     };
-  }, []);
+  }, [retryMedia]);
 
-  const togglePlayback = () => {
+  useEffect(() => {
+    if (loadAttempt === 0) return;
+    videoRef.current?.load();
+    syncPlaybackRef.current();
+  }, [loadAttempt]);
+
+  const handleMediaError = (sourceAttempt = loadAttemptRef.current) => {
+    if (sourceAttempt !== loadAttemptRef.current) return;
+    hasMediaErrorRef.current = true;
+    videoRef.current?.pause();
+    setAutoPlayAllowed(false);
+    setHasMediaError(true);
+  };
+
+  const handlePlaybackKey = (event: KeyboardEvent<HTMLVideoElement>) => {
+    if (event.key !== ' ' && event.key !== 'Enter') return;
+    event.preventDefault();
+    if (event.repeat || prefersReducedMotionRef.current || hasMediaErrorRef.current) return;
     const video = videoRef.current;
     if (!video) return;
+    isIntentionallyPausedRef.current = !video.paused;
+    syncPlaybackRef.current();
+  };
 
-    if (video.paused) {
+  const toggleSound = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const nextMutedState = !video.muted;
+    video.muted = nextMutedState;
+    setIsMuted(nextMutedState);
+    if (isInViewportRef.current && !isIntentionallyPausedRef.current) {
       isIntentionallyPausedRef.current = false;
-      if (
-        video.currentTime < VIDEO_CONFIG.startSeconds ||
-        video.currentTime >= VIDEO_CONFIG.endSeconds
-      ) {
-        video.currentTime = VIDEO_CONFIG.startSeconds;
-      }
-      void video.play().catch(() => setIsPlaying(false));
-    } else {
-      isIntentionallyPausedRef.current = true;
-      video.pause();
-    }
-  };
-
-  const keepPlaybackInCleanRange = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    setShapeSubtitleOpacity(getShapeSubtitleOpacity(video.currentTime));
-
-    if (video.currentTime >= VIDEO_CONFIG.endSeconds) {
-      video.currentTime = VIDEO_CONFIG.startSeconds;
-      setShapeSubtitleOpacity(0);
-    }
-  };
-
-  const recoverFromEncodedEnd = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.currentTime = VIDEO_CONFIG.startSeconds;
-    setShapeSubtitleOpacity(0);
-    if (
-      isInViewportRef.current &&
-      !prefersReducedMotionRef.current &&
-      !isIntentionallyPausedRef.current &&
-      !document.hidden
-    ) {
-      void video.play().catch(() => setIsPlaying(false));
+      void video.play().catch(() => undefined);
     }
   };
 
   return (
-    <div className={styles.storyVideoFrame}>
+    <div
+      className={styles.storyVideoFrame}
+      data-story-media
+      data-media-error={hasMediaError ? 'true' : 'false'}
+    >
       <video
         ref={videoRef}
         className={styles.storyVideo}
-        muted
+        style={{ visibility: hasMediaError || prefersReducedMotion ? 'hidden' : undefined }}
+        muted={isMuted}
         playsInline
+        loop
+        autoPlay={autoPlayAllowed}
+        controls={false}
+        tabIndex={0}
         preload="metadata"
         poster={VIDEO_CONFIG.poster}
-        aria-hidden="true"
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onTimeUpdate={keepPlaybackInCleanRange}
-        onEnded={recoverFromEncodedEnd}
+        aria-label="Customer review journey video"
+        aria-describedby={captionId}
+        aria-keyshortcuts="Space Enter"
+        data-story-video
+        onPlay={() => {
+          if (
+            hasMediaErrorRef.current ||
+            prefersReducedMotionRef.current ||
+            !isInViewportRef.current ||
+            document.hidden ||
+            isIntentionallyPausedRef.current
+          ) {
+            videoRef.current?.pause();
+          }
+        }}
+        onKeyDown={handlePlaybackKey}
+        onVolumeChange={() => setIsMuted(videoRef.current?.muted ?? true)}
+        onError={() => handleMediaError()}
       >
-        <source src={VIDEO_CONFIG.source} type="video/webm" />
+        <source
+          key={`story-${loadAttempt}`}
+          src={VIDEO_CONFIG.source}
+          type="video/mp4"
+          onError={() => handleMediaError(loadAttempt)}
+        />
+        Your browser does not support video playback.
       </video>
 
-      <span className={styles.storyVideoDraftLabel} aria-hidden="true">
-        Ai Review Draft
-      </span>
-      <span
-        className={styles.storyVideoShapeSubtitle}
-        style={{ opacity: shapeSubtitleOpacity }}
-        aria-hidden="true"
-      >
-        Ai,
-      </span>
+      {!hasMediaError && !prefersReducedMotion ? (
+        <button
+          type="button"
+          className={styles.storyVideoControl}
+          aria-label={isMuted ? 'Turn video sound on' : 'Mute video'}
+          aria-pressed={!isMuted}
+          data-story-sound
+          onClick={toggleSound}
+        >
+          {isMuted ? (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9.4v5.2h3.5l4.2 3.4V6L7.5 9.4H4Zm10.1.2 1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4-2.1 2.1 2.1 2.1-1.4 1.4-2.1-2.1-2.1 2.1-1.4-1.4 2.1-2.1-2.1-2.1Z" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9.4v5.2h3.5l4.2 3.4V6L7.5 9.4H4Zm10.2-.9a5 5 0 0 1 0 7l1.2 1.2a6.7 6.7 0 0 0 0-9.4l-1.2 1.2Zm2.4-2.4a8.4 8.4 0 0 1 0 11.8l1.2 1.2a10.1 10.1 0 0 0 0-14.2l-1.2 1.2Z" />
+            </svg>
+          )}
+          <span>{isMuted ? 'Sound on' : 'Mute'}</span>
+        </button>
+      ) : null}
 
-      <button
-        className={styles.storyVideoControl}
-        type="button"
-        onClick={togglePlayback}
-        aria-label={`${isPlaying ? 'Pause' : 'Play'} ${VIDEO_CONFIG.controlLabel}`}
+      <span
+        id={captionId}
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          overflow: 'hidden',
+          clipPath: 'inset(50%)',
+          whiteSpace: 'nowrap',
+        }}
       >
-        {isPlaying ? (
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <rect x="5" y="4" width="3.5" height="12" rx="1" />
-            <rect x="11.5" y="4" width="3.5" height="12" rx="1" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M6 4.8c0-1 1.1-1.6 1.9-1l7.1 5.2a1.2 1.2 0 0 1 0 2l-7.1 5.2c-.8.6-1.9 0-1.9-1V4.8Z" />
-          </svg>
-        )}
-        <span>{isPlaying ? 'Pause' : 'Play'}</span>
-      </button>
+        A customer scans the Digital Hammerr QR code, receives an editable Ai review draft, checks
+        it, chooses a star rating, and posts it to Google. Corrected captions appear only where the
+        original text was unclear. The video plays silently while visible; use the sound button to
+        hear the dialogue. Focus the video and press Space or Enter to pause or resume. Reduced
+        motion shows a static preview.
+      </span>
     </div>
   );
 }

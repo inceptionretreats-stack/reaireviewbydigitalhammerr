@@ -9,6 +9,7 @@ import { requireTenant } from '@/lib/require-tenant';
 import { passwordHasher } from '@/lib/auth-helpers';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { emailChanged, parseAccountDetails } from './schema';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * PATCH /api/v1/account — the account half of SET-01.
@@ -126,6 +127,16 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     return apiError('INTERNAL_ERROR', 'We could not save your details. Please try again.');
   }
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId: auth.context.businessId },
+    {
+      action: 'account.update',
+      targetType: 'user',
+      targetId: userId,
+      metadata: { email_changed: details.email !== account.email },
+    },
+  );
   return NextResponse.json({
     full_name: details.fullName,
     email: details.email,

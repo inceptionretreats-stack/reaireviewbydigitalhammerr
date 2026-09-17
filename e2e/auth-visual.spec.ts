@@ -14,9 +14,9 @@ test.describe('signed-out account screens', () => {
 
       const heading = page.getByRole('heading', { level: 1, name: route.heading });
       const image = page.getByRole('img', {
-        name: /customer sharing feedback on her phone/i,
+        name: 'A friendly Ai robot holding a phone at a café table',
       });
-      const story = page.getByRole('complementary', { name: 'Customer review story' });
+      const story = page.getByRole('complementary', { name: 'Ai robot review story' });
 
       await expect(page).toHaveTitle(route.title);
       await expect(page.getByRole('link', { name: 'Ai Review home' })).toBeVisible();
@@ -38,7 +38,7 @@ test.describe('signed-out account screens', () => {
         decodeURIComponent(
           await image.evaluate((element) => (element as HTMLImageElement).currentSrc),
         ),
-      ).toContain('/marketing/customer-reviewing-auth.png');
+      ).toContain('/marketing/robot-reviewing-auth-v1.png');
 
       const positions = await Promise.all([image.boundingBox(), heading.boundingBox()]);
       expect(positions[0]).not.toBeNull();
@@ -93,7 +93,7 @@ test.describe('signed-out account screens', () => {
 
         const heading = page.getByRole('heading', { level: 1, name: route.heading });
         const image = page.getByRole('img', {
-          name: /customer sharing feedback on her phone/i,
+          name: 'A friendly Ai robot holding a phone at a café table',
         });
         const positions = await Promise.all([heading.boundingBox(), image.boundingBox()]);
 
@@ -219,7 +219,7 @@ test.describe('signed-out account screens', () => {
       await page.goto(route.path);
       await expect(page.getByRole('heading', { level: 1, name: route.heading })).toBeVisible();
       await expect(
-        page.getByRole('img', { name: /customer sharing feedback on her phone/i }),
+        page.getByRole('img', { name: 'A friendly Ai robot holding a phone at a café table' }),
       ).toBeVisible();
       const width = await page.evaluate(() => ({
         client: document.documentElement.clientWidth,

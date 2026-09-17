@@ -15,6 +15,7 @@ import {
   type QrSourceCreate,
   type QrSourceRow,
 } from './qr-source';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * GET /api/v1/qr — the `list` state of QR-01.
@@ -162,6 +163,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   await recordCreated(database, businessId, created);
 
+  recordActivity(
+    request,
+    { session: auth.context.session, businessId },
+    {
+      action: 'qr.create',
+      targetType: 'qr_code',
+      targetId: created.id,
+      metadata: { source_label: created.sourceLabel },
+    },
+  );
   return NextResponse.json(
     {
       source: toQrSourceWire(
