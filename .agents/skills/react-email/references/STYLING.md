@@ -22,7 +22,7 @@ import { Tailwind, pixelBasedPreset } from 'react-email';
   }}
 >
   {/* Email content */}
-</Tailwind>
+</Tailwind>;
 ```
 
 ## pixelBasedPreset
@@ -91,7 +91,7 @@ const Email = ({ source }: { source: string }) => {
 };
 
 Email.PreviewProps = {
-  source: "https://example.com",
+  source: 'https://example.com',
 };
 ```
 
@@ -156,19 +156,19 @@ Use consistent spacing that respects content hierarchy. Larger margins for headi
 - Set descriptive `alt` text on meaningful images; pass an explicit `alt=""` on decorative images so screen readers skip them — never omit the attribute
 
 ```tsx
-{/* Meaningful image — describe purpose and details */}
+{
+  /* Meaningful image — describe purpose and details */
+}
 <Img
   src="https://example.com/hero.png"
   alt="A team of engineers reviewing code on a laptop"
   className="w-full h-auto"
-/>
+/>;
 
-{/* Decorative image — always pass an empty alt string so screen readers skip it */}
-<Img
-  src="https://example.com/divider.png"
-  alt=""
-  className="w-full"
-/>
+{
+  /* Decorative image — always pass an empty alt string so screen readers skip it */
+}
+<Img src="https://example.com/divider.png" alt="" className="w-full" />;
 ```
 
 ## Buttons
@@ -276,7 +276,7 @@ import tailwindConfig, { brandAssets } from './tailwind.config';
       <Button className="bg-brand-primary text-white">Action</Button>
     </Container>
   </Body>
-</Tailwind>
+</Tailwind>;
 ```
 
 ### Maintaining Consistency
@@ -294,7 +294,9 @@ Direct users to place brand assets in appropriate locations:
 - **Custom fonts**: Use the `Font` component with a web font URL (Google Fonts, Adobe Fonts, or self-hosted).
 
 **Example prompt for gathering brand info:**
+
 > "Before I create your email template, I need some brand information to ensure consistency. Could you provide:
+>
 > 1. Your primary brand color (hex code, e.g., #007bff)
 > 2. Your logo URL (must be a publicly accessible PNG or JPEG)
 > 3. Any secondary colors you'd like to use
@@ -307,4 +309,3 @@ Direct users to place brand assets in appropriate locations:
 3. **Keep file size under 102KB** - Gmail clips larger emails
 4. **Use keywords strategically** - Increase engagement in email body
 5. **Inline styles as fallback** - Some clients strip `<style>` tags
-

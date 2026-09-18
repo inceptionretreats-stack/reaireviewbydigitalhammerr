@@ -34,7 +34,14 @@ const reviewPolicyRules = {
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/.next/**', '**/coverage/**', '**/drizzle/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.next/**',
+      '**/coverage/**',
+      '**/drizzle/**',
+      '**/.agents/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

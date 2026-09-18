@@ -8,11 +8,11 @@ Detailed flag specifications for `resend suppressions` commands.
 
 Suppressions block future sends to an address. Each entry has an `origin`:
 
-| Origin | Meaning |
-|--------|---------|
-| `bounce` | Added automatically after a hard bounce |
+| Origin      | Meaning                                    |
+| ----------- | ------------------------------------------ |
+| `bounce`    | Added automatically after a hard bounce    |
 | `complaint` | Added automatically after a spam complaint |
-| `manual` | Added by you via `suppressions add` |
+| `manual`    | Added by you via `suppressions add`        |
 
 `get` and `delete` accept **either** a suppression ID **or** the email address.
 
@@ -22,12 +22,12 @@ Suppressions block future sends to an address. Each entry has an `origin`:
 
 List suppressed addresses (default subcommand — `resend suppressions` alone runs it).
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--limit <n>` | number | 10 | Max results, 1-100 |
-| `--after <cursor>` | string | — | Forward pagination cursor |
-| `--before <cursor>` | string | — | Backward pagination cursor |
-| `--origin <origin>` | string | — | Filter: `bounce` \| `complaint` \| `manual` |
+| Flag                | Type   | Default | Description                                 |
+| ------------------- | ------ | ------- | ------------------------------------------- |
+| `--limit <n>`       | number | 10      | Max results, 1-100                          |
+| `--after <cursor>`  | string | —       | Forward pagination cursor                   |
+| `--before <cursor>` | string | —       | Backward pagination cursor                  |
+| `--origin <origin>` | string | —       | Filter: `bounce` \| `complaint` \| `manual` |
 
 **Alias:** `ls`
 
@@ -61,8 +61,8 @@ Remove a suppression so Resend can send to the address again.
 
 **Argument:** `<id-or-email>` — suppression ID or the suppressed email address
 
-| Flag | Type | Required | Description |
-|------|------|----------|-------------|
+| Flag    | Type    | Required              | Description       |
+| ------- | ------- | --------------------- | ----------------- |
 | `--yes` | boolean | Yes (non-interactive) | Skip confirmation |
 
 **Alias:** `rm`
@@ -75,8 +75,8 @@ Remove a suppression so Resend can send to the address again.
 
 Suppress up to 100 addresses in one request.
 
-| Flag | Type | Required | Description |
-|------|------|----------|-------------|
+| Flag            | Type   | Required              | Description                                              |
+| --------------- | ------ | --------------------- | -------------------------------------------------------- |
 | `--file <path>` | string | Yes (non-interactive) | JSON file with an array of email strings (`-` for stdin) |
 
 **File format:** `["a@example.com", "b@example.com"]`
@@ -89,10 +89,10 @@ Suppress up to 100 addresses in one request.
 
 Remove up to 100 suppressions in one request.
 
-| Flag | Type | Required | Description |
-|------|------|----------|-------------|
-| `--file <path>` | string | Yes (non-interactive) | JSON file with an array of strings (`-` for stdin) |
-| `--ids` | boolean | No | Treat file entries as suppression IDs instead of emails |
+| Flag            | Type    | Required              | Description                                             |
+| --------------- | ------- | --------------------- | ------------------------------------------------------- |
+| `--file <path>` | string  | Yes (non-interactive) | JSON file with an array of strings (`-` for stdin)      |
+| `--ids`         | boolean | No                    | Treat file entries as suppression IDs instead of emails |
 
 **Alias:** `rm`
 

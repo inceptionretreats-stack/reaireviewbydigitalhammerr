@@ -22,11 +22,11 @@ No DNS configuration needed. Find your address in Dashboard → Emails → Recei
 
 Add MX record to receive at `<anything>@example.com`.
 
-| Setting | Value |
-|---------|-------|
-| **Type** | MX |
-| **Host** | Your domain or subdomain |
-| **Value** | Provided in Resend dashboard |
+| Setting      | Value                                  |
+| ------------ | -------------------------------------- |
+| **Type**     | MX                                     |
+| **Host**     | Your domain or subdomain               |
+| **Value**    | Provided in Resend dashboard           |
 | **Priority** | 10 (**lowest number** wins a conflict) |
 
 **Critical:** Your MX record must have the lowest priority value, or emails won't route to Resend.
@@ -35,17 +35,17 @@ Add MX record to receive at `<anything>@example.com`.
 
 If you already have MX records (e.g., Google Workspace, Microsoft 365):
 
-| Approach | Result |
-|----------|--------|
+| Approach                        | Result                                                      |
+| ------------------------------- | ----------------------------------------------------------- |
 | **Use subdomain** (recommended) | `support.acme.com` → Resend, `acme.com` → existing provider |
-| **Use root domain** | All email routes to Resend (breaks existing email) |
+| **Use root domain**             | All email routes to Resend (breaks existing email)          |
 
 ```
 # Example: receive at support.acme.com without affecting acme.com
 support.acme.com.  MX  10  <resend-mx-value>
 ```
 
-If you set up Resend to receive email on a root domain, *all* traffic will be routed to Resend, not to any other mailbox.
+If you set up Resend to receive email on a root domain, _all_ traffic will be routed to Resend, not to any other mailbox.
 
 ## Webhook Setup
 
@@ -54,6 +54,7 @@ If you set up Resend to receive email on a root domain, *all* traffic will be ro
 Dashboard → Webhooks → Add Webhook → Select `email.received`
 
 For local development, use tunneling (ngrok, Tailscale Funnel, VS Code Port Forwarding):
+
 ```bash
 ngrok http 3000
 # Use https://abc123.ngrok.io/api/webhook as endpoint
@@ -146,12 +147,10 @@ Webhooks exclude email body and headers. Call the Receiving API to get them:
 
 ```typescript
 if (event.type === 'email.received') {
-  const { data: email } = await resend.emails.receiving.get(
-    event.data.email_id
-  );
+  const { data: email } = await resend.emails.receiving.get(event.data.email_id);
 
-  console.log(email.html);    // HTML body
-  console.log(email.text);    // Plain text body
+  console.log(email.html); // HTML body
+  console.log(email.text); // Plain text body
   console.log(email.headers); // Email headers
 }
 ```
@@ -169,7 +168,7 @@ const { data: attachments } = await resend.emails.receiving.attachments.list({
 
 for (const attachment of attachments.data) {
   console.log(attachment.filename);
-  console.log(attachment.download_url);  // signed URL, see expires_at
+  console.log(attachment.download_url); // signed URL, see expires_at
   console.log(attachment.expires_at);
 }
 ```
@@ -183,8 +182,8 @@ const { data: attachment } = await resend.emails.receiving.attachments.get({
 });
 
 console.log(attachment.download_url); // signed URL
-console.log(attachment.expires_at);   // expiration timestamp
-console.log(attachment.size);         // bytes
+console.log(attachment.expires_at); // expiration timestamp
+console.log(attachment.size); // bytes
 ```
 
 ### Download Attachment Content
@@ -209,12 +208,12 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   const payload = await req.text();
-  const event = resend.webhooks.verify({ /* ... */ });
+  const event = resend.webhooks.verify({/* ... */});
 
   if (event.type === 'email.received') {
     // 1. Get email content
     const { data: email, error: emailError } = await resend.emails.receiving.get(
-      event.data.email_id
+      event.data.email_id,
     );
 
     if (emailError) {
@@ -245,7 +244,7 @@ export async function POST(req: Request) {
           filename: att.filename,
           content: buffer.toString('base64'),
         };
-      })
+      }),
     );
 
     // 4. Forward the email (single send — batch doesn't support attachments)
@@ -288,18 +287,19 @@ if (event.type === 'email.received') {
 
 ## Common Mistakes
 
-| Mistake | Fix |
-|---------|-----|
-| Expecting body in webhook payload | Webhook has metadata only — call `resend.emails.receiving.get()` for body |
-| MX record not lowest priority | Ensure Resend's MX has lowest number (highest priority) |
-| Adding MX to root domain with existing email | Use subdomain to avoid breaking existing email service |
-| Using expired download_url | URLs expire (see `expires_at` field) — call attachments API again for a fresh URL |
-| Not verifying webhook signatures | Always verify — unverified events can't be trusted |
-| Forgetting to return 200 OK | Resend retries on non-200 responses |
+| Mistake                                      | Fix                                                                               |
+| -------------------------------------------- | --------------------------------------------------------------------------------- |
+| Expecting body in webhook payload            | Webhook has metadata only — call `resend.emails.receiving.get()` for body         |
+| MX record not lowest priority                | Ensure Resend's MX has lowest number (highest priority)                           |
+| Adding MX to root domain with existing email | Use subdomain to avoid breaking existing email service                            |
+| Using expired download_url                   | URLs expire (see `expires_at` field) — call attachments API again for a fresh URL |
+| Not verifying webhook signatures             | Always verify — unverified events can't be trusted                                |
+| Forgetting to return 200 OK                  | Resend retries on non-200 responses                                               |
 
 ## Storage Note
 
 Resend stores received emails even if:
+
 - Webhook isn't configured yet
 - Webhook endpoint is down
 

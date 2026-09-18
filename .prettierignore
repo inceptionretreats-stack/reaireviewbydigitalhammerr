@@ -17,3 +17,7 @@ apps/web/next-env.d.ts
 
 # Runtime logs from `pnpm dev:up`.
 .dev/
+
+# Agent skills & customization
+.agents/
+
