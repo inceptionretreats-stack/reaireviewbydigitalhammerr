@@ -3,8 +3,8 @@ import { BusinessAudienceStrip } from './BusinessAudienceStrip';
 import { HeroAiAccent } from './HeroAiAccent';
 import { HowItWorksVideos } from './HowItWorksVideos';
 import { PricingPlanCards } from './PricingMarketingPage';
-import { ReviewStoryVideo } from './ReviewStoryVideo';
 import { RobotClaimBand } from './RobotClaimBand';
+import { FaqSection } from './FaqSection';
 import {
   ActionLink,
   MarketingShell,
@@ -74,7 +74,7 @@ export function HomeMarketingPage({ demo }: { demo: LandingDemo | null }) {
             </span>
           </h1>
           <p className={styles.heroDescription} data-hero-description>
-            Aapka experience, Ai ki madad. Review edit karo aur Google par share karo.
+            Review Likhna Ab Easy Hai — AI Hai Na.
           </p>
           <div className={styles.heroActions}>
             <ActionLink href="/signup">Create your free QR</ActionLink>
@@ -105,26 +105,20 @@ export function HomeMarketingPage({ demo }: { demo: LandingDemo | null }) {
 
       <HowItWorksVideos />
 
-      <section
-        className={styles.storyShowcase}
-        id="review-journey"
-        aria-label="Customer review journey"
-      >
-        <ReviewStoryVideo />
-      </section>
+      {/* Keep the promotional story video off the homepage until its claims and dialogue are verified. */}
 
       <TrustBand />
 
       <section className={styles.homePricing} id="pricing" aria-labelledby="pricing-title">
         <header className={styles.pricingIntro}>
-          <span>Pricing</span>
-          <h2 id="pricing-title">Start with Free. Move to Pro when you need more.</h2>
-          <p>No card to begin. Free includes ten drafts; Pro includes 2,000 drafts per year.</p>
+          <h2 id="pricing-title">Simple pricing. Built for your business.</h2>
+          <p>Start with Free. Upgrade when you need more.</p>
         </header>
         <PricingPlanCards />
       </section>
 
       <RobotClaimBand />
+      <FaqSection />
     </MarketingShell>
   );
 }

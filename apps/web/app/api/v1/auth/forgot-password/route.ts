@@ -10,6 +10,7 @@ import { verifyCsrf } from '@/lib/csrf';
 import { mailer, passwordResetEmail } from '@/lib/mailer';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { recordActivity } from '@/lib/activity';
+import { safeError } from '@/lib/safe-error';
 
 /** Short enough to limit the window a leaked link stays useful; long enough to reach an inbox. */
 const TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -45,27 +46,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Reuses the login-failure dimensions: this endpoint is attacked the same way (many addresses
   // from one prefix, or one address repeatedly) and sends mail on success, so an unlimited
   // version is also a way to have us spam a third party's inbox.
-  const gate = await rateLimiter().loginFailure({
-    identifier: `forgot:${email}`,
-    ip,
-    pepper: env().HASH_PEPPER,
-  });
-
-  // Still 202. A 429 here would confirm that the address is worth retrying.
-  if (isDenied(gate)) return accepted();
-
-  const database = db();
-  const [account] = await database
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.email, email), isNull(users.deletedAt)))
-    .limit(1);
-
-  if (!account) return accepted();
-
-  const { token, tokenHash } = issueToken();
-
   try {
+    const gate = await rateLimiter().loginFailure({
+      identifier: `forgot:${email}`,
+      ip,
+      pepper: env().HASH_PEPPER,
+    });
+
+    // Still 202. A 429 here would confirm that the address is worth retrying.
+    if (isDenied(gate)) return accepted();
+
+    const database = db();
+    const [account] = await database
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.email, email), isNull(users.deletedAt)))
+      .limit(1);
+
+    if (!account) return accepted();
+
+    const { token, tokenHash } = issueToken();
+
     await database.insert(passwordResetTokens).values({
       userId: account.id,
       tokenHash,
@@ -84,10 +85,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     // Logged, not surfaced. The user is told the same thing either way (AUTH-03-01), so this
     // log line is the only signal that a reset is failing — it belongs on an alert.
-    console.error(
-      '[auth] password reset dispatch failed',
-      error instanceof Error ? error.message : 'unknown',
-    );
+    console.error('[auth] password reset dispatch failed', safeError(error));
   }
 
   return accepted();

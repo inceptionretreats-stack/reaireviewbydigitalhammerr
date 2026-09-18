@@ -1,0 +1,135 @@
+.page {
+  width: min(100% - 48px, 1000px);
+  margin: 0 auto;
+  padding: 34px 0 72px;
+}
+
+.navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 30px;
+}
+
+.navigation a {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 10px 16px;
+  align-items: center;
+  border: 1px solid #dbe2eb;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.navigation a[aria-current='page'] {
+  border-color: #1967d2;
+  background: #edf4ff;
+  color: #174ea6;
+}
+
+.document {
+  padding: clamp(24px, 5vw, 52px);
+  border: 1px solid #dbe2eb;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.heading {
+  padding-bottom: 26px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.eyebrow {
+  color: #174ea6;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.heading h1 {
+  margin: 12px 0 18px;
+  color: #111827;
+  font-size: clamp(30px, 4vw, 44px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.heading p:not(.eyebrow) {
+  max-width: 740px;
+  margin-bottom: 0;
+  color: #475569;
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.heading .updated {
+  margin-top: 18px;
+  font-size: 13px;
+}
+
+.content {
+  max-width: 760px;
+  color: #334155;
+  font-size: 16px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.content section {
+  margin-top: 32px;
+  scroll-margin-top: 100px;
+}
+
+.content h2 {
+  margin-bottom: 12px;
+  color: #111827;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.content p {
+  margin-bottom: 14px;
+}
+
+.content ul {
+  padding-left: 24px;
+  list-style: disc;
+}
+
+.content li + li {
+  margin-top: 10px;
+}
+
+.content a {
+  color: #174ea6;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.content address {
+  font-style: normal;
+}
+
+@media (max-width: 560px) {
+  .page {
+    width: calc(100% - 32px);
+    padding-top: 24px;
+  }
+
+  .document {
+    padding: 24px 20px;
+  }
+
+  .navigation {
+    gap: 8px;
+  }
+
+  .navigation a {
+    padding: 10px 12px;
+  }
+}

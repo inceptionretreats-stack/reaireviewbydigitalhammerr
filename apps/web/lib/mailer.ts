@@ -27,11 +27,8 @@ export interface MailTransport {
 }
 
 export class MailError extends Error {
-  constructor(
-    readonly status: number,
-    subject: string,
-  ) {
-    super(`mail provider answered ${status} for "${subject}"`);
+  constructor(readonly status: number) {
+    super(`mail provider answered ${status}`);
     this.name = 'MailError';
   }
 }
@@ -54,8 +51,8 @@ class ConsoleMailTransport implements MailTransport {
 
 /** Production without a key. Fails loudly rather than silently dropping mail. */
 class UnconfiguredMailTransport implements MailTransport {
-  send(email: Email): Promise<void> {
-    console.error(`[mail] NO TRANSPORT CONFIGURED — dropped "${email.subject}" to ${email.to}`);
+  send(_email: Email): Promise<void> {
+    console.error('[mail] NO TRANSPORT CONFIGURED — email was not sent');
     return Promise.reject(new Error('No mail transport is configured for this environment'));
   }
 }
@@ -67,7 +64,7 @@ export type MailFetchLike = (
 
 /**
  * Resend. One POST per email; a non-2xx answer surfaces as `MailError` with the status and the
- * subject only — the response body can echo the request, and the request holds the recipient.
+ * status only — subjects can contain personal information, and response bodies can echo requests.
  */
 export class ResendTransport implements MailTransport {
   constructor(
@@ -102,14 +99,14 @@ export class ResendTransport implements MailTransport {
         signal: controller.signal,
       });
       if (!response.ok) {
-        console.error(`[mail] resend answered ${response.status} for "${email.subject}"`);
-        throw new MailError(response.status, email.subject);
+        console.error(`[mail] resend answered ${response.status}`);
+        throw new MailError(response.status);
       }
     } catch (error) {
       if (error instanceof MailError) throw error;
       const status = controller.signal.aborted ? 504 : 502;
-      console.error(`[mail] resend request failed (${status}) for "${email.subject}"`);
-      throw new MailError(status, email.subject);
+      console.error(`[mail] resend request failed (${status})`);
+      throw new MailError(status);
     } finally {
       clearTimeout(timer);
     }

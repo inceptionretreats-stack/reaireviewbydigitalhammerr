@@ -7,6 +7,8 @@
 !.env.example
 .git/
 .vercel/
+.agents/
+skills-lock.json
 .pgdata
 .dev
 .cache/

@@ -1,6 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
-import { MailError, ResendTransport } from '../mailer';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MailError, ResendTransport, mailer, setMailTransport } from '../mailer';
 import { receiptEmail, renewalReminderEmail } from '../email-templates';
+
+const mocks = vi.hoisted(() => ({ env: vi.fn(() => ({ NODE_ENV: 'production' })) }));
+vi.mock('../env', () => ({ env: mocks.env }));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  setMailTransport(undefined);
+});
 
 /**
  * AMENDMENT-029. The Resend transport is one POST; what matters is the request shape, that a
@@ -36,18 +44,40 @@ describe('ResendTransport', () => {
     });
   });
 
-  it('reports a provider failure by status and subject, never by body', async () => {
+  it('reports a provider failure by status only, never recipient, subject, body or credentials', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const fetchImpl = vi.fn(async () => ({ ok: false, status: 422 }));
-    const transport = new ResendTransport({ apiKey: 'k', from: 'a@b.c', fetchImpl });
-    await expect(
-      transport.send({ to: 'x@y.z', subject: 'Reset', text: 'https://secret-link' }),
-    ).rejects.toMatchObject({ status: 422 });
+    const transport = new ResendTransport({ apiKey: 'private-api-key', from: 'a@b.c', fetchImpl });
+    const failure = transport.send({
+      to: 'x@y.z',
+      subject: 'Private name invoice 123',
+      text: 'https://secret-link',
+    });
+    await expect(failure).rejects.toMatchObject({
+      status: 422,
+      message: 'mail provider answered 422',
+    });
     const logged = error.mock.calls.map((c) => c.join(' ')).join('\n');
     expect(logged).toContain('422');
     expect(logged).not.toContain('secret-link');
     expect(logged).not.toContain('x@y.z');
+    expect(logged).not.toContain('Private name');
+    expect(logged).not.toContain('private-api-key');
     error.mockRestore();
+  });
+
+  it('fails safely when production email is unconfigured', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(
+      mailer().send({
+        to: 'private-person@example.com',
+        subject: 'Private name invoice 456',
+        text: 'https://secret-reset-token',
+      }),
+    ).rejects.toThrow('No mail transport is configured');
+    expect(error).toHaveBeenCalledExactlyOnceWith(
+      '[mail] NO TRANSPORT CONFIGURED — email was not sent',
+    );
   });
 
   it('turns a network failure into a MailError rather than an unhandled rejection', async () => {

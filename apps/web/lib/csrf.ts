@@ -46,12 +46,17 @@ export function verifyCsrf(request: Request): CsrfResult {
 /**
  * The origins a mutation may come from.
  *
- * Custom tenant domains (D-024) are NOT included: they serve the public renderer only, and no
- * authenticated mutation is ever issued from one. Widening this to accept them would mean any
- * hostname a tenant can point at us becomes a trusted origin for the dashboard.
+ * First-party app aliases must be explicitly configured by the server. Request Host and
+ * forwarded headers never grant trust. Custom tenant domains (D-024) are NOT included: they
+ * serve the public renderer only, and no authenticated mutation is ever issued from one.
+ * Widening this to accept them would mean any hostname a tenant can point at us becomes a
+ * trusted origin for the dashboard.
  */
 function allowedOrigins(): Set<string> {
-  const origins = new Set<string>([normalizeOrigin(env().APP_BASE_URL)]);
+  const origins = new Set<string>([
+    normalizeOrigin(env().APP_BASE_URL),
+    ...env().CSRF_TRUSTED_ORIGINS,
+  ]);
 
   if (env().NODE_ENV !== 'production') {
     origins.add('http://localhost:3000');

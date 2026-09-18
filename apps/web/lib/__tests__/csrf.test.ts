@@ -8,13 +8,15 @@ import { beforeAll, describe, expect, it } from 'vitest';
  */
 let verifyCsrf: (request: Request) => { ok: boolean; reason?: string };
 
-const APP_ORIGIN = 'https://review.digitalhammerr.com';
+const APP_ORIGIN = 'https://ai-review-dh.vercel.app';
+const CUSTOM_APP_ORIGIN = 'https://aireview.digitalhammerr.com';
 
 beforeAll(async () => {
   Object.assign(process.env, {
     NODE_ENV: 'production',
     APP_BASE_URL: APP_ORIGIN,
     API_BASE_URL: `${APP_ORIGIN}/api/v1`,
+    CSRF_TRUSTED_ORIGINS: CUSTOM_APP_ORIGIN,
     SESSION_SECRET: 'a'.repeat(32),
     APP_ENCRYPTION_KEY: 'b'.repeat(32),
     HASH_PEPPER: 'c'.repeat(32),
@@ -38,6 +40,38 @@ function mutation(headers: Record<string, string> = {}, method = 'POST'): Reques
 describe('verifyCsrf', () => {
   it('accepts a same-origin mutation', () => {
     expect(verifyCsrf(mutation({ origin: APP_ORIGIN })).ok).toBe(true);
+  });
+
+  it('accepts signup from the explicitly configured custom app domain', () => {
+    const request = new Request(`${CUSTOM_APP_ORIGIN}/api/v1/auth/signup`, {
+      method: 'POST',
+      headers: { origin: CUSTOM_APP_ORIGIN },
+    });
+    expect(verifyCsrf(request).ok).toBe(true);
+  });
+
+  it.each([
+    'https://other-app.vercel.app',
+    'https://evil.ai-review-dh.vercel.app',
+    'https://evil.aireview.digitalhammerr.com',
+    'http://aireview.digitalhammerr.com',
+    'https://aireview.digitalhammerr.com:8443',
+    'https://aireview.digitalhammerr.com.evil.example',
+  ])('does not extend explicit app trust to %s', (origin) => {
+    expect(verifyCsrf(mutation({ origin })).ok).toBe(false);
+  });
+
+  it('does not trust an origin just because request and forwarded hosts match it', () => {
+    const request = new Request('https://untrusted.vercel.app/api/v1/auth/signup', {
+      method: 'POST',
+      headers: {
+        origin: 'https://untrusted.vercel.app',
+        host: 'untrusted.vercel.app',
+        'x-forwarded-host': 'untrusted.vercel.app',
+        'x-forwarded-proto': 'https',
+      },
+    });
+    expect(verifyCsrf(request).ok).toBe(false);
   });
 
   it('accepts an origin differing only by a trailing slash or path', () => {

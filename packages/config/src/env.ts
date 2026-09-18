@@ -58,6 +58,22 @@ function isOriginOnly(url: URL): boolean {
   );
 }
 
+const trustedOrigin = z
+  .string()
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return (
+        /^https?:\/\/[^/?#\\@\s]+\/?$/i.test(value) &&
+        isOriginOnly(url) &&
+        !url.hostname.includes('*')
+      );
+    } catch {
+      return false;
+    }
+  }, 'must be an exact HTTP(S) origin with no wildcard, path, credentials, query, or fragment')
+  .transform((value) => new URL(value).origin);
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -65,6 +81,14 @@ export const envSchema = z
     // App
     APP_BASE_URL: z.url(),
     API_BASE_URL: z.url(),
+    // Additional first-party app origins only; APP_BASE_URL remains canonical for public URLs.
+    CSRF_TRUSTED_ORIGINS: z
+      .string()
+      .default('')
+      .transform((value) =>
+        value.trim() === '' ? [] : value.split(',').map((part) => part.trim()),
+      )
+      .pipe(z.array(trustedOrigin)),
     SESSION_COOKIE_NAME: nonEmpty.default('dh_session'),
     SESSION_SECRET: secret,
     APP_ENCRYPTION_KEY: secret.min(32, 'encryption key must be at least 32 bytes'),
@@ -248,6 +272,17 @@ export const envSchema = z
     }
 
     if (value.NODE_ENV === 'production') {
+      value.CSRF_TRUSTED_ORIGINS.forEach((origin, index) => {
+        const url = new URL(origin);
+        if (url.protocol !== 'https:' || isPrivateOrLoopbackHost(url.hostname)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['CSRF_TRUSTED_ORIGINS', index],
+            message: 'must use HTTPS and a publicly reachable host in production',
+          });
+        }
+      });
+
       // Every printed QR permanently embeds this origin. A loopback address works in a browser on
       // the server itself but sends a customer's phone to that phone, while plain HTTP is neither
       // trustworthy nor accepted by many camera hand-off flows outside a private LAN.

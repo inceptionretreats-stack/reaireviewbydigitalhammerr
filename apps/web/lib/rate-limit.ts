@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { isIP } from 'node:net';
 import {
   DEFAULT_RATE_LIMIT_CONFIG,
   MemoryRateLimitStore,
@@ -8,6 +9,7 @@ import {
   RedisRateLimitStore,
 } from '@ai-review/core';
 import { env } from './env';
+import { safeError } from './safe-error';
 
 /**
  * The process-wide limiter (AC-032, AC-002, E8-02).
@@ -64,7 +66,7 @@ export function rateLimiter(): RateLimiter {
     onStoreUnavailable: (error, checkName) => {
       if (fallbackSeen.has(checkName)) return;
       fallbackSeen.add(checkName);
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = safeError(error);
       console.warn(
         `[rate-limit] ${checkName} fell back to in-process limiting (${reason}). ` +
           'Limits are per instance until Redis is reachable; reported once per process.',
@@ -109,16 +111,27 @@ function scaledConfig(): RateLimitConfig {
 /**
  * Client IP from the edge.
  *
- * Cloudflare sits in front (ADR-009), so `cf-connecting-ip` is the trustworthy header and
- * `x-forwarded-for` is only a fallback for local development. The value is never stored: the
- * limiter hashes a truncated prefix (13_Security_Privacy_Compliance.md).
+ * Vercel aliases are reachable directly: callers can forge cf-connecting-ip there. On Vercel
+ * trust only its overwritten forwarding headers. The Cloudflare header is retained solely for
+ * local tunnel development, never as a production fallback. Invalid/missing addresses share
+ * the limiter's unknown-address bucket rather than accepting attacker-chosen identifiers.
  */
 export function clientIp(request: Request): string {
+  if (process.env.VERCEL === '1') {
+    const address = (
+      request.headers.get('x-vercel-forwarded-for') ??
+      request.headers.get('x-forwarded-for') ??
+      ''
+    ).trim();
+    return isIP(address) ? address : '';
+  }
+  if (process.env.NODE_ENV === 'production') return '';
   const cf = request.headers.get('cf-connecting-ip');
-  if (cf) return cf.trim();
+  if (cf && isIP(cf.trim())) return cf.trim();
 
   const forwarded = request.headers.get('x-forwarded-for') ?? '';
-  return forwarded.split(',')[0]?.trim() ?? '';
+  const address = forwarded.split(',')[0]?.trim() ?? '';
+  return isIP(address) ? address : '';
 }
 
 /** True when the decision denies the request, narrowing for the caller. */

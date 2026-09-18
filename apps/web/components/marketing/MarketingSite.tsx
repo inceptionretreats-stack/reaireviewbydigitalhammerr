@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { QrStandeePreview } from '@/components/qr/QrStandeePreview';
 import type { LandingDemo } from '@/lib/landing-demo';
+import { PUBLIC_INFORMATION_LINKS } from '@/lib/public-information';
 import { HeroReviewVideo } from './HeroReviewVideo';
 import { MarketingSectionNav, type MarketingSectionLink } from './MarketingSectionNav';
 import styles from './MarketingSite.module.css';
@@ -171,6 +172,11 @@ function MarketingFooter({ demo }: { demo?: LandingDemo | null }) {
               {item.label}
             </Link>
           ))}
+          {PUBLIC_INFORMATION_LINKS.map((item) => (
+            <Link key={item.href} href={item.href}>
+              {item.label}
+            </Link>
+          ))}
         </nav>
         <div className={styles.footerAccount}>
           <Link href="/login">Sign in</Link>
@@ -272,30 +278,74 @@ export function HeroVideoVisual() {
 
 export function TrustBand() {
   return (
-    <section className={styles.trustBand} aria-label="Review safeguards">
-      <span className={styles.trustIcon}>
-        <MarketingIcon name="shield" size={32} />
-      </span>
-      <div>
-        <h2>Built for trust, not shortcuts.</h2>
-        <p>Every customer gets the same honest path, with private feedback always available.</p>
-        <ul>
-          <li>They post it themselves</li>
-          <li>No rating is requested</li>
-          <li>We never claim it was submitted</li>
-          <li>Every draft stays editable—no forced merchant wording</li>
-        </ul>
+    <section
+      className={styles.reviewBenefits}
+      id="why-ai-review"
+      aria-labelledby="review-benefits-title"
+      data-review-benefits
+    >
+      <div className={styles.benefitsCta}>
+        <p>A simple, smarter review experience for your business.</p>
+        <div className={styles.benefitsActions}>
+          <Link className={styles.benefitsPrimaryLink} href="/signup">
+            Create your free QR
+          </Link>
+          <Link className={styles.benefitsSecondaryLink} href="#how-it-works">
+            See how it works
+          </Link>
+        </div>
       </div>
-      <Link href="#how-it-works">
-        Review the three steps <MarketingIcon name="arrow" size={17} />
-      </Link>
+      <div className={styles.benefitsBody}>
+        <h2 id="review-benefits-title">What sets Ai Review apart?</h2>
+        <p className={styles.benefitsIntro}>
+          Less effort for your customers. More possibilities for your business.
+        </p>
+        <dl className={styles.benefitsGrid} data-benefits-grid>
+          <div className={styles.benefitItem} data-review-benefit>
+            <dt>1 QR</dt>
+            <dd>
+              One simple scan
+              <br />
+              to get started
+            </dd>
+          </div>
+          <div className={styles.benefitItem} data-review-benefit>
+            <dt>Ai</dt>
+            <dd>
+              A draft to edit
+              <br />
+              in your own words
+            </dd>
+          </div>
+          <div className={styles.benefitItem} data-review-benefit>
+            <dt>10 free</dt>
+            <dd>
+              Ai review drafts
+              <br />
+              on the Free plan
+            </dd>
+          </div>
+          <div className={styles.benefitItem} data-review-benefit>
+            <dt>You</dt>
+            <dd>
+              Choose what to post
+              <br />
+              on Google
+            </dd>
+          </div>
+        </dl>
+        <p className={styles.benefitsNote}>Your experience. Your words. You choose what to post.</p>
+        <p className={styles.benefitsDisclaimer}>
+          Ai helps with writing; customers decide whether to publish.
+        </p>
+      </div>
     </section>
   );
 }
 
 export function MarketingCallToAction({
   title = 'Ready to make every visit easier to share?',
-  body = 'Create your account in minutes and keep the customer in control.',
+  body = 'Create your account and keep the customer in control.',
 }: {
   title?: string;
   body?: string;

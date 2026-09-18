@@ -1,23 +1,21 @@
-import Image from 'next/image';
 import { HowItWorksClip } from './HowItWorksClip';
-import { ROBOT_IMAGE } from './RobotClaimBand';
 import styles from './HowItWorksVideos.module.css';
 
 const STEPS = [
   {
     id: 'scan',
-    icon: '🧮',
     title: 'Scan or Tap',
+    caption: 'Scan the QR code to get started.',
   },
   {
     id: 'draft',
-    icon: 'robot',
-    title: 'Ai Writes the Review',
+    title: 'Ai Drafts a Review',
+    caption: 'Let Ai draft a review you can edit.',
   },
   {
     id: 'publish',
-    icon: '✅',
-    title: 'One Tap to Post',
+    title: 'Copy, Paste & Post',
+    caption: 'Copy your review, then paste and post it yourself on Google.',
   },
 ] as const;
 
@@ -30,7 +28,10 @@ export function HowItWorksVideos() {
       aria-labelledby="home-steps-title"
     >
       <header className={styles.heading}>
-        <h2 id="home-steps-title">How it works</h2>
+        <h2 id="home-steps-title">
+          How it <span>works</span>
+        </h2>
+        <p data-how-intro>Bas QR scan karo, Ai se review banao aur Google par share karo.</p>
       </header>
 
       <ol className={styles.grid} data-how-grid role="list">
@@ -40,14 +41,10 @@ export function HowItWorksVideos() {
               <h3 className={styles.stepLabel} data-how-step-title>
                 Step {index + 1}
               </h3>
-              <span className={styles.stepIcon} aria-hidden="true">
-                {step.icon === 'robot' ? (
-                  <Image className={styles.robot} src={ROBOT_IMAGE} alt="" width={74} height={89} />
-                ) : (
-                  step.icon
-                )}
-              </span>
             </div>
+            <p className={styles.stepCaption} data-how-step-caption>
+              {step.caption}
+            </p>
             <div className={styles.media}>
               <HowItWorksClip id={step.id} title={step.title} />
             </div>

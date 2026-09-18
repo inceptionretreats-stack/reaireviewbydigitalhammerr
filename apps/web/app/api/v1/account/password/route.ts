@@ -12,6 +12,7 @@ import { sessionService, setSessionCookie } from '@/lib/session';
 import { parsePasswordChange } from '../schema';
 import { countOtherLiveSessions, reportableRevoked } from '../session-count';
 import { recordActivity } from '@/lib/activity';
+import { safeError } from '@/lib/safe-error';
 
 /**
  * POST /api/v1/account/password — "Change password" on SET-01.
@@ -29,8 +30,8 @@ import { recordActivity } from '@/lib/activity';
  *
  * The password itself is never logged, never placed in an error, and never returned (AUTH-01-03
  * applied here). Note that no branch below puts a password — old or new — into a message, and the
- * driver error is reduced to name and message before it reaches the log, because node-postgres
- * attaches statement parameters to some errors and one of those parameters is the new hash.
+ * driver error is reduced to a fixed diagnostic label before it reaches the log: Drizzle's
+ * message can itself contain statement parameters, including the new password hash.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .where(and(eq(users.id, userId), eq(users.passwordHash, account.passwordHash)))
       .returning({ id: users.id });
   } catch (error) {
-    console.error('[account] password change failed', redactError(error));
+    console.error('[account] password change failed', safeError(error));
     return apiError('INTERNAL_ERROR', 'We could not change your password. Please try again.');
   }
 
@@ -209,8 +210,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     sweep = { signedOut: reportableRevoked(liveBefore, revoked) };
   } catch (error) {
-    // AC-030: name and message only. The failing statement's parameters may include the new hash.
-    console.error('[account] session sweep after password change failed', redactError(error));
+    // AC-030: never log a statement message or its parameters, which may include the new hash.
+    console.error('[account] session sweep after password change failed', safeError(error));
   }
 
   recordActivity(
@@ -252,13 +253,4 @@ function passwordMessage(reason: string): string {
     default:
       return 'Use a mix of at least five different characters.';
   }
-}
-
-/**
- * Keeps a driver error out of the log verbatim (AC-030). node-postgres attaches the failing
- * statement's parameters to some errors, and one of those parameters is the new password hash.
- */
-function redactError(error: unknown): string {
-  if (error instanceof Error) return `${error.name}: ${error.message}`;
-  return 'unknown error';
 }

@@ -5,6 +5,7 @@ import { requireTenant } from '@/lib/require-tenant';
 import { sessionService } from '@/lib/session';
 import { countOtherLiveSessions, reportableRevoked } from '../../session-count';
 import { recordActivity } from '@/lib/activity';
+import { safeError } from '@/lib/safe-error';
 
 /**
  * POST /api/v1/account/sessions/revoke-others — "Log out other sessions" on SET-01.
@@ -62,13 +63,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       other_sessions_signed_out: reportableRevoked(liveBefore, revoked),
     });
   } catch (error) {
-    console.error('[account] revoking other sessions failed', redactError(error));
+    console.error('[account] revoking other sessions failed', safeError(error));
     return apiError('INTERNAL_ERROR', 'We could not sign out your other sessions. Please retry.');
   }
-}
-
-/** Keeps a driver error, and any statement parameter attached to it, out of the log (AC-030). */
-function redactError(error: unknown): string {
-  if (error instanceof Error) return `${error.name}: ${error.message}`;
-  return 'unknown error';
 }

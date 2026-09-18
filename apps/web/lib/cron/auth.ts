@@ -6,6 +6,7 @@ export function cronAuthorised(
   secret: string | undefined,
 ): 'ok' | 'unset' | 'wrong' {
   if (!secret) return 'unset';
+  if (!header || !/^Bearer\s+/i.test(header)) return 'wrong';
   const given = header?.replace(/^Bearer\s+/i, '').trim() ?? '';
   const a = Buffer.from(given, 'utf8');
   const b = Buffer.from(secret, 'utf8');

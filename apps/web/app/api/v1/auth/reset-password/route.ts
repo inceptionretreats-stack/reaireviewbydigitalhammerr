@@ -1,14 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { passwordResetTokens, users } from '@ai-review/db';
-import { hashToken, validatePasswordStrength } from '@ai-review/core';
+import { hashToken, SessionService, validatePasswordStrength } from '@ai-review/core';
 import { resetPasswordRequest } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { verifyCsrf } from '@/lib/csrf';
 import { passwordHasher } from '@/lib/auth-helpers';
-import { clearSessionCookie, sessionService } from '@/lib/session';
+import { clearSessionCookie } from '@/lib/session';
 import { recordActivity } from '@/lib/activity';
+import { safeError } from '@/lib/safe-error';
 
 /**
  * POST /api/v1/auth/reset-password — AUTH-03-02.
@@ -55,53 +56,77 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const database = db();
-  const passwordHash = await passwordHasher().hash(password);
+  let userId: string | null;
+  try {
+    const database = db();
+    const tokenHash = hashToken(token);
 
-  // The claim and the password change are one transaction: a token consumed without the password
-  // actually changing would leave the user locked out with a spent link.
-  const userId = await database.transaction(async (tx) => {
-    const claimed = await tx
-      .update(passwordResetTokens)
-      .set({ usedAt: new Date() })
+    // Reject unknown, expired or spent links before expensive Argon2 work. This is only an
+    // optimization: the conditional UPDATE below must still re-check all three conditions,
+    // because the link can expire or be claimed while hashing is in progress.
+    const [candidate] = await database
+      .select({ id: passwordResetTokens.id })
+      .from(passwordResetTokens)
       .where(
         and(
-          eq(passwordResetTokens.tokenHash, hashToken(token)),
+          eq(passwordResetTokens.tokenHash, tokenHash),
           isNull(passwordResetTokens.usedAt),
           gt(passwordResetTokens.expiresAt, new Date()),
         ),
       )
-      .returning({ userId: passwordResetTokens.userId });
+      .limit(1);
+    if (!candidate) return invalidLink();
 
-    const row = claimed[0];
-    if (!row) return null;
+    const passwordHash = await passwordHasher().hash(password);
 
-    await tx
-      .update(users)
-      .set({
-        passwordHash,
-        // A reset is also the recovery path for a locked-out account, so the lock is lifted.
-        failedLoginCount: 0,
-        lockedUntil: null,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(users.id, row.userId));
+    // Token claim, password change and revocation are one security boundary. If any write
+    // fails, the transaction restores the old password and leaves the link usable for a retry.
+    // In particular, never commit a new password while another device's old session stays live.
+    userId = await database.transaction(async (tx) => {
+      const claimed = await tx
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(
+          and(
+            eq(passwordResetTokens.tokenHash, tokenHash),
+            isNull(passwordResetTokens.usedAt),
+            gt(passwordResetTokens.expiresAt, new Date()),
+          ),
+        )
+        .returning({ userId: passwordResetTokens.userId });
 
-    return row.userId;
-  });
+      const row = claimed[0];
+      if (!row) return null;
 
-  if (!userId) {
-    return apiError(
-      'VALIDATION_FAILED',
-      'That reset link is no longer valid. Please request a new one.',
-    );
+      await tx
+        .update(users)
+        .set({
+          passwordHash,
+          // A reset is also the recovery path for a locked-out account, so the lock is lifted.
+          failedLoginCount: 0,
+          lockedUntil: null,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(users.id, row.userId));
+
+      // Use the transaction executor, NOT the process-wide session service/connection.
+      await new SessionService(tx).revokeAllForUser(row.userId, 'PASSWORD_RESET');
+      return row.userId;
+    });
+  } catch (error) {
+    console.error('[auth] password reset failed', safeError(error));
+    return apiError('INTERNAL_ERROR', 'We could not change your password. Please try again.');
   }
 
-  // 13_Security_Privacy_Compliance.md: rotate sessions on password reset. Every existing session
-  // is revoked, including the caller's own — if the reason for resetting was that someone else
-  // had access, leaving their session live defeats the point.
-  await sessionService().revokeAllForUser(userId, 'PASSWORD_RESET');
-  await clearSessionCookie();
+  if (!userId) return invalidLink();
+
+  try {
+    await clearSessionCookie();
+  } catch (error) {
+    // The password is already changed and every old session is revoked in the database.
+    // A stale browser cookie has no authority; do not falsely report a failed password change.
+    console.error('[auth] reset cookie cleanup failed after password change', safeError(error));
+  }
 
   recordActivity(
     request,
@@ -112,6 +137,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     message: 'Your password has been changed. Please sign in.',
     next: '/login',
   });
+}
+
+function invalidLink(): NextResponse {
+  return apiError(
+    'VALIDATION_FAILED',
+    'That reset link is no longer valid. Please request a new one.',
+  );
 }
 
 function passwordMessage(reason: string): string {

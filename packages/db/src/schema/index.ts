@@ -8,3 +8,4 @@ export * from './crm';
 export * from './domains';
 export * from './analytics';
 export * from './platform';
+export * from './maintenance';

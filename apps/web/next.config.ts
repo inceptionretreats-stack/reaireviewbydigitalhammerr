@@ -62,6 +62,7 @@ const config: NextConfig = {
     '@ai-review/contracts',
     '@ai-review/analytics',
     '@ai-review/ui',
+    '@ai-review/worker',
   ],
 
   async headers() {

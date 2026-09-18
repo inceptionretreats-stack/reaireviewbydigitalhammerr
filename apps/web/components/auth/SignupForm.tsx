@@ -137,7 +137,29 @@ export function SignupForm() {
         }}
         error={termsError}
         disabled={submitting}
-        label="I accept the terms of service and privacy policy"
+        label={
+          <span>
+            I accept the{' '}
+            <a
+              className="text-accent underline underline-offset-4"
+              href="/legal/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              terms of service
+            </a>{' '}
+            and{' '}
+            <a
+              className="text-accent underline underline-offset-4"
+              href="/legal/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              privacy policy
+            </a>
+          </span>
+        }
+        description="Policy links open in a new tab so your form stays here."
       />
 
       <Button

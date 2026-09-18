@@ -25,17 +25,17 @@ export function RobotClaimBand() {
     >
       <div className={styles.reviewGrowthCopy} data-review-growth-copy>
         <h2 id="review-growth-title">
-          <span className={styles.reviewGrowthLine}>Boost Your Business</span>{' '}
+          <span className={styles.reviewGrowthLine}>Help your customers</span>{' '}
           <span className={styles.reviewGrowthLine}>
-            <strong>Reviews</strong> on <GoogleWord /> with
+            share <strong>reviews</strong> on <GoogleWord /> with
           </span>{' '}
-          <span className={styles.reviewGrowthLine}>Our</span>{' '}
+          <span className={styles.reviewGrowthLine}>our</span>{' '}
           <span className={styles.reviewGrowthLine}>
-            Google <strong>Review System</strong>
+            Ai <strong>review assistant</strong>
           </span>
         </h2>
         <p className={styles.reviewGrowthMetric}>
-          Increase your reviews upto <strong>10X</strong> in <em>90days</em>
+          Ai drafts. <strong>Customers edit.</strong> <em>They choose what to post.</em>
         </p>
       </div>
 
@@ -44,7 +44,7 @@ export function RobotClaimBand() {
           className={styles.reviewGrowthRobot}
           data-review-growth-robot
           src={ROBOT_IMAGE}
-          alt="Friendly Ai robot helping a business grow its Google reviews"
+          alt="Friendly Ai robot representing the editable review draft assistant"
           width={1145}
           height={1374}
           sizes="(max-width: 560px) 78vw, (max-width: 820px) 350px, 430px"

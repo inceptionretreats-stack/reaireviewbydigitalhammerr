@@ -7,6 +7,8 @@ describe('cronAuthorised', () => {
     expect(cronAuthorised('bearer s3cret', 's3cret')).toBe('ok');
     expect(cronAuthorised('Bearer s3cre', 's3cret')).toBe('wrong');
     expect(cronAuthorised('Bearer s3cret2', 's3cret')).toBe('wrong');
+    expect(cronAuthorised('s3cret', 's3cret')).toBe('wrong');
+    expect(cronAuthorised('Basic s3cret', 's3cret')).toBe('wrong');
     expect(cronAuthorised(null, 's3cret')).toBe('wrong');
     expect(cronAuthorised('', 's3cret')).toBe('wrong');
     expect(cronAuthorised('Bearer s3cret', undefined)).toBe('unset');

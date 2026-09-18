@@ -10,6 +10,7 @@ import { passwordHasher } from '@/lib/auth-helpers';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { emailChanged, parseAccountDetails } from './schema';
 import { recordActivity } from '@/lib/activity';
+import { isUniqueViolation, safeError } from '@/lib/safe-error';
 
 /**
  * PATCH /api/v1/account — the account half of SET-01.
@@ -121,9 +122,8 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
         details: { fields: ['email'] },
       });
     }
-    // AC-030: the driver error never reaches the client, and node-postgres attaches statement
-    // parameters to some errors — here the email address — so only name and message are logged.
-    console.error('[account] details update failed', redactError(error));
+    // Driver/ORM messages can include statement parameters, including the email address.
+    console.error('[account] details update failed', safeError(error));
     return apiError('INTERNAL_ERROR', 'We could not save your details. Please try again.');
   }
 
@@ -203,15 +203,4 @@ async function verifyCurrentPassword(input: ReauthInput): Promise<NextResponse |
   // does, so a run of typos here cannot lock the owner out of the login screen.
   await limiter.loginSuccess(subject);
   return null;
-}
-
-/** 23505 is Postgres unique_violation. */
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
-}
-
-/** Keeps a driver error, and any statement parameter attached to it, out of the log (AC-030). */
-function redactError(error: unknown): string {
-  if (error instanceof Error) return `${error.name}: ${error.message}`;
-  return 'unknown error';
 }

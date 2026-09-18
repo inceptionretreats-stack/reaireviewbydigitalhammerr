@@ -1,5 +1,6 @@
 import { and, eq, gt, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
-import { analyticsDailyBusiness, analyticsEvents, businesses, type Database } from '@ai-review/db';
+import { analyticsDailyBusiness, analyticsEvents, businesses } from '@ai-review/db';
+import type { Executor } from '@ai-review/core';
 import { AGGREGATED_METRIC_NAMES, type DailyMetricRow, type EventTally } from './metrics';
 
 /**
@@ -38,7 +39,7 @@ export interface AnalyticsAggregationStore {
 }
 
 export class PostgresAnalyticsAggregationStore implements AnalyticsAggregationStore {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Executor) {}
 
   /**
    * Soft-deleted tenants are skipped; suspended ones are not. A suspended business keeps its

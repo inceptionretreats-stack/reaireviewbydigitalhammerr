@@ -27,6 +27,62 @@ describe('loadEnv', () => {
     expect(env.PRO_ANNUAL_PRICE_PAISE).toBe(99900);
     expect(env.DEFAULT_TIMEZONE).toBe('Asia/Kolkata');
     expect(env.AI_MAX_OUTPUT_TOKENS).toBe(220);
+    expect(env.CSRF_TRUSTED_ORIGINS).toEqual([]);
+  });
+
+  it('parses explicit app aliases without changing the canonical app origin', () => {
+    const env = loadEnv({
+      ...valid,
+      NODE_ENV: 'production',
+      CSRF_TRUSTED_ORIGINS:
+        ' https://aireview.digitalhammerr.com/, https://ai-review-dh.vercel.app ',
+    });
+    expect(env.CSRF_TRUSTED_ORIGINS).toEqual([
+      'https://aireview.digitalhammerr.com',
+      'https://ai-review-dh.vercel.app',
+    ]);
+    expect(env.APP_BASE_URL).toBe(valid.APP_BASE_URL);
+    expect(env.API_BASE_URL).toBe(valid.API_BASE_URL);
+    expect(loadEnv({ ...valid, CSRF_TRUSTED_ORIGINS: ' ' }).CSRF_TRUSTED_ORIGINS).toEqual([]);
+  });
+
+  it.each([
+    '*',
+    'https://*.vercel.app',
+    'https://aireview.digitalhammerr.com/signup',
+    'https://aireview.digitalhammerr.com/../',
+    'https://user:password@aireview.digitalhammerr.com',
+    'https://aireview.digitalhammerr.com?redirect=example',
+    'https://aireview.digitalhammerr.com#fragment',
+    'https://aireview.digitalhammerr.com?',
+    'https://aireview.digitalhammerr.com#',
+    'ftp://aireview.digitalhammerr.com',
+    'aireview.digitalhammerr.com',
+    'https://aireview.digitalhammerr.com,',
+  ])('rejects invalid CSRF trusted origin configuration: %s', (origin) => {
+    expect(() => loadEnv({ ...valid, CSRF_TRUSTED_ORIGINS: origin })).toThrow(
+      /CSRF_TRUSTED_ORIGINS/,
+    );
+  });
+
+  it.each([
+    'http://aireview.digitalhammerr.com',
+    'https://localhost',
+    'https://127.0.0.1',
+    'https://192.168.1.6',
+    'https://10.0.0.1',
+    'https://172.16.0.1',
+    'https://[::1]',
+  ])('rejects non-public or non-HTTPS CSRF trusted origins in production: %s', (origin) => {
+    expect(() =>
+      loadEnv({ ...valid, NODE_ENV: 'production', CSRF_TRUSTED_ORIGINS: origin }),
+    ).toThrow(/CSRF_TRUSTED_ORIGINS/);
+  });
+
+  it('allows an explicit local HTTP alias outside production', () => {
+    expect(
+      loadEnv({ ...valid, CSRF_TRUSTED_ORIGINS: 'http://localhost:3001' }).CSRF_TRUSTED_ORIGINS,
+    ).toEqual(['http://localhost:3001']);
   });
 
   it('requires admin MFA unless the switch is exactly "false" (AMENDMENT-027)', () => {

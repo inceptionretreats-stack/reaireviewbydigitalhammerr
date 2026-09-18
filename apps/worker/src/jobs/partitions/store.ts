@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { Database } from '@ai-review/db';
+import type { Executor } from '@ai-review/core';
 import { DEFAULT_PARTITION_NAME, firstDayOf, parsePartitionName, type YearMonth } from './window';
 
 /**
@@ -18,7 +18,7 @@ export interface PartitionStore {
 }
 
 export class PostgresPartitionStore implements PartitionStore {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Executor) {}
 
   /**
    * Calls the SQL function defined in packages/db/drizzle/0000_initial_schema.sql rather than

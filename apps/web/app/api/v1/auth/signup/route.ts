@@ -15,6 +15,7 @@ import { passwordHasher, SHELL_CATEGORY, shellBusinessName } from '@/lib/auth-he
 import { landingPathFor, sessionService, setSessionCookie } from '@/lib/session';
 import { clientIp } from '@/lib/rate-limit';
 import { recordActivity } from '@/lib/activity';
+import { isUniqueViolation, safeError } from '@/lib/safe-error';
 
 /**
  * POST /api/v1/auth/signup — AUTH-01.
@@ -62,12 +63,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const passwordHash = await passwordHasher().hash(password);
-  const database = db();
-  const commercial = await new PlatformSettingsService(database).values();
-
   let userId: string;
   try {
+    const passwordHash = await passwordHasher().hash(password);
+    const database = db();
+    const commercial = await new PlatformSettingsService(database).values();
+
     userId = await database.transaction(async (tx) => {
       const [user] = await tx
         .insert(users)
@@ -120,26 +121,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         details: { fields: ['email'] },
       });
     }
-    console.error('[auth] signup failed', redactError(error));
+    console.error('[auth] signup failed', safeError(error));
     return apiError('INTERNAL_ERROR', 'We could not create your account. Please try again.');
   }
 
   // Hashed, not raw. 13_Security_Privacy_Compliance.md forbids retaining a raw IP, the column
   // is a char(64) digest, and the login and password-change routes both hash it — signup writing
   // the plain address left the same column holding two different kinds of value.
-  const signupIp = clientIp(request);
-  const session = await sessionService().create({
-    userId,
-    userAgent: request.headers.get('user-agent'),
-    ipHash: signupIp ? privacyHash(signupIp, env().HASH_PEPPER) : null,
-  });
-  await setSessionCookie(session.token, session.expiresAt);
-
   recordActivity(
     request,
     { userId },
     { action: 'auth.signup', targetType: 'user', targetId: userId },
   );
+
+  try {
+    const signupIp = clientIp(request);
+    const session = await sessionService().create({
+      userId,
+      userAgent: request.headers.get('user-agent'),
+      ipHash: signupIp ? privacyHash(signupIp, env().HASH_PEPPER) : null,
+    });
+    await setSessionCookie(session.token, session.expiresAt);
+  } catch (error) {
+    // The user, business and subscription are already committed. Do not say creation failed or
+    // delete them: the owner can sign in with the password they just chose once sessions recover.
+    console.error('[auth] signup session failed after account creation', safeError(error));
+    return apiError(
+      'INTERNAL_ERROR',
+      'Your account was created, but we could not sign you in. Please sign in with your new account.',
+      { details: { account_created: true, next: '/login' } },
+    );
+  }
   return NextResponse.json(
     { next: landingPathFor('BUSINESS_OWNER'), onboarding_required: true },
     { status: 201 },
@@ -161,20 +173,4 @@ function passwordMessage(reason: string): string {
     default:
       return 'Use a mix of at least five different characters.';
   }
-}
-
-/** 23505 is Postgres unique_violation; only users.email is unique in this transaction. */
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
-}
-
-/**
- * Keeps a driver error out of the log verbatim.
- *
- * node-postgres attaches the failing statement parameters to some errors, and one of those
- * parameters is the password hash. AC-030 and AUTH-01-03 both make that unacceptable.
- */
-function redactError(error: unknown): string {
-  if (error instanceof Error) return `${error.name}: ${error.message}`;
-  return 'unknown error';
 }

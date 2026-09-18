@@ -5,17 +5,18 @@ import {
   MarketingShell,
   marketingStyles as styles,
 } from './MarketingSite';
+import { PricingDetailsLink } from './PricingDetails';
 
 const FREE_FEATURES = [
-  'Ten Ai drafts per business',
-  'Your branded QR and public business page',
-  'Private feedback and journey analytics',
+  '10 Ai drafts per business',
+  'Branded QR and business page',
+  'Private feedback and analytics',
 ];
 
 const PRO_FEATURES = [
-  '2,000 Ai review drafts per year',
+  '2,000 Ai drafts per year',
   'Everything included in Free',
-  'One clear price, billed annually',
+  'Customer-editable review drafts',
 ];
 
 const INCLUDED = [
@@ -64,39 +65,37 @@ export function PricingPlanCards() {
   return (
     <div className={styles.pricingSection} aria-label="Pricing plans">
       <article className={`${styles.planCard} ${styles.freePlan}`} data-accent="yellow">
-        <span className={styles.planAccent} aria-hidden="true" />
         <div className={styles.planName}>
-          <span>
-            <MarketingIcon name="draft" size={25} />
-          </span>
-          <div>
-            <h3>Free</h3>
-            <p>Try the complete review loop.</p>
-          </div>
+          <h3>Free</h3>
+          <p>Try the complete review loop.</p>
         </div>
         <p className={styles.price}>₹0</p>
-        <FeatureChecks items={FREE_FEATURES} />
+        <p className={styles.planBilling}>No card needed to begin</p>
         <ActionLink href="/signup" secondary>
           Create free account
         </ActionLink>
+        <div className={styles.planDetails}>
+          <h4>What’s included</h4>
+          <FeatureChecks items={FREE_FEATURES} />
+        </div>
+        <PricingDetailsLink plan="Free" />
       </article>
 
       <article className={`${styles.planCard} ${styles.proPlan}`} data-accent="green">
-        <span className={styles.planAccent} aria-hidden="true" />
         <div className={styles.planName}>
-          <span>
-            <MarketingIcon name="phone" size={25} />
-          </span>
-          <div>
-            <h3>Pro</h3>
-            <p>For businesses ready to keep every visit moving.</p>
-          </div>
+          <h3>Pro</h3>
+          <p>More capacity for your business.</p>
         </div>
         <p className={styles.price}>
           ₹999 <span>/ year</span>
         </p>
-        <FeatureChecks items={PRO_FEATURES} />
+        <p className={styles.planBilling}>Billed annually</p>
         <ActionLink href="/signup">Create account</ActionLink>
+        <div className={styles.planDetails}>
+          <h4>What’s included</h4>
+          <FeatureChecks items={PRO_FEATURES} />
+        </div>
+        <PricingDetailsLink plan="Pro" />
       </article>
     </div>
   );

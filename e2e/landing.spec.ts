@@ -8,31 +8,28 @@ const NAVIGATION = [
   { label: 'Pricing', href: '/#pricing', target: 'pricing' },
 ] as const;
 
-const GROWTH_TITLE = 'Boost Your Business Reviews on Google with Our Google Review System';
-const GROWTH_CLAIM = 'Increase your reviews upto 10X in 90days';
-const HERO_DESCRIPTION =
-  'Aapka experience, Ai ki madad. Review edit karo aur Google par share karo.';
+const GROWTH_TITLE = 'Help your customers share reviews on Google with our Ai review assistant';
+const GROWTH_CLAIM = 'Ai drafts. Customers edit. They choose what to post.';
+const HERO_DESCRIPTION = 'Review Likhna Ab Easy Hai — AI Hai Na.';
+const HOW_INTRO = 'Bas QR scan karo, Ai se review banao aur Google par share karo.';
 const HOW_STEPS = [
   {
     id: 'scan',
     label: 'Step 1',
     title: 'Scan or Tap',
-    caption:
-      'Customer scans your QR code or taps your NFC card at the counter. No app download needed.',
+    caption: 'Scan the QR code to get started.',
   },
   {
     id: 'draft',
     label: 'Step 2',
-    title: 'Ai Writes the Review',
-    caption:
-      'In under 3 seconds, Ai creates a genuine-sounding review based on your business type. Sounds like a real person wrote it.',
+    title: 'Ai Drafts a Review',
+    caption: 'Let Ai draft a review you can edit.',
   },
   {
     id: 'publish',
     label: 'Step 3',
-    title: 'One Tap to Post',
-    caption:
-      'Customer copies the review and is instantly redirected to your Google page. Done in 10 seconds.',
+    title: 'Copy, Paste & Post',
+    caption: 'Copy your review, then paste and post it yourself on Google.',
   },
 ] as const;
 
@@ -771,17 +768,22 @@ test.describe('marketing site', () => {
         name: /simple for you\. effortless for customers\./i,
       }),
     ).toHaveCount(0);
-    await expect(journey.getByText('How it works', { exact: true })).toBeVisible();
+    await expect(
+      journey.getByRole('heading', { level: 2, name: 'How it works', exact: true }),
+    ).toBeVisible();
+    await expect(journey.locator('[data-how-intro]')).toHaveText(HOW_INTRO);
+    await expect(journey.locator('[data-how-intro]')).toBeVisible();
     await expect(journey).toHaveAttribute('data-how-it-works');
     await expect(journey.locator('ol[data-how-grid]')).toHaveCount(1);
     await expect(journey.getByRole('listitem')).toHaveCount(3);
-    await expect(journey.locator('[data-how-step-caption]')).toHaveCount(0);
+    await expect(journey.locator('[data-how-step-caption]')).toHaveCount(3);
     await expect(journey.getByText(/^(?:01|02|03)$/)).toHaveCount(0);
     expect(new Set(HOW_STEPS.map((step) => step.title)).size).toBe(3);
     for (const [index, card] of HOW_STEPS.entries()) {
       const renderedCard = journey.locator('[data-how-step]').nth(index);
       await expect(renderedCard.locator('h3[data-how-step-title]')).toHaveText(card.label);
-      await expect(journey.getByText(card.caption, { exact: true })).toHaveCount(0);
+      await expect(renderedCard.locator('[data-how-step-caption]')).toHaveText(card.caption);
+      await expect(renderedCard.locator('[data-how-step-caption]')).toBeVisible();
       await expect(
         renderedCard.getByRole('heading', { name: card.title, exact: true }),
       ).toHaveCount(0);
@@ -810,7 +812,9 @@ test.describe('marketing site', () => {
       .toBe(true);
   });
 
-  test('uses the supplied growth messages with the Ai review mascot', async ({ page }) => {
+  test('uses factual customer-controlled draft copy with the Ai review mascot', async ({
+    page,
+  }) => {
     for (const viewport of [
       { width: 1280, height: 720 },
       { width: 760, height: 900 },
@@ -828,10 +832,11 @@ test.describe('marketing site', () => {
         growth.getByRole('heading', { level: 2, name: GROWTH_TITLE, exact: true }),
       ).toBeVisible();
       await expect(growth.getByText(GROWTH_CLAIM, { exact: true })).toBeVisible();
+      await expect(growth).not.toContainText(/10[×x]|90\s*days?|guarantee/i);
       await expect(robot).toHaveCount(1);
       await expect(robot).toHaveAttribute(
         'alt',
-        'Friendly Ai robot helping a business grow its Google reviews',
+        'Friendly Ai robot representing the editable review draft assistant',
       );
       await growth.scrollIntoViewIfNeeded();
       await expect(growth).toBeInViewport();
@@ -890,23 +895,17 @@ test.describe('marketing site', () => {
       await expect(pricing).toHaveCount(1);
     }
 
-    await expect(page.locator('#how-it-works img[src*="ai-review-robot-mascot"]')).toHaveCount(1);
+    await expect(page.locator('#how-it-works img[src*="ai-review-robot-mascot"]')).toHaveCount(0);
     await expect(page.locator('main > #pricing + #review-growth')).toHaveCount(1);
     expect(
       await page.locator('main').evaluate((main) => {
         const home = main.querySelector('#home')!;
         const how = main.querySelector('#how-it-works')!;
         const growth = main.querySelector('#review-growth')!;
-        const story = main.querySelector('#review-journey')!;
         const pricing = main.querySelector('#pricing')!;
         const before = (first: Element, second: Element) =>
           Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
-        return (
-          before(home, how) &&
-          before(how, story) &&
-          before(story, pricing) &&
-          pricing.nextElementSibling === growth
-        );
+        return before(home, how) && before(how, pricing) && pricing.nextElementSibling === growth;
       }),
     ).toBe(true);
   });
@@ -939,24 +938,25 @@ test.describe('marketing site', () => {
       }),
     ).toHaveCount(0);
     await expect(
-      page.locator('#how-it-works').getByText('How it works', { exact: true }),
+      page
+        .locator('#how-it-works')
+        .getByRole('heading', { level: 2, name: 'How it works', exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole('banner').getByRole('link', { name: 'How it works', exact: true }),
     ).toHaveAttribute('aria-current', 'location');
   });
 
-  test('removes the teaser blocks while keeping real pricing and customer-control promises', async ({
+  test('removes the teaser blocks while keeping real pricing and customer-controlled reviews', async ({
     page,
   }) => {
     await page.goto('/');
 
-    const body = (await page.locator('body').innerText()).toLowerCase();
+    const body = (await page.locator('body').innerText()).toLowerCase().replace(/\s+/g, ' ');
     expect(body).toContain('₹999');
-    expect(body).toContain('they post it themselves');
-    expect(body).toContain('no rating is requested');
-    expect(body).toContain('we never claim it was submitted');
-    expect(body).toContain('every draft stays editable—no forced merchant wording');
+    expect(body).toContain('editable drafts in your own words');
+    expect(body).toContain('your experience. your words. you choose what to post.');
+    expect(body).not.toContain('built for trust, not shortcuts.');
     expect(body).not.toContain('ready to make every visit easier to share?');
     expect(body).not.toContain('simple tools. a more human review experience.');
     expect(body).not.toContain('start free. grow when it makes sense.');
@@ -965,14 +965,108 @@ test.describe('marketing site', () => {
     const pricing = page.locator('#pricing');
     await expect(pricing.getByRole('heading', { name: 'Free', exact: true })).toBeVisible();
     await expect(pricing.getByRole('heading', { name: 'Pro', exact: true })).toBeVisible();
-    await expect(pricing).toContainText('2,000 Ai review drafts per year');
+    await expect(pricing).toContainText('2,000 Ai drafts per year');
     await expect(pricing).not.toContainText(/unlimited/i);
     const freePlan = pricing
       .locator('article')
       .filter({ hasText: 'Try the complete review loop.' });
-    await expect(freePlan).toContainText('Ten Ai drafts per business');
+    await expect(freePlan).toContainText('10 Ai drafts per business');
     await expect(freePlan).not.toContainText(/lifetime/i);
     await expect(pricing).not.toContainText(/lifetime/i);
+  });
+
+  test('shows the reference-inspired benefits block with responsive metrics and working actions', async ({
+    page,
+  }) => {
+    const metricValues = ['1 QR', 'Ai', '10 free', 'You'];
+    const metricDescriptions = [
+      'One simple scan to get started',
+      'A draft to edit in your own words',
+      'Ai review drafts on the Free plan',
+      'Choose what to post on Google',
+    ];
+
+    for (const viewport of [
+      { width: 1280, height: 900 },
+      { width: 1024, height: 900 },
+      { width: 768, height: 900 },
+      { width: 390, height: 844 },
+      { width: 320, height: 568 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      const benefits = page.locator('#why-ai-review[data-review-benefits]');
+      await benefits.scrollIntoViewIfNeeded();
+      await expect(benefits).toHaveCount(1);
+      await expect(benefits).toHaveAttribute('aria-labelledby', 'review-benefits-title');
+      await expect(
+        benefits.getByRole('heading', { name: 'What sets Ai Review apart?', exact: true }),
+      ).toBeVisible();
+      await expect(benefits).toContainText(
+        'A simple, smarter review experience for your business.',
+      );
+      await expect(benefits).toContainText(
+        'Less effort for your customers. More possibilities for your business.',
+      );
+      const metrics = benefits.locator('[data-review-benefit]');
+      await expect(metrics).toHaveCount(4);
+      await expect(metrics.locator('dt')).toHaveText(metricValues);
+      await expect(metrics.locator('dd')).toHaveText(metricDescriptions, { useInnerText: true });
+      await expect(benefits).toContainText('Your experience. Your words. You choose what to post.');
+      await expect(benefits).not.toContainText(/10[×x]|review boost|guarantee/i);
+      await expect(
+        benefits.getByText('Ai helps with writing; customers decide whether to publish.', {
+          exact: true,
+        }),
+      ).toBeVisible();
+
+      const geometry = await benefits.evaluate((element) => {
+        const grid = element.querySelector<HTMLElement>('[data-benefits-grid]')!;
+        const items = Array.from(element.querySelectorAll<HTMLElement>('[data-review-benefit]'));
+        const sectionBox = element.getBoundingClientRect();
+        return {
+          columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+          items: items.map((item) => {
+            const box = item.getBoundingClientRect();
+            return { top: box.top, left: box.left, right: box.right, bottom: box.bottom };
+          }),
+          sectionLeft: sectionBox.left,
+          sectionRight: sectionBox.right,
+          viewportWidth: document.documentElement.clientWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          hasClippedText: items.some((item) =>
+            Array.from(item.querySelectorAll<HTMLElement>('dt, dd')).some(
+              (text) => text.scrollWidth > text.clientWidth,
+            ),
+          ),
+        };
+      });
+      expect(geometry.columns).toBe(viewport.width > 600 ? 4 : 2);
+      expect(geometry.sectionLeft).toBeGreaterThanOrEqual(0);
+      expect(geometry.sectionRight).toBeLessThanOrEqual(geometry.viewportWidth);
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+      expect(geometry.hasClippedText).toBe(false);
+      expect(Math.abs(geometry.items[0]!.top - geometry.items[1]!.top)).toBeLessThanOrEqual(1);
+      expect(geometry.items[0]!.right).toBeLessThanOrEqual(geometry.items[1]!.left + 1);
+      if (viewport.width > 600) {
+        expect(Math.abs(geometry.items[0]!.top - geometry.items[3]!.top)).toBeLessThanOrEqual(1);
+      } else {
+        expect(geometry.items[2]!.top).toBeGreaterThanOrEqual(geometry.items[0]!.bottom);
+        expect(Math.abs(geometry.items[2]!.top - geometry.items[3]!.top)).toBeLessThanOrEqual(1);
+      }
+
+      const signup = benefits.getByRole('link', { name: 'Create your free QR', exact: true });
+      const howItWorks = benefits.getByRole('link', { name: 'See how it works', exact: true });
+      await expect(signup).toHaveAttribute('href', '/signup');
+      await expect(howItWorks).toHaveAttribute('href', '#how-it-works');
+      expect((await signup.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await howItWorks.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await howItWorks.click();
+      await expect(page).toHaveURL(/\/#how-it-works$/);
+      await expect(page.locator('#how-it-works')).toBeInViewport();
+      await signup.click();
+      await expect(page).toHaveURL(/\/signup$/);
+    }
   });
 
   test('keeps the brand colors and soft Google-blue treatment on the aligned three steps', async ({
@@ -1015,12 +1109,7 @@ test.describe('marketing site', () => {
         elements.map((card) => getComputedStyle(card).transform),
       ),
     ).toEqual(['none', 'none', 'none']);
-    await expect(cards.locator('[aria-hidden="true"]')).toHaveCount(3);
-    expect(
-      await cards
-        .locator('[aria-hidden="true"]')
-        .evaluateAll((icons) => icons.map((icon) => getComputedStyle(icon).backgroundColor)),
-    ).toEqual(['rgb(238, 244, 255)', 'rgb(238, 244, 255)', 'rgb(238, 244, 255)']);
+    await expect(cards.locator('[aria-hidden="true"]')).toHaveCount(0);
   });
 
   test('loads three V5 explanation clips and automatically decodes changing native frames', async ({
@@ -1145,18 +1234,18 @@ test.describe('marketing site', () => {
     expect(assetPaths.size).toBe(9);
   });
 
-  test('automatically plays all five visible muted videos together without playback buttons', async ({
+  test('automatically plays all four visible muted demo videos together without playback buttons', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 3600 });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/', { waitUntil: 'networkidle' });
     const videos = page.locator('main video');
-    await expect(videos).toHaveCount(5);
+    await expect(videos).toHaveCount(4);
     await expect(page.locator('[data-how-video-control], [data-hero-video-control]')).toHaveCount(
       0,
     );
-    await expect(page.locator('#review-journey [data-story-sound]')).toHaveCount(1);
+    await expect(page.locator('#review-journey [data-story-sound]')).toHaveCount(0);
     await expect
       .poll(() =>
         videos.evaluateAll((elements) =>
@@ -1185,13 +1274,6 @@ test.describe('marketing site', () => {
         controls: false,
         buttons: 0,
       })),
-      {
-        muted: true,
-        loop: true,
-        inline: true,
-        controls: false,
-        buttons: 1,
-      },
     ]);
     const startedAt = await videos.evaluateAll((elements) =>
       elements.map((element) => (element as HTMLVideoElement).currentTime),
@@ -1240,7 +1322,7 @@ test.describe('marketing site', () => {
     }
   });
 
-  test('pauses and resumes automatic clips with visibility and keeps all five previews static with reduced motion', async ({
+  test('pauses and resumes automatic clips with visibility and keeps all four demo previews static with reduced motion', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -1304,7 +1386,7 @@ test.describe('marketing site', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/', { waitUntil: 'networkidle' });
     const reducedVideos = page.locator('main video');
-    await expect(reducedVideos).toHaveCount(5);
+    await expect(reducedVideos).toHaveCount(4);
     await expect
       .poll(() =>
         reducedVideos.evaluateAll((videos) =>
@@ -1404,7 +1486,7 @@ test.describe('marketing site', () => {
       .toBeGreaterThan(restartedAt + 0.1);
   });
 
-  test('keeps three bold steps and complete centered phones readable in the compact responsive layout', async ({
+  test('keeps three compact steps with short captions and complete centered phones readable in the responsive layout', async ({
     page,
   }) => {
     for (const viewport of [
@@ -1418,7 +1500,9 @@ test.describe('marketing site', () => {
       await page.goto('/', { waitUntil: 'networkidle' });
       const grid = page.locator('[data-how-grid]');
       await expect(grid.locator('[data-how-step]')).toHaveCount(3);
-      await expect(grid.locator('[data-how-step-caption]')).toHaveCount(0);
+      await expect(grid.locator('[data-how-step-caption]')).toHaveText(
+        HOW_STEPS.map((step) => step.caption),
+      );
       const geometry = await grid.evaluate((element) => {
         const rect = element.getBoundingClientRect();
         const cards = Array.from(element.querySelectorAll<HTMLElement>('[data-how-step]'));
@@ -1448,10 +1532,10 @@ test.describe('marketing site', () => {
               cardBox.height,
             );
             const title = card.querySelector<HTMLElement>('[data-how-step-title]')!;
+            const caption = card.querySelector<HTMLElement>('[data-how-step-caption]')!;
             const copy = title.parentElement!;
             const copyBox = copy.getBoundingClientRect();
-            const icon = copy.querySelector<HTMLElement>('span[aria-hidden="true"]')!;
-            const iconBox = icon.getBoundingClientRect();
+            const captionBox = caption.getBoundingClientRect();
             const figure = card.querySelector<HTMLElement>('[data-how-clip]')!;
             const video = figure.querySelector<HTMLVideoElement>('video')!;
             const figureBox = figure.getBoundingClientRect();
@@ -1465,19 +1549,22 @@ test.describe('marketing site', () => {
               contentWidth,
               window.innerWidth <= 820
                 ? 240
-                : Math.min(400, Math.max(180, window.innerHeight - 300)) * (8 / 15),
+                : Math.min(400, Math.max(180, window.innerHeight - 360)) * (8 / 15),
             );
             return {
               cardInside: inside(layoutCardBox, rect),
               translation,
-              allContentInside: [copy, title, icon, figure].every((child) =>
+              allContentInside: [copy, title, caption, figure].every((child) =>
                 inside(child.getBoundingClientRect(), cardBox),
               ),
-              noTextOverflow: title.scrollWidth <= title.clientWidth,
-              figureBelowCopy: figureBox.top - copyBox.bottom >= 13.5,
-              iconDoesNotCoverTitle: iconBox.left >= title.getBoundingClientRect().right + 11.5,
-              iconDoesNotCoverVideo: iconBox.bottom <= figureBox.top,
-              iconSize: { width: iconBox.width, height: iconBox.height },
+              noTextOverflow: [title, caption].every(
+                (element) => element.scrollWidth <= element.clientWidth,
+              ),
+              textCentered: [title, caption].every(
+                (element) => getComputedStyle(element).textAlign === 'center',
+              ),
+              captionBelowCopy: captionBox.top >= copyBox.bottom,
+              figureBelowCopy: figureBox.top - captionBox.bottom >= 13.5,
               videoInside: inside(video.getBoundingClientRect(), figureBox),
               objectFit: getComputedStyle(video).objectFit,
               posterSize: getComputedStyle(figure).backgroundSize,
@@ -1492,7 +1579,7 @@ test.describe('marketing site', () => {
               titleWeight: Number.parseInt(titleStyle.fontWeight, 10),
               titleSingleLine:
                 title.getBoundingClientRect().height <=
-                Number.parseFloat(titleStyle.fontSize) * 1.16,
+                Number.parseFloat(titleStyle.fontSize) * 1.31,
               titleLeading:
                 Number.parseFloat(titleStyle.lineHeight) / Number.parseFloat(titleStyle.fontSize),
             };
@@ -1510,10 +1597,9 @@ test.describe('marketing site', () => {
         expect(card.cardInside).toBe(true);
         expect(card.allContentInside).toBe(true);
         expect(card.noTextOverflow).toBe(true);
+        expect(card.textCentered).toBe(true);
+        expect(card.captionBelowCopy).toBe(true);
         expect(card.figureBelowCopy).toBe(true);
-        expect(card.iconDoesNotCoverTitle).toBe(true);
-        expect(card.iconDoesNotCoverVideo).toBe(true);
-        expect(card.iconSize).toEqual({ width: 36, height: 36 });
         expect(card.videoInside).toBe(true);
         expect(card.objectFit).toBe('contain');
         expect(card.posterSize).toBe('contain');
@@ -1521,10 +1607,10 @@ test.describe('marketing site', () => {
         expect(card.figureAspect).toBeCloseTo(8 / 15, 2);
         expect(card.mediaMatchesCompactSlot).toBe(true);
         expect(card.mediaCentered).toBe(true);
-        expect(card.titleSize).toBe(viewport.width <= 560 ? 32 : 35);
-        expect(card.titleWeight).toBe(750);
+        expect(card.titleSize).toBe(viewport.width <= 560 ? 20 : 22);
+        expect(card.titleWeight).toBe(700);
         expect(card.titleSingleLine).toBe(true);
-        expect(card.titleLeading).toBeCloseTo(1.15, 2);
+        expect(card.titleLeading).toBeCloseTo(1.3, 2);
       }
     }
   });
@@ -1580,6 +1666,7 @@ test.describe('marketing site', () => {
           pageWidth: document.documentElement.scrollWidth,
           sectionFullyVisible: fullyVisible(element),
           headingFullyVisible: fullyVisible(element.querySelector('h2')!),
+          introFullyVisible: fullyVisible(element.querySelector('[data-how-intro]')!),
           cardCount: cards.length,
           mediaCount: media.length,
           allCardsFullyVisible: cards.every(fullyVisible),
@@ -1596,6 +1683,7 @@ test.describe('marketing site', () => {
       expect(fit.mediaCount).toBe(3);
       expect(fit.sectionFullyVisible).toBe(true);
       expect(fit.headingFullyVisible).toBe(true);
+      expect(fit.introFullyVisible).toBe(true);
       expect(fit.allCardsFullyVisible).toBe(true);
       expect(fit.allMediaFullyVisible).toBe(true);
       expect(fit.sectionHeight).toBeLessThanOrEqual(fit.availableHeight + 0.5);
@@ -1669,8 +1757,8 @@ test.describe('marketing site', () => {
     await expect(media.locator('[data-hero-flow-step],[data-hero-trust-line]')).toHaveCount(0);
     await expect(hero.locator('[data-hero-qr]')).toHaveCount(0);
     await expect(hero.getByRole('link', { name: 'Open live demo', exact: true })).toHaveCount(0);
-    await expect(page.locator('video')).toHaveCount(5);
-    await expect(page.locator('#review-journey video')).toHaveCount(1);
+    await expect(page.locator('video')).toHaveCount(4);
+    await expect(page.locator('#review-journey video')).toHaveCount(0);
   });
 
   test('automatically decodes the six-step hero with keyboard pause and static reduced motion', async ({
@@ -1829,112 +1917,17 @@ test.describe('marketing site', () => {
       .toBeGreaterThan(restartedAt + 0.1);
   });
 
-  test('automatically plays and pauses the review story with keyboard access and reduced-motion previews', async ({
+  test('keeps the unverified promotional story off the homepage without stale navigation', async ({
     page,
   }) => {
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const story = page.locator('#review-journey');
-    const video = story.locator('video');
-    await expect(story.getByText('The whole review journey, brought to life.')).toHaveCount(0);
-    await expect(story.getByText('Create your review flow')).toHaveCount(0);
-    await expect(video).toHaveAttribute(
-      'poster',
-      '/marketing/ai-review-customer-journey-v2-minimal-overlay-poster.png',
-    );
-    const soundButton = story.getByRole('button', { name: 'Turn video sound on' });
-    await expect(soundButton).toBeVisible();
-    await expect(video).toHaveJSProperty('controls', false);
-    await expect(video).toHaveJSProperty('muted', true);
-    await expect(video).toHaveJSProperty('playsInline', true);
-    await expect(video).toHaveJSProperty('loop', true);
-    await expect(video).toHaveAttribute('tabindex', '0');
-    await expect
-      .poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState))
-      .toBeGreaterThanOrEqual(1);
-    expect(await video.evaluate((element: HTMLVideoElement) => element.duration)).toBeGreaterThan(
-      39,
-    );
-    expect(await video.evaluate((element: HTMLVideoElement) => element.videoWidth)).toBe(848);
-    expect(await video.evaluate((element: HTMLVideoElement) => element.videoHeight)).toBe(478);
-    await expect(video).toHaveJSProperty('paused', true);
-    await story.evaluate((element) =>
-      window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 104),
-    );
-    await expect(video).toHaveJSProperty('paused', false);
-    const frameGeometry = await video.evaluate((element: HTMLVideoElement) => {
-      const frame = element.parentElement!;
-      const section = frame.closest('section')!;
-      const sectionBox = section.getBoundingClientRect();
-      const frameBox = frame.getBoundingClientRect();
-      const videoBox = element.getBoundingClientRect();
-      return {
-        overflow: getComputedStyle(frame).overflow,
-        buttons: frame.querySelectorAll('button').length,
-        fillsSection:
-          Math.abs(frameBox.left - sectionBox.left) <= 2 &&
-          Math.abs(frameBox.right - sectionBox.right) <= 2 &&
-          Math.abs(frameBox.top - sectionBox.top) <= 2 &&
-          Math.abs(frameBox.bottom - sectionBox.bottom) <= 2,
-        videoInside:
-          videoBox.left >= frameBox.left &&
-          videoBox.right <= frameBox.right &&
-          videoBox.top >= frameBox.top &&
-          videoBox.bottom <= frameBox.bottom,
-      };
-    });
-    expect(frameGeometry).toEqual({
-      overflow: 'hidden',
-      buttons: 1,
-      fillsSection: true,
-      videoInside: true,
-    });
-    await soundButton.click();
-    await expect(video).toHaveJSProperty('muted', false);
-    await expect(story.getByRole('button', { name: 'Mute video' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    const startedAt = await video.evaluate((element: HTMLVideoElement) => element.currentTime);
-    await expect
-      .poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime))
-      .toBeGreaterThan(startedAt + 0.1);
-    await page.locator('#pricing').scrollIntoViewIfNeeded();
-    await expect(video).toHaveJSProperty('paused', true);
-    await story.evaluate((element) =>
-      window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 104),
-    );
-    await expect(video).toHaveJSProperty('paused', false);
-    await video.focus();
-    await expect(video).toBeFocused();
-    await page.keyboard.press('Space');
-    await expect(video).toHaveJSProperty('paused', true);
-    await page.keyboard.press('Enter');
-    await expect(video).toHaveJSProperty('paused', false);
-    await video.evaluate((element: HTMLVideoElement) => {
-      element.currentTime = element.duration - 0.12;
-    });
-    await expect
-      .poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime))
-      .toBeLessThan(2);
-
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.reload({ waitUntil: 'networkidle' });
-    const reducedVideo = page.locator('#review-journey video');
-    const reducedStory = page.locator('#review-journey');
-    await reducedStory.scrollIntoViewIfNeeded();
-    await expect(reducedStory.getByRole('button')).toHaveCount(0);
-    await expect(reducedVideo).toHaveJSProperty('paused', true);
-    expect(await reducedVideo.evaluate((element) => getComputedStyle(element).visibility)).toBe(
-      'hidden',
-    );
-    await expect
-      .poll(() =>
-        reducedVideo.evaluate(
-          (element) => getComputedStyle(element.parentElement!).backgroundImage,
-        ),
-      )
-      .toContain('ai-review-customer-journey-v2-minimal-overlay-poster.png');
+    await page.goto('/');
+    await expect(
+      page.locator('#review-journey, [data-story-media], [data-story-video]'),
+    ).toHaveCount(0);
+    await expect(page.locator('a[href$="#review-journey"]')).toHaveCount(0);
+    await expect(page.locator('main video')).toHaveCount(4);
+    await expect(page.locator('[data-hero-video]')).toHaveCount(1);
+    await expect(page.locator('[data-how-video]')).toHaveCount(3);
   });
 
   test('keeps the single marketing page and its anchors inside every viewport', async ({
