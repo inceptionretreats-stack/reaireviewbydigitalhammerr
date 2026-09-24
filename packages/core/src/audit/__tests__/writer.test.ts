@@ -4,7 +4,7 @@ import {
   AuditReasonRequiredError,
   AuditWriter,
   HIGH_RISK_ACTIONS,
-} from '../audit/writer';
+} from '../writer';
 
 /**
  * RBAC rule 5 and AMENDMENT-029 at the writer: a high-risk action without a reason, or a

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Database } from '@ai-review/db';
-import { AbuseService, AbuseTargetNotFoundError } from '../../abuse/service';
+import { AbuseService, AbuseTargetNotFoundError } from '../../abuse/abuse-service';
 import { AuditReasonRequiredError } from '../../audit/writer';
 
 /** AMENDMENT-030 against the real schema: every control audited, reversible, reason-gated. */

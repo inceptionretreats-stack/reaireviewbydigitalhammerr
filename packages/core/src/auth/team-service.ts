@@ -1,7 +1,7 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { sessions, userInvites, users } from '@ai-review/db';
 import { AuditWriter } from '../audit/writer';
-import { auditActorType, type AdminAction } from '../billing/subscription-service';
+import { auditActorType, type AdminAction } from '../audit/actor';
 import type { Executor } from '../db-executor';
 import type { PasswordHasher } from './password';
 import { hashToken, issueToken } from './tokens';

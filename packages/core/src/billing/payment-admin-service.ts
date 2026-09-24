@@ -15,12 +15,8 @@ import { AuditWriter } from '../audit/writer';
 import type { Executor } from '../db-executor';
 import { CheckoutService } from './checkout-service';
 import { RazorpayError, type RazorpayClient } from './razorpay';
-import {
-  auditActorType,
-  SubscriptionService,
-  SYSTEM_ACTOR,
-  type AdminActor,
-} from './subscription-service';
+import { auditActorType, SYSTEM_ACTOR, type AdminActor } from '../audit/actor';
+import { SubscriptionService } from './subscription-service';
 
 /**
  * Payment control for the platform admin (AMENDMENT-029): the cross-tenant list, the webhook

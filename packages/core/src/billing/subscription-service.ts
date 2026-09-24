@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { businesses, subscriptions, type Subscription } from '@ai-review/db';
+import { auditActorType, type AdminAction } from '../audit/actor';
 import { AuditWriter } from '../audit/writer';
 import type { Executor } from '../db-executor';
 
@@ -21,27 +22,6 @@ import type { Executor } from '../db-executor';
  * activation has no admin actor and is not an admin mutation; the route records it as the
  * `subscription_activated` analytics event instead.
  */
-
-export interface AdminActor {
-  /** The person acting. Null only when `system` is set (AMENDMENT-029). */
-  userId: string | null;
-  ipHash?: string | null;
-  /** The platform acting on its own — the expiry sweep, a provider-initiated refund. */
-  system?: boolean;
-}
-
-/** The actor the platform uses for mutations nobody clicked. */
-export const SYSTEM_ACTOR: AdminActor = { userId: null, system: true };
-
-export function auditActorType(actor: AdminActor): 'ADMIN' | 'SYSTEM' {
-  return actor.system ? 'SYSTEM' : 'ADMIN';
-}
-
-export interface AdminAction {
-  actor: AdminActor;
-  /** Required. The writer refuses a high-risk action without one. */
-  reason: string;
-}
 
 export interface ActivateByAdmin extends AdminAction {
   source: 'ADMIN';

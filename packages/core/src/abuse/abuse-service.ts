@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { businesses, type Database } from '@ai-review/db';
 import { AuditWriter } from '../audit/writer';
 import type { Executor } from '../db-executor';
-import { auditActorType, type AdminAction } from '../billing/subscription-service';
+import { auditActorType, type AdminAction } from '../audit/actor';
 
 /**
  * The admin's answers to an abuse signal (AMENDMENT-030): warn, suspend Ai, throttle, and

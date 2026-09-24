@@ -8,7 +8,7 @@ import {
   signWebhookBody,
   verifyCheckoutSignature,
   verifyWebhookSignature,
-} from '../billing/razorpay';
+} from '../razorpay';
 
 /**
  * AC-016: a forged payload or signature must never activate an entitlement. These are the
