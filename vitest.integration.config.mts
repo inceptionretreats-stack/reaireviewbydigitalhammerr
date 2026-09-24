@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 /**
@@ -27,6 +28,10 @@ try {
 }
 
 export default defineConfig({
+  // Same `@/` mapping as apps/web/tsconfig.json; see vitest.config.mts.
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./apps/web', import.meta.url)) },
+  },
   test: {
     include: ['**/__tests__/integration/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/.next/**'],
