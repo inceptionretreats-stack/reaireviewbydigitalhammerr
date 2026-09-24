@@ -31,7 +31,7 @@ import { readBoolean, unattachedFailure, useSettingsSubmit } from './use-setting
  */
 
 export interface AccountDetailsFormProps {
-  initial: { fullName: string; email: string; mobile: string };
+  initial: { fullName: string; email: string; mobile: string; hasPassword: boolean };
 }
 
 type FieldKey = 'full_name' | 'email' | 'mobile' | 'current_password';
@@ -70,7 +70,8 @@ export function AccountDetailsForm({ initial }: AccountDetailsFormProps) {
    */
   const [passwordDemanded, setPasswordDemanded] = useState(false);
 
-  const needsPassword = emailChanged(email, savedEmail) || passwordDemanded;
+  const needsPassword =
+    initial.hasPassword && (emailChanged(email, savedEmail) || passwordDemanded);
   const busy = state.status === 'submitting';
 
   /** Clears a stale message so a correction is never made underneath one. */
@@ -221,7 +222,11 @@ export function AccountDetailsForm({ initial }: AccountDetailsFormProps) {
           label="Email"
           required
           error={errorFor('email')}
-          hint="You sign in with this address."
+          hint={
+            initial.hasPassword
+              ? 'You sign in with this address.'
+              : 'This is the email on your connected Google account. It cannot be changed here.'
+          }
         >
           {(control) => (
             <Input
@@ -238,7 +243,7 @@ export function AccountDetailsForm({ initial }: AccountDetailsFormProps) {
               autoCapitalize="none"
               spellCheck={false}
               maxLength={EMAIL_MAX}
-              disabled={busy}
+              disabled={busy || !initial.hasPassword}
             />
           )}
         </Field>

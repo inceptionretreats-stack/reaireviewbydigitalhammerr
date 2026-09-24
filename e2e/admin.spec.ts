@@ -73,6 +73,68 @@ test.describe('platform admin', () => {
     await expect(page).toHaveURL(/\/admin$/);
   });
 
+  test('admin navigation stays usable on a narrow phone', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 740 });
+    await signIn(page, ADMIN);
+
+    const navigation = page.getByRole('navigation', { name: 'Admin' });
+    const menu = navigation.getByRole('button', { name: 'Menu' });
+    await expect(menu).toBeVisible();
+    await expect(menu).toHaveAttribute('aria-expanded', 'false');
+    await menu.click();
+    await expect(menu).toHaveAttribute('aria-expanded', 'true');
+    await navigation.getByRole('link', { name: 'Businesses' }).click();
+    await expect(page).toHaveURL(/\/admin\/businesses$/);
+    await expect(menu).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('heading', { name: /businesses/i })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      320,
+    );
+
+    if (process.env.RESPONSIVE_QA_SCREENSHOT) {
+      await page.screenshot({ path: process.env.RESPONSIVE_QA_SCREENSHOT });
+    }
+  });
+
+  test('admin pages do not overflow phone or tablet viewports', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 320, height: 740 });
+    await signIn(page, ADMIN);
+
+    const routes = [
+      '/admin',
+      '/admin/businesses',
+      '/admin/payments',
+      '/admin/activity',
+      '/admin/ai',
+      '/admin/settings',
+      '/admin/team',
+      '/admin/audit',
+    ];
+    for (const width of [320, 390, 768]) {
+      await page.setViewportSize({ width, height: 740 });
+      for (const route of routes) {
+        await page.goto(route);
+        await expect(page.locator('#admin-content')).toBeVisible();
+        const layout = await page.evaluate(() => ({
+          documentWidth: document.documentElement.scrollWidth,
+          overflowingElements: [...document.querySelectorAll<HTMLElement>('body *')]
+            .filter((element) => element.getBoundingClientRect().right > window.innerWidth + 1)
+            .slice(0, 8)
+            .map((element) => ({
+              tag: element.tagName,
+              className: element.className,
+              right: Math.round(element.getBoundingClientRect().right),
+            })),
+        }));
+        expect(
+          layout.documentWidth,
+          `${route} at ${width}px: ${JSON.stringify(layout.overflowingElements)}`,
+        ).toBeLessThanOrEqual(width);
+      }
+    }
+  });
+
   test('an owner is refused by the admin area and API', async ({ page }) => {
     await signIn(page, OWNER);
     await page.goto('/admin');
@@ -116,7 +178,7 @@ test.describe('platform admin', () => {
     // The change is real to the quota engine, not just to the admin's screen: a customer
     // generation is now counted against the Pro allowance.
     const generated = await page.request.post('/api/v1/public/review/generate', {
-      data: { slug: 'demo-south-cafe' },
+      data: { slug: 'demo-south-cafe', selected_services: ['Website development'] },
     });
     expect(generated.status()).toBe(200);
     await page.getByRole('link', { name: 'Subscription & payments', exact: true }).click();
@@ -172,7 +234,7 @@ test.describe('platform admin', () => {
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
 
     const generated = await page.request.post('/api/v1/public/review/generate', {
-      data: { slug: 'demo-south-cafe' },
+      data: { slug: 'demo-south-cafe', selected_services: ['Website development'] },
     });
     expect(generated.status()).toBe(200);
     expect(((await generated.json()) as { prompt_version: string }).prompt_version).toBe(
@@ -193,7 +255,7 @@ test.describe('platform admin', () => {
       .click();
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
     const after = await page.request.post('/api/v1/public/review/generate', {
-      data: { slug: 'demo-south-cafe' },
+      data: { slug: 'demo-south-cafe', selected_services: ['Website development'] },
     });
     expect(((await after.json()) as { prompt_version: string }).prompt_version).toBe(activeVersion);
   });

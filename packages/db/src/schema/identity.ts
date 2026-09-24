@@ -19,7 +19,8 @@ export const users = pgTable(
     email: citext('email').notNull().unique(),
     mobile: varchar('mobile', { length: 20 }),
     fullName: varchar('full_name', { length: 120 }).notNull(),
-    passwordHash: text('password_hash').notNull(),
+    // Null for accounts created with a verified Google identity and no local password.
+    passwordHash: text('password_hash'),
     role: userRole('role').notNull().default('BUSINESS_OWNER'),
 
     // AMENDMENT-007 — MFA is mandatory for SUPER_ADMIN per 13_Security_Privacy_Compliance.md
@@ -45,6 +46,17 @@ export const users = pgTable(
   },
   (t) => [index('idx_users_role').on(t.role)],
 );
+
+/** Google sign-in identity; the immutable Google `sub`, never email, is the lookup key. */
+export const googleIdentities = pgTable('google_identities', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  googleSubject: varchar('google_subject', { length: 255 }).notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 /**
  * AMENDMENT-001 — sessions.
@@ -160,6 +172,7 @@ export const mfaRecoveryCodes = pgTable(
 export const isSessionLive = sql`revoked_at IS NULL AND expires_at > now()`;
 
 export type User = typeof users.$inferSelect;
+export type GoogleIdentity = typeof googleIdentities.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type UserInvite = typeof userInvites.$inferSelect;

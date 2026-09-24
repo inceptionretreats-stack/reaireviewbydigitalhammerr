@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import jsQR from 'jsqr';
 import sharp from 'sharp';
 import { closeDb } from './support/db';
@@ -7,7 +9,7 @@ import { closeDb } from './support/db';
  * The business dashboard: every screen an owner can reach, and the compliance rules that hold
  * across all of them.
  *
- * These ten screens had been verified only as far as "returns 200". This walks each one, checks
+ * These eleven screens had been verified only as far as "returns 200". This walks each one, checks
  * it rendered its own content rather than an error boundary, and asserts the two things that
  * must never appear anywhere in the product.
  */
@@ -19,7 +21,7 @@ const OWNER = {
 
 const SCREENS = [
   { path: '/app', id: 'DASH-01', heading: /digital hammerr/i },
-  { path: '/app/ai-review', id: 'AI-01', heading: /drafts are built from/i },
+  { path: '/app/ai-review', id: 'AI-01', heading: /^Ai review settings$/i },
   { path: '/app/review-modes', id: 'AI-02', heading: /what your drafts lean on/i },
   { path: '/app/qr', id: 'QR-01', heading: /qr codes/i },
   { path: '/app/profile', id: 'PROFILE-01', heading: /your public page/i },
@@ -27,6 +29,7 @@ const SCREENS = [
   { path: '/app/review-requests', id: 'REQ-01', heading: /ask a customer/i },
   { path: '/app/feedback', id: 'FB-02', heading: /private feedback/i },
   { path: '/app/analytics', id: 'AN-01', heading: /how customers are using/i },
+  { path: '/app/subscription', id: 'SUB-01', heading: /your plan/i },
   { path: '/app/settings', id: 'SET-01', heading: /your account/i },
 ] as const;
 
@@ -36,6 +39,22 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel(/^password/i).fill(OWNER.password);
   await page.getByRole('button', { name: /sign in/i }).click();
   await expect(page).toHaveURL(/\/app/, { timeout: 30_000 });
+}
+
+async function expectNoHorizontalOverflow(page: Page): Promise<void> {
+  const geometry = await page.evaluate(() => ({
+    document: document.documentElement.scrollWidth,
+    viewport: document.documentElement.clientWidth,
+  }));
+  expect(geometry.document).toBeLessThanOrEqual(geometry.viewport);
+}
+
+/** Optional local QA evidence, never a checked-in image or a hard-coded developer path. */
+async function captureVendorEvidence(page: Page, name: string): Promise<void> {
+  const directory = process.env.VENDOR_UI_ARTIFACT_DIR;
+  if (!directory) return;
+  await mkdir(directory, { recursive: true });
+  await page.screenshot({ path: join(directory, `${name}.png`), fullPage: true });
 }
 
 test.afterAll(async () => {
@@ -75,12 +94,15 @@ test.describe('business dashboard', () => {
     await signIn(page);
 
     for (const viewport of [
-      { width: 1280, height: 800 },
+      { width: 320, height: 740 },
       { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 900 },
+      { width: 1440, height: 1000 },
     ]) {
       await page.setViewportSize(viewport);
 
-      for (const path of ['/app', '/app/qr', '/app/settings']) {
+      for (const path of ['/app', '/app/qr', '/app/settings', '/app/customers']) {
         await page.goto(path);
         await expect(page.locator('.app-sidebar')).toBeVisible();
         await expect(page.locator('.app-topbar')).toBeVisible();
@@ -97,7 +119,7 @@ test.describe('business dashboard', () => {
         expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
         expect(geometry.mainTop).toBeDefined();
         expect(geometry.navHeight).toBeDefined();
-        if (viewport.width === 390) {
+        if (viewport.width < 768) {
           expect(geometry.mainTop!).toBeLessThan(260);
           expect(geometry.navHeight!).toBeLessThan(70);
 
@@ -106,14 +128,271 @@ test.describe('business dashboard', () => {
             await expect(menu).toHaveAttribute('aria-expanded', 'false');
             await menu.click();
             await expect(menu).toHaveAttribute('aria-expanded', 'true');
-            await expect(page.getByRole('link', { name: 'QR Codes' })).toBeVisible();
+            const navigation = page.getByRole('navigation', { name: 'Dashboard sections' });
+            await expect(
+              navigation.getByRole('link', { name: 'QR Codes', exact: true }),
+            ).toBeVisible();
             await page.keyboard.press('Escape');
             await expect(menu).toHaveAttribute('aria-expanded', 'false');
             await expect(menu).toBeFocused();
+            await menu.click();
+            await navigation.getByRole('link', { name: 'QR Codes', exact: true }).click();
+            await expect(page).toHaveURL(/\/app\/qr$/);
+            await expect(menu).toHaveAttribute('aria-expanded', 'false');
           }
+        }
+        if (path === '/app') {
+          await page.goto('/app');
+          await expect(page.locator('.vendor-figures .dashboard-kpi')).toHaveCount(2);
+          // Streaming can insert the Suspense payload before its hidden container is revealed.
+          // Count alone is not proof that an owner can actually see either metric.
+          await expect(page.locator('.vendor-figures .dashboard-kpi').first()).toBeVisible();
+          await expect(
+            page.getByRole('heading', { name: 'Digital Hammerr', exact: true }),
+          ).toBeVisible();
+          await captureVendorEvidence(page, `vendor-dashboard-${viewport.width}`);
         }
       }
     }
+  });
+
+  test('navigation exposes eleven working destinations in four clear groups', async ({ page }) => {
+    await signIn(page);
+    const navigation = page.getByRole('navigation', { name: 'Dashboard sections' });
+    await expect(navigation.getByRole('link')).toHaveCount(11);
+    await expect(navigation.locator('.vendor-nav-group')).toHaveText([
+      'Workspace',
+      'Review setup',
+      'Customer activity',
+      'Account',
+    ]);
+    await expect(navigation.getByText('Soon', { exact: true })).toHaveCount(0);
+    await expect(navigation.getByText('Custom Domain', { exact: true })).toHaveCount(0);
+    await expect(navigation.getByText('Support', { exact: true })).toHaveCount(0);
+    const destinations = await navigation
+      .getByRole('link')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+    expect(destinations).toEqual(SCREENS.map((screen) => screen.path));
+  });
+
+  test('dashboard metrics and paired cards align at desktop and tablet widths', async ({
+    page,
+  }) => {
+    await signIn(page);
+    for (const width of [1024, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto('/app');
+      await expect(page.locator('.vendor-figures .dashboard-kpi')).toHaveCount(2);
+      await expect(page.locator('.vendor-figures .dashboard-kpi').first()).toBeVisible();
+      for (const selector of [
+        '.vendor-figures .dashboard-kpi',
+        '.vendor-overview-panels > .ui-card',
+      ]) {
+        const cards = page.locator(selector);
+        await expect(cards).toHaveCount(2);
+        const boxes = await cards.evaluateAll((elements) =>
+          elements.map((element) => {
+            const box = element.getBoundingClientRect();
+            return {
+              width: box.width,
+              height: box.height,
+              top: box.top,
+              left: box.left,
+              right: box.right,
+            };
+          }),
+        );
+        expect(
+          Math.abs(boxes[0]!.height - boxes[1]!.height),
+          `${selector} heights at ${width}`,
+        ).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(boxes[0]!.width - boxes[1]!.width),
+          `${selector} widths at ${width}`,
+        ).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(boxes[0]!.top - boxes[1]!.top),
+          `${selector} alignment at ${width}`,
+        ).toBeLessThanOrEqual(1);
+        expect(boxes[1]!.left).toBeGreaterThan(boxes[0]!.right);
+      }
+      await expectNoHorizontalOverflow(page);
+    }
+  });
+
+  test('customer table and edit modal stay usable without saving any contact', async ({ page }) => {
+    await signIn(page);
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/app/customers');
+      await expect(page.getByRole('table', { name: 'Your customer contacts' })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      const add = page.getByRole('button', { name: 'Add customer', exact: true }).first();
+      await add.click();
+      const dialog = page.getByRole('dialog', { name: 'Add a customer' });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByLabel('Name', { exact: false })).toBeVisible();
+      const bounds = await dialog.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
+      await expectNoHorizontalOverflow(page);
+      await captureVendorEvidence(page, `vendor-customer-modal-${width}`);
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+      await expect(add).toBeFocused();
+      const search = page.getByRole('search').getByLabel('Search', { exact: true });
+      await search.fill('synthetic-no-match-for-layout');
+      await page.getByRole('search').getByRole('button', { name: 'Search', exact: true }).click();
+      await expect(page.getByRole('table', { name: 'Your customer contacts' })).toContainText(
+        /no matches|no customers/i,
+      );
+      await expectNoHorizontalOverflow(page);
+    }
+  });
+
+  test('all five onboarding forms retain progress, readable fields and a safe Back path', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await signIn(page);
+    const steps = ['business', 'review-link', 'links', 'ai', 'finish'];
+    const labels = ['Your business', 'Google link', 'Contact links', 'Ai context', 'Publish'];
+    for (const width of [320, 390, 1440]) {
+      await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
+      for (const [index, step] of steps.entries()) {
+        await page.goto(`/onboarding/${step}`);
+        await expect(page.locator('.onboarding-panel')).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+        const progress = page.getByRole('navigation', { name: 'Setup progress' });
+        await expect(progress.locator('li')).toHaveCount(5);
+        await expect(progress.locator('[aria-current="step"]')).toHaveCount(1);
+        await expect(progress.locator('[aria-current="step"]')).toContainText(labels[index]!);
+        for (const label of labels) await expect(progress).toContainText(label);
+        await expectNoHorizontalOverflow(page);
+        const clippedLabels = await progress.locator('li').evaluateAll(
+          (items) =>
+            items.filter((item) => {
+              const box = item.getBoundingClientRect();
+              return (
+                box.left < 0 ||
+                box.right > document.documentElement.clientWidth + 1 ||
+                item.scrollWidth > item.clientWidth + 1
+              );
+            }).length,
+        );
+        expect(clippedLabels).toBe(0);
+        const controls = await page
+          .locator(
+            '.onboarding-panel .ui-input, .onboarding-panel .ui-select, .onboarding-panel .ui-textarea',
+          )
+          .evaluateAll((elements) =>
+            elements
+              .filter((element) => element.getBoundingClientRect().width > 0)
+              .map((element) => ({
+                font: Number.parseFloat(getComputedStyle(element).fontSize),
+                height: element.getBoundingClientRect().height,
+                left: element.getBoundingClientRect().left,
+                right: element.getBoundingClientRect().right,
+              })),
+          );
+        for (const control of controls) {
+          expect(control.font, `${step} field font at ${width}`).toBeGreaterThanOrEqual(16);
+          expect(control.height, `${step} field target at ${width}`).toBeGreaterThanOrEqual(44);
+          expect(control.left).toBeGreaterThanOrEqual(0);
+          expect(control.right).toBeLessThanOrEqual(width + 1);
+        }
+        await expect(page.locator('body')).not.toContainText(
+          /application error|unhandled runtime|something went wrong/i,
+        );
+        await captureVendorEvidence(page, `vendor-onboarding-${step}-${width}`);
+      }
+      await page.goto('/onboarding/review-link');
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
+      await expect(page).toHaveURL(/\/onboarding\/business$/);
+      await expect(page.getByLabel(/business name/i)).toHaveValue('Digital Hammerr');
+    }
+    // The seeded business is already published; setup's resume route must not reset it.
+    await page.goto('/onboarding');
+    await expect(page).toHaveURL(/\/onboarding\/finish$/);
+    expect(errors).toEqual([]);
+  });
+
+  test('optional Ai and QR help opens with the keyboard while destructive actions remain legible', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await signIn(page);
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
+      for (const help of [
+        {
+          path: '/app/ai-review',
+          summary: 'How your details are used',
+          items: 'ol > li',
+          count: 7,
+          image: 'ai-settings',
+        },
+        {
+          path: '/app/qr',
+          summary: 'How your QR codes work',
+          items: 'dl > div',
+          count: 4,
+          image: 'qr',
+        },
+      ]) {
+        await page.goto(help.path);
+        const summary = page.locator('summary').filter({ hasText: help.summary });
+        const details = page.locator('details').filter({ has: summary });
+        await expect(summary).toBeVisible();
+        await expect(details).not.toHaveAttribute('open');
+        await expect(details.locator(help.items)).toHaveCount(help.count);
+        await captureVendorEvidence(page, `vendor-${help.image}-${width}`);
+        await summary.focus();
+        await page.keyboard.press('Enter');
+        await expect(details).toHaveAttribute('open', '');
+        await expect(details.locator(help.items).first()).toBeVisible();
+        await expectNoHorizontalOverflow(page);
+        await page.keyboard.press('Space');
+        await expect(details).not.toHaveAttribute('open');
+        await expect(summary).toBeFocused();
+      }
+
+      await page.goto('/app/ai-review');
+      await page.getByRole('button', { name: 'Reset to profile details', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Reset to profile details', exact: true });
+      await expect(dialog).toBeVisible();
+      const destructive = dialog.getByRole('button', { name: 'Reset the fields', exact: true });
+      const appearance = await destructive.evaluate((button) => {
+        const styles = getComputedStyle(button);
+        const luminance = (color: string) => {
+          const [r = 0, g = 0, b = 0] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((part) => {
+            const value = Number(part) / 255;
+            return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        };
+        const values = [luminance(styles.color), luminance(styles.backgroundColor)].sort(
+          (a, b) => b - a,
+        );
+        return {
+          foreground: styles.color,
+          background: styles.backgroundColor,
+          contrast: (values[0]! + 0.05) / (values[1]! + 0.05),
+        };
+      });
+      expect(appearance.foreground).toBe('rgb(255, 255, 255)');
+      expect(appearance.background).not.toBe('rgba(0, 0, 0, 0)');
+      expect(appearance.contrast).toBeGreaterThanOrEqual(4.5);
+      await expectNoHorizontalOverflow(page);
+      await captureVendorEvidence(page, `vendor-reset-dialog-${width}`);
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+    expect(errors).toEqual([]);
   });
 
   /**

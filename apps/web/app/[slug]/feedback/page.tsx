@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { resolveBySlug } from '@/lib/public-business';
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
 import { FeedbackForm } from '@/components/FeedbackForm';
+import styles from '@/components/PrivateFeedback.module.css';
 
 /**
  * GET /{slug}/feedback — FB-01, private feedback.
@@ -44,26 +45,26 @@ export default async function PrivateFeedbackPage({
   await recordFeedbackOpen(config.businessId);
 
   return (
-    <main className="shell">
-      <div className="identity">
-        <h1>Private feedback for {config.name}</h1>
-        <p className="muted">
-          This goes straight to {config.name} and is not posted anywhere publicly.
-        </p>
-      </div>
-      {/* The route param, not config.slug: this page was reached BY that slug, so it is the
+    <main className={styles.page}>
+      <div className={styles.card}>
+        <header className={styles.header}>
+          <h1>Private feedback for {config.name}</h1>
+          <p>This goes straight to {config.name} and is not posted anywhere publicly.</p>
+        </header>
+        {/* The route param, not config.slug: this page was reached BY that slug, so it is the
           authoritative value and cannot be null the way a QR-resolved tenant's can. */}
-      <FeedbackForm slug={slug} businessName={config.name} />
+        <FeedbackForm slug={slug} businessName={config.name} />
+      </div>
     </main>
   );
 }
 
 function UnavailablePage() {
   return (
-    <main className="shell">
-      <div className="notice">
+    <main className={styles.page}>
+      <div className={`${styles.card} ${styles.unavailable}`}>
         <p>This feedback page is not available at the moment.</p>
-        <p className="muted">Please ask the business for an up-to-date link.</p>
+        <p>Please ask the business for an up-to-date link.</p>
       </div>
     </main>
   );

@@ -8,14 +8,15 @@ SET LOCAL lock_timeout = '5s';
 DO $secure$
 DECLARE
   app_tables text[] := ARRAY[
-    'password_reset_tokens', 'sessions', 'user_invites', 'users', 'assets',
+    'password_reset_tokens', 'sessions', 'user_invites', 'users', 'google_identities', 'assets',
     'business_links', 'business_slugs', 'businesses', 'review_destinations',
     'anonymous_sessions', 'qr_codes', 'ai_business_contexts', 'ai_generations',
     'ai_prompt_versions', 'review_modes', 'payment_webhook_events', 'payments',
     'subscriptions', 'customers', 'private_feedback', 'review_request_templates',
     'review_requests', 'custom_domains', 'analytics_daily_business', 'analytics_events',
     'admin_audit_logs', 'feature_flags', 'platform_settings', 'mfa_recovery_codes',
-    'invoice_sequences', 'payment_refunds', 'subscription_reminders', 'user_activity_logs'
+    'invoice_sequences', 'payment_refunds', 'subscription_reminders', 'user_activity_logs',
+    'maintenance_jobs'
   ];
   object_name text;
   item record;
@@ -74,6 +75,26 @@ BEGIN
   EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated, service_role', current_user);
 END;
 $secure$;
+
+-- Migration history is server-only too, even though drizzle is not an exposed API schema.
+DO $journal$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'drizzle' AND c.relname = '__drizzle_migrations'
+      AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+  ) THEN
+    RAISE EXCEPTION 'Expected migration journal missing or owned by another role';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'drizzle' AND tablename = '__drizzle_migrations') THEN
+    RAISE EXCEPTION 'Unexpected migration journal RLS policies';
+  END IF;
+END;
+$journal$;
+ALTER TABLE drizzle.__drizzle_migrations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON SCHEMA drizzle FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON TABLE drizzle.__drizzle_migrations FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON SEQUENCE drizzle.__drizzle_migrations_id_seq FROM PUBLIC, anon, authenticated, service_role;
 
 -- Future partitions need their own RLS and grants; parent RLS alone does not protect direct access.
 CREATE OR REPLACE FUNCTION public.ensure_analytics_events_partition(target_month date)

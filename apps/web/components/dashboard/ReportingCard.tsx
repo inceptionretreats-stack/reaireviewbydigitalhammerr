@@ -1,13 +1,11 @@
-import { Card, EmptyState } from '@ai-review/ui';
+import Link from 'next/link';
+import { Card } from '@ai-review/ui';
+import { SECONDARY_LINK } from './link-styles';
 
 /**
- * Where DASH-01's funnel, top QR sources and top link clicks will go.
- *
- * An empty state rather than a chart of zeroes. The public flow does record its events already —
- * `POST /api/v1/public/events` writes them — but nothing rolls them up into
- * `analytics_daily_business` yet, so a chart here could only be drawn from numbers this screen
- * does not have. The design brief asks for empty states with one clear message, and "not measured
- * yet" is a different statement from "nobody used it".
+ * A direct route to the existing analytics screen, not an invented dashboard chart.
+ * This overview does not load analytics totals; the dedicated screen owns its date ranges,
+ * recorded events and daily summaries. Link there rather than displaying sample or zero data.
  *
  * The ceiling on what will ever appear is stated up front, deliberately. An owner who expects a
  * count of reviews left on Google will read whatever number appears as that, so the honest version
@@ -20,19 +18,21 @@ export function ReportingCard() {
     <Card
       title="Performance"
       titleAs="h2"
-      className="dashboard-section-card dashboard-section-card--green"
+      className="vendor-reporting-card dashboard-section-card dashboard-section-card--green"
+      actions={
+        <Link href="/app/analytics" className={SECONDARY_LINK}>
+          View analytics
+        </Link>
+      }
     >
-      <EmptyState
-        title="Reporting is not available yet"
-        description={
-          <>
-            Scans, generations and copies are already being recorded, and this is where they get
-            summarised, alongside your busiest QR sources and most-used profile links. The final
-            step it can ever report is <strong>Google review page opened</strong> — what a customer
-            writes on Google is not something we can see.
-          </>
-        }
-      />
+      <p className="max-w-prose text-sm leading-relaxed text-ink-muted">
+        See recorded scans, Ai drafts and copies, alongside your QR sources and profile link clicks.
+        Choose a date range in Analytics to see how customers use your page.
+      </p>
+      <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink-muted">
+        The final step we can report is <strong>Google review page opened</strong> — what a customer
+        writes or posts on Google is not something we can see.
+      </p>
     </Card>
   );
 }

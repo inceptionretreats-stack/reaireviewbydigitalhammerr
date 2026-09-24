@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { TenantGuard, buildQrUrl } from '@ai-review/core';
 import { Card, StatusBadge } from '@ai-review/ui';
@@ -13,6 +14,7 @@ import { SetupProgressCard } from './SetupProgressCard';
 import { SubscriptionCard } from './SubscriptionCard';
 import { describeBusinessStatus, formatDate } from './presentation';
 import { loadDashboardSummary } from './summary';
+import { PRIMARY_LINK, SECONDARY_LINK } from './link-styles';
 
 /**
  * DASH-01's `data` state.
@@ -54,12 +56,26 @@ export async function DashboardOverview() {
     : null;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <p className="text-xs font-semibold tracking-wider text-ink-muted uppercase">Dashboard</p>
-        <h1 className="text-2xl font-bold tracking-tight text-ink">{summary.business.name}</h1>
-        <StatusBadge status={status.badge} label={status.label} className="self-start" />
-      </div>
+    <div className="vendor-overview flex flex-col gap-6">
+      <header className="vendor-overview-header flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="vendor-title-row">
+            <h1 className="text-2xl font-bold tracking-tight break-words text-ink">
+              {summary.business.name}
+            </h1>
+            <StatusBadge status={status.badge} label={status.label} className="self-start" />
+          </div>
+          <p className="vendor-overview-description">Your review experience, all in one place.</p>
+        </div>
+        <div className="vendor-overview-actions flex flex-wrap items-center gap-2">
+          <Link href="/app/qr" className={PRIMARY_LINK}>
+            Manage QR codes
+          </Link>
+          <Link href="/app/ai-review" className={SECONDARY_LINK}>
+            Edit Ai context
+          </Link>
+        </div>
+      </header>
 
       {/* Setup comes first while it is unfinished: nothing else on the screen matters until the
           page is live, and an owner who lands here mid-onboarding needs the way back in.
@@ -88,7 +104,7 @@ export async function DashboardOverview() {
         businessStatus={summary.business.status}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="vendor-overview-panels grid gap-4 lg:grid-cols-2">
         <PublicPageCard
           publicUrl={publicUrl}
           isLive={status.isPubliclyLive}

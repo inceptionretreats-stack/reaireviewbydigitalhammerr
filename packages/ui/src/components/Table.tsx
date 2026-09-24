@@ -135,7 +135,7 @@ export function Table<T>({
                         {label}
                       </span>
                     )}
-                    <span>{column.cell(row)}</span>
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{column.cell(row)}</span>
                   </>
                 );
 

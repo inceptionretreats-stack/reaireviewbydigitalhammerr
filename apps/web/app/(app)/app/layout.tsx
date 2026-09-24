@@ -6,6 +6,7 @@ import { AppBrand } from '@/components/brand/AppBrand';
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { SignOutButton } from '@/components/dashboard/SignOutButton';
 import { getSession } from '@/lib/session';
+import styles from '@/components/dashboard/VendorWorkspace.module.css';
 
 /** Shared authenticated shell. Pages remain Server Components and inherit this session guard. */
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -14,7 +15,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   if (isAdminRole(session.role)) redirect('/admin');
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${styles.workspace}`}>
       <a
         href="#dashboard-content"
         className="sr-only rounded-control bg-accent px-4 py-2 font-semibold text-on-accent focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50"
@@ -27,7 +28,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <AppBrand />
         </Link>
 
-        <p className="app-nav-label">Workspace</p>
         <DashboardNav />
 
         <div className="app-sidebar-note">
@@ -45,7 +45,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <header className="app-topbar">
           <div className="app-topbar-copy">
             <span>Business workspace</span>
-            <small>Your review experience, all in one place.</small>
           </div>
           <SignOutButton />
         </header>

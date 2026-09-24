@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { analyticsEvents } from '@ai-review/db';
 import { normalizeQrCode } from '@ai-review/core';
 import { db } from '@/lib/db';
-import { resolveByQrCode } from '@/lib/public-business';
+import { loadPublicServices, resolveByQrCode } from '@/lib/public-business';
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
 import { loadLatestDraft } from '@/lib/generation-service';
 import { ReviewFlow } from '@/components/ReviewFlow';
@@ -16,7 +16,7 @@ import styles from '@/components/CustomerReview.module.css';
  * which is what lets a business change its Google URL, slug, review mode or custom domain
  * without reprinting a single standee (D-026, AC-017).
  *
- * It lands directly on the review experience — no interstitial, no questionnaire (D-007).
+ * It lands on the customer review experience, starting with services they actually used.
  */
 export default async function QrLandingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
@@ -47,10 +47,11 @@ export default async function QrLandingPage({ params }: { params: Promise<{ code
     await recordScan(database, config, session.sessionId);
   }
 
-  // Handed to the client so an arriving visitor sees a draft rather than a button, without the
-  // page spending a generation it does not need to. Null for a first visit — the client asks for
-  // one on mount.
-  const existingDraft = session ? await loadLatestDraft(database, session.sessionId) : null;
+  // Refreshes reuse the existing draft; a first visit chooses services before spending quota.
+  const [existingDraft, services] = await Promise.all([
+    session ? loadLatestDraft(database, session.sessionId) : Promise.resolve(null),
+    loadPublicServices(database, config.businessId),
+  ]);
 
   return (
     <main className={styles.page}>
@@ -61,6 +62,7 @@ export default async function QrLandingPage({ params }: { params: Promise<{ code
           logoUrl: config.logoUrl,
           reviewUrl: config.reviewUrl,
           reviewPlatformLabel: config.reviewPlatformLabel,
+          services,
         }}
         qrCode={normalizeQrCode(code)}
         initialDraft={existingDraft}

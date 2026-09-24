@@ -27,6 +27,7 @@ export interface AccountSettings {
     email: string;
     /** E.164 (`normalizePhone`), or '' for a Flow B user created before a number was known. */
     mobile: string;
+    hasPassword: boolean;
   };
   business: {
     name: string;
@@ -60,6 +61,7 @@ export async function loadAccountSettings(
         fullName: users.fullName,
         email: users.email,
         mobile: users.mobile,
+        passwordHash: users.passwordHash,
         // users.email_verified_at is deliberately not read. A change to the address clears it
         // (PATCH /api/v1/account) and the endpoint reports that in its response, so the screen has
         // no use for the resting value — and a 'not confirmed' badge would ask an owner to fix
@@ -101,6 +103,7 @@ export async function loadAccountSettings(
       fullName: account.fullName,
       email: account.email,
       mobile: account.mobile ?? '',
+      hasPassword: account.passwordHash !== null,
     },
     business: {
       name: business.name,

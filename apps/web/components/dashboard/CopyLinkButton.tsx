@@ -23,6 +23,8 @@ export interface CopyLinkButtonProps {
   value: string;
   /** Distinguishes several copy controls on one screen for assistive technology. */
   what: string;
+  /** Optional visible wording; other copy controls retain their existing label. */
+  label?: string;
 }
 
 type CopyState = 'idle' | 'copied' | 'failed';
@@ -39,7 +41,7 @@ const MESSAGE: Record<CopyState, string> = {
  */
 const GLYPH: Record<CopyState, string> = { idle: '', copied: '✓', failed: '⚠' };
 
-export function CopyLinkButton({ value, what }: CopyLinkButtonProps) {
+export function CopyLinkButton({ value, what, label = 'Copy' }: CopyLinkButtonProps) {
   const [state, setState] = useState<CopyState>('idle');
 
   const copy = useCallback(async () => {
@@ -54,7 +56,8 @@ export function CopyLinkButton({ value, what }: CopyLinkButtonProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <Button variant="secondary" onClick={() => void copy()}>
-        Copy<span className="sr-only"> {what}</span>
+        {label}
+        <span className="sr-only"> {what}</span>
       </Button>
       <p
         role="status"

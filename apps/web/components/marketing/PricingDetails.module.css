@@ -1,17 +1,16 @@
 .cardMore {
   margin-top: 14px;
-  border-top: 1px solid #e2e8f0;
   color: #334155;
 }
 
 .cardLink {
-  display: flex;
+  display: inline-flex;
   min-height: 44px;
   padding-top: 6px;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   color: #174ea6;
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 650;
   text-decoration: none;
 }
@@ -40,60 +39,8 @@
   white-space: nowrap;
 }
 
-.content {
-  overflow-wrap: anywhere;
-}
-
-.intro {
-  margin: 0 0 22px;
-  color: #475569;
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 26px 32px;
-  margin: 0;
-}
-
-.grid dt {
-  margin-bottom: 6px;
-  color: #111827;
-  font-size: 16px;
-  font-weight: 650;
-}
-
-.grid dd {
-  margin: 0;
-  color: #475569;
-  font-size: 15px;
-  line-height: 1.75;
-}
-
-.links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 20px;
-  margin-top: 20px;
-  padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
-}
-
-.links a {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  color: #174ea6;
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-
 @media (max-width: 600px) {
-  .grid {
-    grid-template-columns: minmax(0, 1fr);
+  .cardLink {
+    font-size: 16px;
   }
 }

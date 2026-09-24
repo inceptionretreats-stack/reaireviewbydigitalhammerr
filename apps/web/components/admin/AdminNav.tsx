@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -30,10 +31,60 @@ const ITEM =
 
 export function AdminNav({ role = 'SUPER_ADMIN' }: { role?: AdminNavRole }) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const items = ADMIN_NAV.filter((item) => role === 'SUPER_ADMIN' || item.viewer);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeFromOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !navRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const closeFromKeyboard = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        toggleRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('pointerdown', closeFromOutside);
+    document.addEventListener('keydown', closeFromKeyboard);
+    return () => {
+      document.removeEventListener('pointerdown', closeFromOutside);
+      document.removeEventListener('keydown', closeFromKeyboard);
+    };
+  }, [open]);
+
   return (
-    <nav aria-label="Admin" className="dashboard-nav dashboard-nav--open">
-      <ul className="dashboard-nav-list">
+    <nav
+      ref={navRef}
+      aria-label="Admin"
+      className={`dashboard-nav${open ? ' dashboard-nav--open' : ''}`}
+    >
+      <button
+        ref={toggleRef}
+        type="button"
+        className="dashboard-nav-toggle"
+        aria-controls="admin-navigation"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>Menu</span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          {open ? <path d="m6 6 12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+        </svg>
+      </button>
+      <ul id="admin-navigation" className="dashboard-nav-list">
         {items.map((item) => {
           const current =
             item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href);
@@ -43,6 +94,7 @@ export function AdminNav({ role = 'SUPER_ADMIN' }: { role?: AdminNavRole }) {
                 href={item.href}
                 aria-current={current ? 'page' : undefined}
                 className={`${ITEM} ${current ? 'dashboard-nav-item--current font-bold text-accent' : 'font-medium text-ink hover:bg-surface'}`}
+                onClick={() => setOpen(false)}
               >
                 <span className="dashboard-nav-text">{item.label}</span>
               </Link>

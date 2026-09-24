@@ -1,0 +1,661 @@
+/* Vendor-only visual system. No transforms on shell ancestors: dialogs are fixed descendants. */
+.workspace:global(.app-shell) {
+  --color-bg: #fff;
+  --color-surface: #f4f6fa;
+  --color-surface-sunk: #eef2f7;
+  --color-ink: #14243b;
+  --color-ink-muted: #566781;
+  --color-ink-faint: #65758b;
+  --color-line: #dee5ee;
+  --color-line-strong: #8a99ad;
+  --color-accent: #1967d2;
+  --color-accent-hover: #1558b5;
+  --color-on-danger: #fff;
+  background: #f4f6fa;
+  border-top: 4px solid transparent;
+  border-image: linear-gradient(90deg, #4285f4 0 25%, #ea4335 25% 50%, #fbbc05 50% 75%, #34a853 75%)
+    1;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.workspace:global(.app-shell) :global(.app-sidebar) {
+  z-index: 30;
+  border: 0;
+  background: #12233b;
+  padding: 18px 20px;
+}
+
+.workspace:global(.app-shell) :global(.app-sidebar-brand) {
+  color: #fff;
+}
+.workspace:global(.app-shell) :global(.app-brand-copy strong) {
+  font-size: 20px;
+  font-weight: 700;
+}
+.workspace:global(.app-shell) :global(.app-brand-copy small) {
+  color: #c8d4e7;
+  font-weight: 400;
+}
+.workspace:global(.app-shell) :global(.dashboard-nav-toggle) {
+  color: #fff;
+  border-color: #456079;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+.workspace:global(.app-shell) :global(.dashboard-nav-list) {
+  background: #12233b;
+  border: 1px solid #39516b;
+  border-radius: 12px;
+  padding: 12px;
+  gap: 3px;
+  max-height: min(75dvh, 640px);
+  box-shadow: 0 16px 40px #0d1c3340;
+  scrollbar-width: thin;
+  scrollbar-color: #536a83 #12233b;
+}
+.workspace:global(.app-shell) :global(.dashboard-nav-item) {
+  min-height: 44px;
+  padding: 9px 12px;
+  gap: 12px;
+  color: #cbd6e8;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1.4;
+  transform: none;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+.workspace:global(.app-shell) :global(.dashboard-nav-item:hover) {
+  background: #203752;
+  color: #fff;
+}
+.workspace:global(.app-shell) :global(.dashboard-nav-item--current) {
+  background: #1967d2;
+  color: #fff;
+  box-shadow: none;
+  font-weight: 600;
+}
+.workspace:global(.app-shell) :global(.dashboard-nav-icon) {
+  width: 20px;
+  height: 22px;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+.workspace:global(.app-shell) :global(.dashboard-nav-icon svg) {
+  width: 20px;
+  height: 20px;
+}
+.workspace:global(.app-shell) :global(.vendor-nav-group) {
+  margin: 22px 12px 8px;
+  color: #acbdd3;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  line-height: 1.5;
+}
+.workspace:global(.app-shell) :global(.dashboard-nav-list > li:first-child .vendor-nav-group) {
+  margin-top: 3px;
+}
+.workspace:global(.app-shell) :global(.app-sidebar-note) {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #33465f;
+  border-radius: 0;
+  padding: 18px 8px 0;
+  color: #acbdd3;
+}
+.workspace:global(.app-shell) :global(.app-sidebar-note strong) {
+  font-size: 12px;
+  line-height: 1.7;
+  font-weight: 400;
+}
+.workspace:global(.app-shell) :global(.vendor-mobile-signout) {
+  display: block;
+  margin-top: 10px;
+  padding: 12px 4px 2px;
+  border-top: 1px solid #39516b;
+}
+.workspace:global(.app-shell) :global(.vendor-mobile-signout .ui-button) {
+  width: 100%;
+  justify-content: center;
+  border-color: #536a83;
+  background: #203752;
+  color: #fff;
+}
+.workspace:global(.app-shell) :global(.app-sidebar-note .app-mini-signature) {
+  display: none;
+}
+.workspace:global(.app-shell) :global(.app-workspace) {
+  min-height: calc(100dvh - 4px);
+}
+.workspace:global(.app-shell) :global(.app-topbar) {
+  position: relative;
+  top: auto;
+  min-height: 62px;
+  padding: 10px 20px;
+  background: #fff;
+  backdrop-filter: none;
+}
+.workspace:global(.app-shell) :global(.app-topbar-copy) {
+  font-size: 14px;
+}
+.workspace:global(.app-shell) :global(.app-main) {
+  max-width: 1360px;
+  padding: 24px 20px 36px;
+  min-width: 0;
+}
+.workspace:global(.app-shell) :global(.app-main h1) {
+  font-size: clamp(24px, 2.3vw, 32px);
+  line-height: 1.25;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+  color: #14243b;
+}
+.workspace:global(.app-shell) :global(.app-main) h1::after,
+.workspace:global(.app-shell) :global(.ui-card) > div:first-child h2::before,
+.workspace:global(.app-shell) :global(.ui-card) > div:first-child h3::before {
+  content: none;
+}
+.workspace:global(.app-shell) :global(.app-main h2) {
+  font-size: 18px;
+  line-height: 1.4;
+  letter-spacing: -0.015em;
+}
+.workspace:global(.app-shell) :global(.app-main h3) {
+  font-size: 16px;
+  line-height: 1.5;
+}
+.workspace:global(.app-shell) :global(.ui-card),
+.workspace:global(.app-shell) :global(.ui-kpi-card) {
+  border: 1px solid #dee5ee;
+  border-radius: 12px;
+  box-shadow: 0 2px 3px #14243b02;
+  background: #fff;
+  min-width: 0;
+}
+.workspace:global(.app-shell) :global(.ui-card.p-4) {
+  padding: 22px;
+}
+.workspace:global(.app-shell) :global(.ui-card > div:first-child h2),
+.workspace:global(.app-shell) :global(.ui-card > div:first-child h3) {
+  color: #14243b;
+  font-weight: 650;
+}
+.workspace:global(.app-shell) :global(.ui-card > div:first-child) {
+  row-gap: 14px;
+}
+.workspace:global(.app-shell) :global(.ui-kpi-card) {
+  padding: 22px;
+}
+.workspace:global(.app-shell) :global(.ui-kpi-card dt) {
+  color: #566781;
+  font-size: 14px;
+  font-weight: 500;
+}
+.workspace:global(.app-shell) :global(.ui-kpi-card dd) {
+  color: #14243b;
+  font-size: 30px;
+  line-height: 1.3;
+  font-weight: 700;
+  margin-top: 8px;
+}
+.workspace:global(.app-shell) :global(.ui-kpi-card > p) {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.workspace:global(.app-shell) :global(.ui-button),
+.workspace:global(.app-shell) :global(a.rounded-control) {
+  min-height: 44px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  box-shadow: none;
+  transform: none;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+.workspace:global(.app-shell) :global(.ui-button:hover) {
+  transform: none;
+}
+.workspace:global(.app-shell) :global(.ui-button.bg-accent) {
+  box-shadow: none;
+}
+.workspace:global(.app-shell) :global(.ui-button:focus-visible),
+.workspace:global(.app-shell) :global(a:focus-visible),
+.workspace:global(.app-shell) :global(.dashboard-nav-toggle:focus-visible) {
+  outline: 3px solid #8bb8fb;
+  outline-offset: 3px;
+}
+.workspace:global(.app-shell) :global(.ui-input),
+.workspace:global(.app-shell) :global(.ui-select),
+.workspace:global(.app-shell) :global(.ui-textarea) {
+  min-height: 44px;
+  border: 1px solid #cbd5e2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.workspace:global(.app-shell) :global(.ui-textarea) {
+  min-height: 112px;
+}
+.workspace:global(.app-shell) :global(label) {
+  line-height: 1.5;
+  font-weight: 550;
+}
+.workspace:global(.app-shell) :global(.ui-table) {
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+.workspace:global(.app-shell) :global(.ui-table thead th) {
+  padding: 13px 16px;
+  background: #f5f7fb;
+  color: #566781;
+  font-size: 12px;
+  font-weight: 600;
+}
+.workspace:global(.app-shell) :global(.ui-table tbody td),
+.workspace:global(.app-shell) :global(.ui-table tbody th) {
+  padding: 14px 16px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.workspace:global(.app-shell) :global(.ui-table tbody tr:hover) {
+  background: #f8faff;
+}
+.workspace:global(.app-shell) :global(.ui-table td > span:last-child),
+.workspace:global(.app-shell) :global(.ui-table th > span:last-child) {
+  min-width: 0;
+}
+.workspace:global(.app-shell) :global(.border-dashed) {
+  border-color: #d8e1ee;
+  border-radius: 10px;
+  background: #f8fafd;
+}
+.workspace:global(.app-shell) :global(.vendor-overview) {
+  gap: 22px;
+}
+.workspace:global(.app-shell) :global(.vendor-overview-header) {
+  align-items: center;
+  gap: 18px;
+  padding-block: 4px 6px;
+}
+.workspace:global(.app-shell) :global(.vendor-overview-actions) {
+  gap: 10px;
+}
+.workspace:global(.app-shell) :global(.vendor-overview-actions a) {
+  padding: 12px 18px;
+}
+.workspace:global(.app-shell) :global(.vendor-overview-panels) {
+  gap: 22px;
+  align-items: stretch;
+}
+.workspace:global(.app-shell) :global(.ui-card.vendor-public-card),
+.workspace:global(.app-shell) :global(.ui-card.vendor-plan-card) {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+}
+.workspace:global(.app-shell) :global(.vendor-public-url) {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #f4f6fa;
+  font-family: inherit;
+  color: #526681;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.workspace:global(.app-shell) :global(.vendor-public-url) code {
+  font-family: inherit;
+  color: inherit;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace:global(.app-shell) :global(.vendor-public-actions),
+.workspace:global(.app-shell) :global(.vendor-plan-actions) {
+  margin-top: auto;
+  padding-top: 22px;
+}
+.workspace:global(.app-shell) :global(.vendor-public-actions) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 10px;
+}
+.workspace:global(.app-shell) :global(.vendor-public-actions > div) {
+  flex-direction: column;
+  align-items: stretch;
+  row-gap: 0;
+}
+.workspace:global(.app-shell) :global(.vendor-public-actions .ui-button) {
+  width: 100%;
+}
+.workspace:global(.app-shell) :global(.vendor-plan-link) {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid #1967d2;
+  border-radius: 8px;
+  text-decoration: none;
+  min-height: 44px;
+  font-size: 14px;
+}
+.workspace:global(.app-shell) :global(.vendor-plan-link:hover) {
+  background: #edf4ff;
+}
+.workspace:global(.app-shell) :global(.vendor-plan-summary) {
+  gap: 0;
+}
+.workspace:global(.app-shell) :global(.vendor-plan-summary > dt),
+.workspace:global(.app-shell) :global(.vendor-plan-summary > dd) {
+  padding-block: 10px;
+  border-bottom: 1px solid #edf0f5;
+}
+.workspace:global(.app-shell) :global(.vendor-plan-summary > dt:last-of-type),
+.workspace:global(.app-shell) :global(.vendor-plan-summary > dd:last-of-type) {
+  border-bottom: 0;
+}
+.workspace:global(.app-shell) :global(.vendor-plan-summary dd) {
+  text-align: right;
+}
+.workspace:global(.app-shell) :global(.vendor-reporting-card .border-dashed) {
+  padding: 20px;
+  border: 0;
+  background: #f8fafd;
+}
+.workspace:global(.app-shell) :global(.vendor-setup-steps) {
+  gap: 12px;
+}
+.workspace:global(.app-shell) :global(.vendor-figures) {
+  gap: 22px;
+  grid-auto-rows: 1fr;
+}
+.workspace:global(.app-shell) :global(.vendor-figures .dashboard-kpi) {
+  padding-left: 102px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.workspace:global(.app-shell) :global(.vendor-kpi-icon) {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #f0f5fc;
+  color: #1967d2;
+  border-radius: 50%;
+}
+.workspace:global(.app-shell) :global(.vendor-kpi-icon svg) {
+  width: 28px;
+  height: 28px;
+}
+.workspace:global(.app-shell) :global(.vendor-title-row) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.workspace:global(.app-shell) :global(.vendor-title-row > .self-start) {
+  align-self: center;
+}
+.workspace:global(.app-shell) :global(.vendor-overview-description) {
+  margin-top: 6px;
+  color: #566781;
+  font-size: 14px;
+}
+.workspace:global(.app-shell) :global(.app-footer) {
+  border: 0;
+  background: transparent;
+  color: #65758b;
+  padding: 0 20px 24px;
+  font-size: 12px;
+  gap: 8px;
+}
+
+@media (min-width: 640px) {
+  .workspace:global(.app-shell) :global(.vendor-overview-panels) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace:global(.app-shell) :global(.vendor-overview-panels > .ui-card) {
+    min-height: 272px;
+  }
+  .workspace:global(.app-shell) :global(.vendor-overview .dashboard-kpi) {
+    min-height: 150px;
+  }
+}
+@media (min-width: 1024px) {
+  .workspace:global(.app-shell) {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+  .workspace:global(.app-shell) :global(.app-sidebar) {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    align-self: start;
+    align-items: stretch;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 28px 14px 24px;
+    gap: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #496078 transparent;
+  }
+  .workspace:global(.app-shell) :global(.app-sidebar-brand) {
+    margin: 0 10px 28px;
+  }
+  .workspace:global(.app-shell) :global(.dashboard-nav) {
+    margin: 0;
+    width: 100%;
+  }
+  .workspace:global(.app-shell) :global(.dashboard-nav-toggle) {
+    display: none;
+  }
+  .workspace:global(.app-shell) :global(.vendor-mobile-signout) {
+    display: none;
+  }
+  .workspace:global(.app-shell) :global(.dashboard-nav-list) {
+    position: static;
+    display: flex;
+    width: 100%;
+    max-height: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .workspace:global(.app-shell) :global(.app-sidebar-note) {
+    margin-top: 28px;
+    display: block;
+  }
+  .workspace:global(.app-shell) :global(.app-topbar) {
+    min-height: 72px;
+    padding-inline: 32px;
+  }
+  .workspace:global(.app-shell) :global(.app-topbar-copy) {
+    font-size: 15px;
+  }
+  .workspace:global(.app-shell) :global(.app-main) {
+    padding: 32px 32px 40px;
+  }
+  .workspace:global(.app-shell) :global(.app-footer) {
+    padding: 0 32px 24px;
+  }
+}
+@media (max-width: 1023px) {
+  .workspace:global(.app-shell) :global(.app-topbar) {
+    display: none;
+  }
+}
+@media (max-width: 767px) {
+  .workspace:global(.app-shell) :global(.ui-table) {
+    border: 0;
+    border-radius: 0;
+  }
+  .workspace:global(.app-shell) :global(.ui-table tbody tr) {
+    padding: 12px;
+    border-radius: 10px;
+    background: #fff;
+  }
+  .workspace:global(.app-shell) :global(.ui-table tbody td),
+  .workspace:global(.app-shell) :global(.ui-table tbody th) {
+    padding: 8px 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .workspace:global(.app-shell) :global(.ui-table tbody td > span:first-child:not(:last-child)),
+  .workspace:global(.app-shell) :global(.ui-table tbody th > span:first-child:not(:last-child)) {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .workspace:global(.app-shell) :global(.ui-table tbody td > span:last-child),
+  .workspace:global(.app-shell) :global(.ui-table tbody th > span:last-child) {
+    width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 639px) {
+  .workspace:global(.app-shell) :global(.app-sidebar) {
+    padding: 14px 16px;
+  }
+  .workspace:global(.app-shell) :global(.app-topbar) {
+    min-height: 54px;
+    padding: 5px 16px;
+  }
+  .workspace:global(.app-shell) :global(.app-topbar-copy) {
+    font-size: 13px;
+  }
+  .workspace:global(.app-shell) :global(.app-main) {
+    padding: 22px 16px 30px;
+  }
+  .workspace:global(.app-shell) :global(.ui-card.p-4),
+  .workspace:global(.app-shell) :global(.ui-card.vendor-public-card),
+  .workspace:global(.app-shell) :global(.ui-card.vendor-plan-card) {
+    padding: 20px;
+  }
+  .workspace:global(.app-shell) :global(.vendor-overview-actions) {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .workspace:global(.app-shell) :global(.vendor-overview-actions a) {
+    padding: 12px 10px;
+    text-align: center;
+    font-size: 13px;
+  }
+  .workspace:global(.app-shell) :global(.app-main h2) {
+    font-size: 17px;
+  }
+  .workspace:global(.app-shell) :global(.vendor-overview),
+  .workspace:global(.app-shell) :global(.vendor-overview-panels) {
+    gap: 16px;
+  }
+  .workspace:global(.app-shell) :global(.vendor-figures) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .workspace:global(.app-shell) :global(.vendor-figures .dashboard-kpi) {
+    min-height: 160px;
+    padding: 16px;
+    justify-content: flex-start;
+  }
+  .workspace:global(.app-shell) :global(.vendor-figures .dashboard-kpi dt) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .workspace:global(.app-shell) :global(.vendor-figures .dashboard-kpi dd) {
+    margin-top: 7px;
+    font-size: clamp(20px, 6vw, 26px);
+    line-height: 1.18;
+  }
+  .workspace:global(.app-shell) :global(.vendor-figures .dashboard-kpi > p) {
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .workspace:global(.app-shell) :global(.vendor-kpi-icon) {
+    position: static;
+    width: 34px;
+    height: 34px;
+    transform: none;
+  }
+  .workspace:global(.app-shell) :global(.vendor-kpi-icon svg) {
+    width: 19px;
+    height: 19px;
+  }
+  .workspace:global(.app-shell) :global(.vendor-date-fields) {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .workspace:global(.app-shell) :global(.vendor-date-fields > *) {
+    width: 100%;
+  }
+  .workspace:global(.app-shell) :global(.vendor-date-fields .ui-button) {
+    width: 100%;
+  }
+  .workspace:global(.app-shell) :global(.vendor-date-presets) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    text-align: center;
+  }
+  .workspace:global(.app-shell) :global(.vendor-date-presets > span) {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+  .workspace:global(.app-shell) :global(.vendor-date-presets a) {
+    display: flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    padding-inline: 4px;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .workspace:global(.app-shell) :global(.app-footer) {
+    padding-inline: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+@media (max-width: 359px) {
+  .workspace:global(.app-shell) :global(.vendor-overview-actions a) {
+    padding-inline: 6px;
+    font-size: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace:global(.app-shell) :global(.dashboard-nav-item),
+  .workspace:global(.app-shell) :global(.ui-button),
+  .workspace:global(.app-shell) :global(a.rounded-control) {
+    transition: none;
+  }
+}

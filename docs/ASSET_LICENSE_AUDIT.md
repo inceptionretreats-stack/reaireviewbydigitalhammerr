@@ -41,6 +41,26 @@ The font files were not replaced or modified. Official sources checked:
 - [Inter licence](https://github.com/rsms/inter/blob/master/LICENSE.txt)
 - [Google Fonts commercial/open-source overview](https://developers.google.com/fonts)
 
+## Business-category icons
+
+The landing-page business strip uses `lucide-react` outline icons. Lucide's ISC
+licence permits commercial use; icons derived from Feather carry the included
+MIT notice. The package's licence text is retained in
+`apps/web/public/licenses/lucide.txt` for the deployed site. These icons are
+decorative; the business names remain text.
+
+## Benefits-section photography (23 September 2026)
+
+- `apps/web/public/marketing/benefits-local-shop-v1.webp` is an optimized copy
+  of [Pexels photo 29834266 by Daniel & Hannah Snipes](https://www.pexels.com/photo/friendly-interaction-at-local-shop-counter-29834266/).
+  The source page labels it free to use. [Pexels' licence](https://www.pexels.com/license/)
+  permits commercial website use and modification without required attribution.
+- The photo illustrates an ordinary shop-counter conversation. The depicted
+  people are not Ai Review customers or endorsers; no testimonial, review
+  total, or product-result claim is attached to their image.
+- The nearby editable review draft is application-made example UI, disclosed on
+  the page as an illustrative preview. It is not part of the source photo.
+
 ## Installed software: metadata audit, not full distribution clearance
 
 Command: `pnpm --filter @ai-review/web... licenses list --prod --json`.

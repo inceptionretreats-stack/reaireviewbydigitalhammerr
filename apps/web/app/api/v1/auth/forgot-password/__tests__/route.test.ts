@@ -48,7 +48,7 @@ function request(): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.gate.mockResolvedValue({ allowed: true });
-  mocks.lookup.mockResolvedValue([{ id: 'owner-id' }]);
+  mocks.lookup.mockResolvedValue([{ id: 'owner-id', passwordHash: 'stored-password-hash' }]);
   mocks.insert.mockResolvedValue(undefined);
   mocks.send.mockResolvedValue(undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -60,7 +60,21 @@ describe('forgot-password neutral failures', () => {
   it('sends the reset for a known account and returns neutral success', async () => {
     const response = await POST(request());
     expect(response.status).toBe(202);
+    expect(mocks.insert).toHaveBeenCalledOnce();
     expect(mocks.send).toHaveBeenCalledOnce();
+  });
+
+  it('does not issue a reset for a Google-only account without a password', async () => {
+    mocks.lookup.mockResolvedValueOnce([{ id: 'google-owner-id', passwordHash: null }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({
+      message: 'If that email address has an account, a reset link is on its way.',
+    });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
   });
 
   it.each(['gate', 'lookup', 'insert', 'send'] as const)(

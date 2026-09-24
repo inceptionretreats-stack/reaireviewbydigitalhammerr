@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Checkbox, Field, InlineError, Input } from '@ai-review/ui';
+import { GoogleSignIn } from './GoogleSignIn';
 import { fieldError, useFormSubmit } from './use-form-submit';
 
 /**
@@ -17,7 +18,7 @@ import { fieldError, useFormSubmit } from './use-form-submit';
  * validation is authoritative per the screen spec's preamble. Its job is to save a round trip,
  * not to be the check.
  */
-export function SignupForm() {
+export function SignupForm({ googleClientId }: { googleClientId: string | null }) {
   const router = useRouter();
   const { state, submit, reset } = useFormSubmit('/api/v1/auth/signup');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -53,13 +54,20 @@ export function SignupForm() {
   const emailFailure = fieldError(state, 'email');
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
         <h1 className="text-2xl font-bold tracking-tight text-ink">Create your account</h1>
         <p className="text-sm text-ink-muted">
           Set up your business and get a QR code in a few minutes.
         </p>
       </div>
+
+      {googleClientId && (
+        <>
+          <GoogleSignIn clientId={googleClientId} />
+          <p className="text-center text-xs font-medium text-ink-muted">or sign up with email</p>
+        </>
+      )}
 
       {state.status === 'error' && state.failure.fields.length === 0 && (
         <InlineError>{state.failure.message}</InlineError>

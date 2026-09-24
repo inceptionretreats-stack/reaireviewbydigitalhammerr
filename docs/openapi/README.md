@@ -91,6 +91,11 @@ two files.
 - **`POST /public/review/generate` never runs `generateReviewRequest`**, so a body naming neither
   `slug` nor `qr_code` fails resolution and returns `404` rather than `422`. `POST /public/events`
   likewise does not use `publicEventRequest`.
+  The generation route now validates its body with a local Zod schema and server-validates
+  `selected_services` against the resolved business before quota/provider work. The shared
+  contract and YAML describe that field; omitted selection is allowed only for businesses with
+  no services. Identifier range constraints in the local route remain broader than the shared
+  contract, so the historical identifier discrepancy above is not being claimed as resolved.
 - **`POST /business/publish` can return a non-envelope 500.** If `reserveQrCode` exhausts its five
   collision retries it throws, and the framework's error page is the body — not the `Error` shape
   every other failure returns.

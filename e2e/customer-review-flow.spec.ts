@@ -1,5 +1,11 @@
-import { expect, test } from '@playwright/test';
-import { closeDb, demoQrCode, eventCountForQrSession, resetFreeQuota } from './support/db';
+import { expect, test, type Page } from '@playwright/test';
+import {
+  closeDb,
+  demoQrCode,
+  eventCountForQrSession,
+  quotaUsed,
+  resetFreeQuota,
+} from './support/db';
 
 /**
  * The customer journey, end to end: Flow C, screens REV-01 through REV-03.
@@ -14,6 +20,15 @@ const SLUG = process.env.E2E_SLUG ?? 'demo-south-cafe';
 // Resolved from the database rather than hard-coded: the seed generates fresh codes, and a stale
 // literal fails as a 404 that looks like a broken route.
 let QR_CODE = '';
+const SELECTED_SERVICES = ['Website development', 'SEO'];
+
+async function selectServicesAndGenerate(page: Page) {
+  await expect(page.getByRole('heading', { name: 'What did you try?' })).toBeVisible();
+  for (const service of SELECTED_SERVICES) {
+    await page.getByRole('button', { name: service, exact: true }).click();
+  }
+  await page.getByRole('button', { name: 'Create my draft', exact: true }).click();
+}
 
 test.beforeAll(async () => {
   QR_CODE = await demoQrCode();
@@ -33,23 +48,24 @@ test.beforeEach(async () => {
 });
 
 test.describe('customer review flow', () => {
-  test('scanning a QR lands directly on the review page with no questionnaire', async ({
-    page,
-  }) => {
+  test('scanning a QR offers unselected services without spending a draft', async ({ page }) => {
     await page.context().clearCookies();
     await page.goto(`/r/${QR_CODE}`);
 
     await expect(page.getByRole('heading', { name: 'Digital Hammerr', exact: true })).toBeVisible();
 
-    // D-008: no questionnaire, and now no tap either — the scan was the intent, so the draft is
-    // written on arrival. Nothing is asked of the customer before they have something to react to.
-    await expect(page.getByRole('textbox', { name: /your review/i })).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(page.getByText(/written with Ai assistance/)).toBeVisible();
-    await expect(page.getByText(/written with AI assistance/)).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'What did you try?' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create my draft', exact: true })).toBeDisabled();
+    await expect(page.locator('button[aria-pressed="true"]')).toHaveCount(0);
+    for (const service of SELECTED_SERVICES) {
+      await expect(page.getByRole('button', { name: service, exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    }
+    await expect(page.getByRole('textbox', { name: /your review/i })).toHaveCount(0);
     await expect(page.locator('form input[type="text"]')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /generate my review/i })).toHaveCount(0);
+    expect(await quotaUsed()).toBe(0);
 
     const anonymousCookie = (await page.context().cookies()).find(
       (cookie) => cookie.name === 'dh_anon',
@@ -61,6 +77,19 @@ test.describe('customer review flow', () => {
     await expect
       .poll(() => eventCountForQrSession('review_page_view', QR_CODE, anonymousCookie!.value))
       .toBe(1);
+    expect(await eventCountForQrSession('ai_generate_click', QR_CODE, anonymousCookie!.value)).toBe(
+      0,
+    );
+
+    // Choosing services alone does not generate, and deselection restores the empty state.
+    const service = page.getByRole('button', { name: 'SEO', exact: true });
+    await service.click();
+    await expect(service).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Create my draft', exact: true })).toBeEnabled();
+    expect(await quotaUsed()).toBe(0);
+    await service.click();
+    await expect(service).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('button', { name: 'Create my draft', exact: true })).toBeDisabled();
   });
 
   /**
@@ -82,12 +111,23 @@ test.describe('customer review flow', () => {
 
   test('generates an editable draft', async ({ page }) => {
     await page.goto(`/r/${QR_CODE}`);
+    const generated = page.waitForRequest(
+      (request) =>
+        request.method() === 'POST' && request.url().endsWith('/api/v1/public/review/generate'),
+    );
+    await selectServicesAndGenerate(page);
+    expect((await generated).postDataJSON()).toMatchObject({
+      qr_code: QR_CODE,
+      selected_services: SELECTED_SERVICES,
+    });
 
     const draft = page.getByRole('textbox', { name: /your review/i });
     await expect(draft).toBeVisible({ timeout: 30_000 });
 
     const text = await draft.inputValue();
     expect(text.length).toBeGreaterThan(60);
+    await expect(page.getByRole('heading', { name: 'Make it your own' })).toBeVisible();
+    expect(await quotaUsed()).toBe(1);
     // CHANGE-003: the demo tenant is Hinglish by default and the stub honours the setting, so
     // a draft here is written in Hinglish. The marker is a literal copy of HINGLISH_MARKER in
     // packages/core — Playwright must not import that package.
@@ -108,12 +148,13 @@ test.describe('customer review flow', () => {
   /**
    * AC-008 and ADR-008 — the hinge of the entire product.
    *
-   * V1 asks the customer nothing, so the draft is a machine's suggestion until a real person
-   * affirms it is true. Copy stays disabled until they do.
+   * Selecting services is not confirmation of an AI-written draft. Copy stays disabled until
+   * the customer has read it and affirms that it represents their genuine experience.
    */
   test('keeps Copy disabled until genuine experience is confirmed', async ({ page }) => {
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.goto(`/r/${QR_CODE}`);
+    await selectServicesAndGenerate(page);
     const draft = page.getByRole('textbox', { name: /your review/i });
     await expect(draft).toBeVisible({
       timeout: 30_000,
@@ -174,6 +215,7 @@ test.describe('customer review flow', () => {
     });
 
     await page.goto(`/r/${QR_CODE}`);
+    await selectServicesAndGenerate(page);
     const draft = page.getByRole('textbox', { name: /your review/i });
     await expect(draft).toBeVisible({ timeout: 30_000 });
     const draftLength = (await draft.inputValue()).length;
@@ -230,6 +272,7 @@ test.describe('customer review flow', () => {
     });
 
     await page.goto(`/r/${QR_CODE}`);
+    await selectServicesAndGenerate(page);
     const draft = page.getByRole('textbox', { name: /your review/i });
     await expect(draft).toBeVisible({ timeout: 30_000 });
     await page.getByRole('checkbox', { name: /genuine experience/i }).check();
@@ -255,6 +298,7 @@ test.describe('customer review flow', () => {
 
   test('regenerating produces a different draft and re-arms the confirmation', async ({ page }) => {
     await page.goto(`/r/${QR_CODE}`);
+    await selectServicesAndGenerate(page);
 
     const draft = page.getByRole('textbox', { name: /your review/i });
     await expect(draft).toBeVisible({ timeout: 30_000 });
@@ -279,6 +323,210 @@ test.describe('customer review flow', () => {
     await expect(page.getByRole('link', { name: /copy & open google/i })).toHaveCount(0);
   });
 
+  test('can cancel changed services without losing the edited draft or spending quota', async ({
+    page,
+  }) => {
+    await page.goto(`/r/${QR_CODE}`);
+    await selectServicesAndGenerate(page);
+    const editor = page.getByRole('textbox', { name: /your review/i });
+    await expect(editor).toBeVisible();
+    const edited = `${await editor.inputValue()} My own edit.`;
+    await editor.fill(edited);
+    await page.getByRole('button', { name: 'Change services', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'What did you try?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Website development', exact: true }).click();
+    await page.getByRole('button', { name: 'App development', exact: true }).click();
+    expect(await quotaUsed()).toBe(1);
+    await page.getByRole('button', { name: 'Return to draft', exact: true }).click();
+    await expect(editor).toHaveValue(edited);
+    expect(await quotaUsed()).toBe(1);
+
+    // Cancel means the original service selection, not the unsubmitted choices, remains active.
+    await page.getByRole('button', { name: 'Change services', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Website development', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page.getByRole('button', { name: 'App development', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('changing services requests a new draft with only the new choices', async ({ page }) => {
+    await page.goto(`/r/${QR_CODE}`);
+    await selectServicesAndGenerate(page);
+    const editor = page.getByRole('textbox', { name: /your review/i });
+    await expect(editor).toBeVisible();
+    const first = await editor.inputValue();
+    await page.getByRole('checkbox', { name: /genuine experience/i }).check();
+    await page.getByRole('button', { name: 'Change services', exact: true }).click();
+    await page.getByRole('button', { name: 'Website development', exact: true }).click();
+    await page.getByRole('button', { name: 'App development', exact: true }).click();
+    const request = page.waitForRequest(
+      (candidate) =>
+        candidate.method() === 'POST' && candidate.url().endsWith('/api/v1/public/review/generate'),
+    );
+    await page.getByRole('button', { name: 'Create my draft', exact: true }).click();
+    const payload = (await request).postDataJSON() as {
+      qr_code: string;
+      selected_services: string[];
+    };
+    expect(payload.qr_code).toBe(QR_CODE);
+    expect(payload.selected_services.toSorted()).toEqual(['App development', 'SEO']);
+    await expect(editor).not.toHaveValue(first);
+    await expect(page.getByRole('checkbox', { name: /genuine experience/i })).not.toBeChecked();
+    await expect(page.getByRole('button', { name: 'Copy & open Google' })).toBeDisabled();
+    expect(await quotaUsed()).toBe(2);
+  });
+
+  test('refresh starts with empty services and restores a saved draft only when requested', async ({
+    page,
+  }) => {
+    await page.goto(`/r/${QR_CODE}`);
+    await selectServicesAndGenerate(page);
+    const editor = page.getByRole('textbox', { name: /your review/i });
+    await expect(editor).toBeVisible();
+    const generatedText = await editor.inputValue();
+    expect(await quotaUsed()).toBe(1);
+    let generatedAfterRefresh = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/api/v1/public/review/generate')) {
+        generatedAfterRefresh += 1;
+      }
+    });
+    await page.reload();
+
+    // A repeat scan/refresh is a new entry into the journey, not consent to skip its first step.
+    await expect(page.getByRole('heading', { name: 'What did you try?' })).toBeVisible();
+    await expect(page.locator('button[aria-pressed="true"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Create my draft', exact: true })).toBeDisabled();
+    await expect(editor).toHaveCount(0);
+    expect(generatedAfterRefresh).toBe(0);
+    expect(await quotaUsed()).toBe(1);
+
+    // An explicit recovery action still preserves the previous draft and its matching services.
+    await page.getByRole('button', { name: 'Return to draft', exact: true }).click();
+    await expect(editor).toHaveValue(generatedText);
+    await expect(page.getByText('Website development · SEO', { exact: true })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /genuine experience/i })).not.toBeChecked();
+    await page.getByRole('button', { name: 'Change services', exact: true }).click();
+    for (const service of SELECTED_SERVICES) {
+      await expect(page.getByRole('button', { name: service, exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    }
+    expect(generatedAfterRefresh).toBe(0);
+    expect(await quotaUsed()).toBe(1);
+  });
+
+  for (const revisit of ['same tab', 'new tab'] as const) {
+    test(`rescanning in the ${revisit} shows services before a saved draft and uses only new choices`, async ({
+      page,
+    }, testInfo) => {
+      await page.goto(`/r/${QR_CODE}`);
+      await selectServicesAndGenerate(page);
+      await expect(page.getByRole('textbox', { name: /your review/i })).toBeVisible();
+      const anonymousCookie = (await page.context().cookies()).find(
+        (cookie) => cookie.name === 'dh_anon',
+      );
+      expect(anonymousCookie).toBeDefined();
+      expect(await quotaUsed()).toBe(1);
+
+      let generationsAfterRescan = 0;
+      page.context().on('request', (request) => {
+        if (
+          request.method() === 'POST' &&
+          request.url().endsWith('/api/v1/public/review/generate')
+        ) {
+          generationsAfterRescan += 1;
+        }
+      });
+      const scannedPage = revisit === 'new tab' ? await page.context().newPage() : page;
+      if (revisit === 'new tab') await scannedPage.setViewportSize({ width: 390, height: 844 });
+      if (revisit === 'same tab') await scannedPage.goto('about:blank');
+      await scannedPage.goto(`/r/${QR_CODE}`);
+
+      await expect(scannedPage.getByRole('heading', { name: 'What did you try?' })).toBeVisible();
+      await expect(scannedPage.getByRole('textbox', { name: /your review/i })).toHaveCount(0);
+      await expect(scannedPage.locator('button[aria-pressed="true"]')).toHaveCount(0);
+      await expect(
+        scannedPage.getByRole('button', { name: 'Create my draft', exact: true }),
+      ).toBeDisabled();
+      await expect(
+        scannedPage.getByRole('button', { name: 'Return to draft', exact: true }),
+      ).toBeVisible();
+      expect(
+        (await scannedPage.context().cookies()).find((cookie) => cookie.name === 'dh_anon')?.value,
+      ).toBe(anonymousCookie!.value);
+      expect(generationsAfterRescan).toBe(0);
+      expect(await quotaUsed()).toBe(1);
+      const screenshot = testInfo.outputPath(
+        `rescan-services-first-${revisit.replace(' ', '-')}.png`,
+      );
+      await scannedPage.screenshot({ path: screenshot, fullPage: true });
+      await testInfo.attach('Services first on a repeat scan', {
+        path: screenshot,
+        contentType: 'image/png',
+      });
+
+      // The old draft may have different services: only the customer's fresh choices are sent.
+      await scannedPage.getByRole('button', { name: 'App development', exact: true }).click();
+      const generated = scannedPage.waitForRequest(
+        (request) =>
+          request.method() === 'POST' && request.url().endsWith('/api/v1/public/review/generate'),
+      );
+      await scannedPage.getByRole('button', { name: 'Create my draft', exact: true }).click();
+      const payload = (await generated).postDataJSON();
+      expect(payload).toMatchObject({
+        qr_code: QR_CODE,
+        selected_services: ['App development'],
+      });
+      expect(payload).not.toHaveProperty('previous_generation_id');
+      await expect(scannedPage.getByRole('textbox', { name: /your review/i })).toBeVisible();
+      await expect(scannedPage.getByText('App development', { exact: true })).toBeVisible();
+      await expect(
+        scannedPage.getByRole('checkbox', { name: /genuine experience/i }),
+      ).not.toBeChecked();
+      expect(generationsAfterRescan).toBe(1);
+      expect(await quotaUsed()).toBe(2);
+      if (revisit === 'new tab') await scannedPage.close();
+    });
+  }
+
+  test('rejects missing, malformed and unconfigured service selections without spending quota', async ({
+    page,
+  }) => {
+    for (const selectedServices of [
+      undefined,
+      [],
+      null,
+      'SEO',
+      ['Unconfigured service'],
+      ['seo'],
+      ['SEO '],
+      ['x'.repeat(81)],
+      Array.from({ length: 31 }, () => 'SEO'),
+    ]) {
+      const response = await page.request.post('/api/v1/public/review/generate', {
+        data: { qr_code: QR_CODE, selected_services: selectedServices },
+      });
+      expect(response.status()).toBe(422);
+      expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+      expect(await quotaUsed()).toBe(0);
+    }
+  });
+
+  test('canonicalizes duplicate services while charging for only one successful draft', async ({
+    page,
+  }) => {
+    const response = await page.request.post('/api/v1/public/review/generate', {
+      data: { qr_code: QR_CODE, selected_services: ['SEO', 'Website development', 'SEO'] },
+    });
+    expect(response.ok()).toBe(true);
+    expect(await response.json()).toMatchObject({ selected_services: SELECTED_SERVICES });
+    expect(await quotaUsed()).toBe(1);
+  });
+
   /**
    * AC-025 and D-028. The platform can only observe that Google was opened. Nothing anywhere in
    * the customer flow may say or imply the review was posted.
@@ -286,6 +534,7 @@ test.describe('customer review flow', () => {
   test('never claims the review was submitted', async ({ page }) => {
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.goto(`/r/${QR_CODE}`);
+    await selectServicesAndGenerate(page);
     await expect(page.getByRole('textbox', { name: /your review/i })).toBeVisible({
       timeout: 30_000,
     });
@@ -336,5 +585,6 @@ test.describe('customer review flow', () => {
     await expect(page).toHaveURL(new RegExp(`/${SLUG}/feedback`));
     await expect(page.getByRole('textbox', { name: /like the business to know/i })).toBeVisible();
     await expect(page.locator('[type="radio"]')).toHaveCount(0);
+    expect(await quotaUsed()).toBe(0);
   });
 });

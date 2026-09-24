@@ -70,14 +70,9 @@ export default async function Page() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-semibold tracking-wider text-ink-muted">Ai review</p>
-        <h1 className="text-2xl font-bold tracking-tight text-ink">
-          What your customers&rsquo; drafts are built from
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Ai review settings</h1>
         <p className="max-w-2xl text-sm text-ink-muted">
-          Your customer never fills in a questionnaire, so this is everything the writing assistant
-          knows about you. The draft it produces is a starting point they edit and confirm
-          themselves.
+          Add your business details to help Ai draft reviews customers can edit.
         </p>
       </div>
 

@@ -407,15 +407,12 @@ function QrSources({
               <QrStandeePreview businessName={businessName} qrSrc={featuredSource.previewSrc} />
             </div>
             <div className="min-w-0">
-              <p className="m-0 text-xs font-bold tracking-[0.14em] text-accent uppercase">
-                Print-ready artwork
-              </p>
-              <h3 id="branded-card-title" className="m-0 mt-1 text-xl font-bold text-ink">
-                Your clean counter card
+              <h3 id="branded-card-title" className="m-0 text-xl font-bold text-ink">
+                Ready to print
               </h3>
               <p className="m-0 mt-2 max-w-xl text-sm leading-6 text-ink-muted">
-                The artwork keeps only your business name, the scannable code and “By Digital
-                Hammerr” at the bottom. Previewing {featuredSource.label}.
+                Download your QR card and place it where customers can scan it. Showing{' '}
+                {featuredSource.label}.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <a

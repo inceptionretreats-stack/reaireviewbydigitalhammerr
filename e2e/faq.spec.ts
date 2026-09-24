@@ -4,7 +4,7 @@ import path from 'node:path';
 // Browser plugin not available. These read-only homepage checks use the repository's
 // installed Chrome/Playwright workflow and never exercise database-backed actions.
 const FAQ_ITEMS = [
-  { id: 'qr', question: 'How do I get started with my QR?', image: 'qr-setup.webp' },
+  { id: 'qr', question: 'How do I get started with my QR?', image: 'qr-counter-scene-v1.webp' },
   { id: 'edit', question: 'Can customers edit the Ai review?', image: 'edit-review.webp' },
   {
     id: 'google',
@@ -81,12 +81,20 @@ async function expectOpenQuestion(faq: Locator, activeId: string | null) {
 async function expectImageLoaded(image: Locator, item: (typeof FAQ_ITEMS)[number]) {
   await expect(image).toBeVisible();
   await expect(image).toHaveAttribute('alt', /\S/);
-  await expect(image).toHaveCSS('object-fit', 'contain');
+  const isPhone = image.page().viewportSize()!.width <= 600;
+  await expect(image).toHaveCSS('object-fit', item.id === 'qr' && !isPhone ? 'cover' : 'contain');
+  await expect(image).toHaveAttribute(
+    'alt',
+    item.id === 'qr' ? 'Illustrative QR counter display' : /^Example product screen: /,
+  );
   const figure = image.locator('xpath=ancestor::figure');
   await expect(figure).toHaveAttribute('data-faq-preview-for', item.id);
   await expect(image).toHaveAttribute('src', `/marketing/faq/${item.image}`);
   const fullScreenshot = figure.getByRole('link', {
-    name: `View full screenshot: ${item.question}`,
+    name:
+      item.id === 'qr'
+        ? 'View illustrative QR counter display'
+        : `View full screenshot: ${item.question}`,
     exact: true,
   });
   await expect(fullScreenshot).toHaveAttribute('href', `/marketing/faq/${item.image}`);

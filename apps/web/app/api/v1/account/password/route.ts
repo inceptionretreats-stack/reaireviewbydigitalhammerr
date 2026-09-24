@@ -62,6 +62,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .limit(1);
 
   if (!account) return apiError('AUTH_REQUIRED', 'Please sign in and try again.');
+  if (!account.passwordHash) {
+    return apiError(
+      'VALIDATION_FAILED',
+      'This Google account has no password to change. Use password reset to set one first.',
+      { details: { fields: ['current_password'] } },
+    );
+  }
 
   /*
    * The limiter, on the same windows as POST /auth/login.

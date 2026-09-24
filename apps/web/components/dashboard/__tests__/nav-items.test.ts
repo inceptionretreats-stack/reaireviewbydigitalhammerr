@@ -39,6 +39,33 @@ describe('isCurrentNavItem', () => {
 });
 
 describe('DASHBOARD_NAV', () => {
+  it('retains all eleven built vendor destinations in their grouped display order', () => {
+    const built = DASHBOARD_NAV.filter((item) => item.href !== undefined);
+    expect(built.map(({ label, href }) => ({ label, href }))).toEqual([
+      { label: 'Dashboard', href: '/app' },
+      { label: 'Ai Review', href: '/app/ai-review' },
+      { label: 'Review Modes', href: '/app/review-modes' },
+      { label: 'QR Codes', href: '/app/qr' },
+      { label: 'Business Profile', href: '/app/profile' },
+      { label: 'Customers', href: '/app/customers' },
+      { label: 'Review Requests', href: '/app/review-requests' },
+      { label: 'Private Feedback', href: '/app/feedback' },
+      { label: 'Analytics', href: '/app/analytics' },
+      { label: 'Subscription', href: '/app/subscription' },
+      { label: 'Settings', href: '/app/settings' },
+    ]);
+    for (const item of built) {
+      for (const pathname of [
+        item.href!,
+        ...(item.href === '/app' ? [] : [`${item.href}/detail`]),
+      ]) {
+        expect(built.filter((candidate) => isCurrentNavItem(pathname, candidate.href!))).toEqual([
+          item,
+        ]);
+      }
+    }
+  });
+
   it('gives every built item an href under /app and leaves planned items without one', () => {
     for (const item of DASHBOARD_NAV) {
       if (item.href === undefined) continue;

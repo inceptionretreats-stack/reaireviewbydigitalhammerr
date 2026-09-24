@@ -1,3 +1,4 @@
+import localFont from 'next/font/local';
 import {
   ActionLink,
   MarketingCallToAction,
@@ -6,6 +7,15 @@ import {
   marketingStyles as styles,
 } from './MarketingSite';
 import { PricingDetailsLink } from './PricingDetails';
+
+const priceFont = localFont({
+  src: '../../assets/fonts/inter-latin-600-normal.woff',
+  variable: '--font-plan-price',
+  weight: '600',
+  display: 'swap',
+  preload: false,
+  fallback: ['Arial', 'sans-serif'],
+});
 
 const FREE_FEATURES = [
   '10 Ai drafts per business',
@@ -16,7 +26,7 @@ const FREE_FEATURES = [
 const PRO_FEATURES = [
   '2,000 Ai drafts per year',
   'Everything included in Free',
-  'Customer-editable review drafts',
+  '12-month draft allowance',
 ];
 
 const INCLUDED = [
@@ -69,7 +79,9 @@ export function PricingPlanCards() {
           <h3>Free</h3>
           <p>Try the complete review loop.</p>
         </div>
-        <p className={styles.price}>₹0</p>
+        <p className={`${styles.price} ${priceFont.variable}`}>
+          <small className={styles.currency}>₹</small>0
+        </p>
         <p className={styles.planBilling}>No card needed to begin</p>
         <ActionLink href="/signup" secondary>
           Create free account
@@ -86,8 +98,8 @@ export function PricingPlanCards() {
           <h3>Pro</h3>
           <p>More capacity for your business.</p>
         </div>
-        <p className={styles.price}>
-          ₹999 <span>/ year</span>
+        <p className={`${styles.price} ${priceFont.variable}`}>
+          <small className={styles.currency}>₹</small>999 <span>/ year</span>
         </p>
         <p className={styles.planBilling}>Billed annually</p>
         <ActionLink href="/signup">Create account</ActionLink>

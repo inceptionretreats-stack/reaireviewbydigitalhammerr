@@ -164,29 +164,27 @@ function MarketingFooter({ demo }: { demo?: LandingDemo | null }) {
       <div className={styles.footerInner}>
         <div className={styles.footerIntro}>
           <MarketingBrand />
-          <p>A clearer way for real customers to write and share genuine reviews.</p>
         </div>
         <nav className={styles.footerNav} aria-label="Footer navigation">
-          {NAVIGATION.map((item) => (
-            <Link key={item.id} href={item.href}>
-              {item.label}
-            </Link>
-          ))}
           {PUBLIC_INFORMATION_LINKS.map((item) => (
             <Link key={item.href} href={item.href}>
               {item.label}
             </Link>
           ))}
         </nav>
-        <div className={styles.footerAccount}>
+      </div>
+      <div className={styles.footerBottom}>
+        <span>Ai Review by Digital Hammerr · Customers choose what they post.</span>
+        <nav className={styles.footerAccount} aria-label="More links">
+          {NAVIGATION.map((item) => (
+            <Link key={item.id} href={item.href}>
+              {item.label}
+            </Link>
+          ))}
           <Link href="/login">Sign in</Link>
           <Link href="/signup">Create account</Link>
           {demo ? <Link href={`/${demo.slug}`}>Example page</Link> : null}
-        </div>
-      </div>
-      <div className={styles.footerBottom}>
-        <span>Ai Review by Digital Hammerr</span>
-        <span>Customers always control what they post.</span>
+        </nav>
       </div>
     </footer>
   );
@@ -273,73 +271,6 @@ export function HeroVideoVisual() {
     <div className={styles.heroVideoVisual} data-hero-visual>
       <HeroReviewVideo />
     </div>
-  );
-}
-
-export function TrustBand() {
-  return (
-    <section
-      className={styles.reviewBenefits}
-      id="why-ai-review"
-      aria-labelledby="review-benefits-title"
-      data-review-benefits
-    >
-      <div className={styles.benefitsCta}>
-        <p>A simple, smarter review experience for your business.</p>
-        <div className={styles.benefitsActions}>
-          <Link className={styles.benefitsPrimaryLink} href="/signup">
-            Create your free QR
-          </Link>
-          <Link className={styles.benefitsSecondaryLink} href="#how-it-works">
-            See how it works
-          </Link>
-        </div>
-      </div>
-      <div className={styles.benefitsBody}>
-        <h2 id="review-benefits-title">What sets Ai Review apart?</h2>
-        <p className={styles.benefitsIntro}>
-          Less effort for your customers. More possibilities for your business.
-        </p>
-        <dl className={styles.benefitsGrid} data-benefits-grid>
-          <div className={styles.benefitItem} data-review-benefit>
-            <dt>1 QR</dt>
-            <dd>
-              One simple scan
-              <br />
-              to get started
-            </dd>
-          </div>
-          <div className={styles.benefitItem} data-review-benefit>
-            <dt>Ai</dt>
-            <dd>
-              A draft to edit
-              <br />
-              in your own words
-            </dd>
-          </div>
-          <div className={styles.benefitItem} data-review-benefit>
-            <dt>10 free</dt>
-            <dd>
-              Ai review drafts
-              <br />
-              on the Free plan
-            </dd>
-          </div>
-          <div className={styles.benefitItem} data-review-benefit>
-            <dt>You</dt>
-            <dd>
-              Choose what to post
-              <br />
-              on Google
-            </dd>
-          </div>
-        </dl>
-        <p className={styles.benefitsNote}>Your experience. Your words. You choose what to post.</p>
-        <p className={styles.benefitsDisclaimer}>
-          Ai helps with writing; customers decide whether to publish.
-        </p>
-      </div>
-    </section>
   );
 }
 

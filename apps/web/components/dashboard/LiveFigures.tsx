@@ -30,10 +30,15 @@ export interface LiveFiguresProps {
 
 export function LiveFigures({ qrSources, subscription, businessStatus }: LiveFiguresProps) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="vendor-figures grid gap-3 sm:grid-cols-2">
       <KpiCard
         className="dashboard-kpi dashboard-kpi--green"
-        label="Enabled QR sources"
+        label={
+          <>
+            <MetricIcon kind="qr" />
+            Enabled QR sources
+          </>
+        }
         value={qrSources.active}
         hint={describeQrSources(qrSources, businessStatus)}
       />
@@ -60,7 +65,12 @@ function GenerationAllowance({
   return (
     <KpiCard
       className="dashboard-kpi dashboard-kpi--blue"
-      label={isPro ? 'Pro Ai drafts used this year' : 'Free Ai drafts used'}
+      label={
+        <>
+          <MetricIcon kind="draft" />
+          {isPro ? 'Pro Ai drafts used this year' : 'Free Ai drafts used'}
+        </>
+      }
       value={`${used.toLocaleString('en-IN')} of ${limit.toLocaleString('en-IN')}`}
       hint={
         remaining > 0
@@ -71,5 +81,30 @@ function GenerationAllowance({
             'None left. Customers can still open Google straight from your page.'
       }
     />
+  );
+}
+
+function MetricIcon({ kind }: { kind: 'qr' | 'draft' }) {
+  return (
+    <span className="vendor-kpi-icon" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {kind === 'qr' ? (
+          <>
+            <path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h2v2h-2zM20 15h1v6h-6v-1" />
+          </>
+        ) : (
+          <>
+            <path d="M5 3h9l5 5v13H5zM14 3v6h5M9 13h6M9 17h4" />
+          </>
+        )}
+      </svg>
+    </span>
   );
 }

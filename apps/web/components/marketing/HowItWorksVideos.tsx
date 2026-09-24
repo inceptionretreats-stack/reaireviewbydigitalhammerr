@@ -15,7 +15,7 @@ const STEPS = [
   {
     id: 'publish',
     title: 'Copy, Paste & Post',
-    caption: 'Copy your review, then paste and post it yourself on Google.',
+    caption: 'Copy, paste & post it yourself.',
   },
 ] as const;
 

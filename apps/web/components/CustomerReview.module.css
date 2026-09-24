@@ -31,13 +31,13 @@
 .card {
   position: relative;
   width: 100%;
-  max-width: 540px;
+  max-width: 640px;
   min-width: 0;
   margin: 0;
-  padding: 24px;
+  padding: 32px;
   overflow: hidden;
   border: 1px solid #e4ebf5;
-  border-radius: 22px;
+  border-radius: 24px;
   background: #ffffff;
   box-shadow: 0 12px 38px rgb(37 67 113 / 8%);
 }
@@ -70,22 +70,34 @@
 .identity {
   display: flex;
   min-width: 0;
-  margin: 0 0 28px;
-  flex-direction: column;
+  margin: 0;
+  padding-bottom: 22px;
+  border-bottom: 1px solid #e4ebf5;
+  flex-direction: row;
   align-items: center;
   gap: 12px;
-  text-align: center;
+  text-align: left;
+}
+
+.identityText {
+  min-width: 0;
+}
+.identityCaption {
+  margin: 3px 0 0;
+  color: #65758b;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .logo,
 .monogram {
   display: block;
-  width: 64px;
-  height: 64px;
+  width: 48px;
+  height: 48px;
   flex: none;
   overflow: hidden;
   border: 1px solid #dce8fb;
-  border-radius: 18px;
+  border-radius: 12px;
   background: #e8f1ff;
 }
 
@@ -96,8 +108,9 @@
 .monogram {
   display: grid;
   place-items: center;
-  color: #1967d2;
-  font-size: 30px;
+  background: #1967d2;
+  color: #ffffff;
+  font-size: 23px;
   font-weight: 650;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -108,8 +121,8 @@
   min-width: 0;
   margin: 0;
   color: #172033;
-  font-size: 26px;
-  font-weight: 650;
+  font-size: 23px;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.3;
   overflow-wrap: anywhere;
@@ -120,7 +133,243 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+}
+
+.progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 22px 0 32px;
+  padding: 0;
+  list-style: none;
+}
+.progress li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  color: #65758b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+}
+.progress li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  height: 1px;
+  background: #d9e3f0;
+  top: 8px;
+  left: calc(50% + 12px);
+  width: calc(100% - 24px);
+}
+.progress li[data-state='complete']::after {
+  background: #1967d2;
+}
+.progress li[data-state='current'] {
+  color: #1967d2;
+  font-weight: 700;
+}
+.progressDot {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #a9b7cb;
+  border-radius: 50%;
+  background: #fff;
+}
+.progress li[data-state='current'] .progressDot,
+.progress li[data-state='complete'] .progressDot {
+  border-color: #1967d2;
+  background: #1967d2;
+  color: #fff;
+}
+.progressDot svg {
+  width: 15px;
+  height: 15px;
+}
+.introduction p {
+  margin: 9px 0 0;
+  color: #65758b;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.flowTitle {
+  margin: 0;
+  color: #172033;
+  font-size: clamp(26px, 5.8vw, 30px);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.flowTitle:focus {
+  outline: none;
+}
+.servicePicker {
+  min-width: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+}
+.serviceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.serviceOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 12px;
+  border: 1px solid #cbd5e3;
+  border-radius: 12px;
+  background: #fff;
+  color: #172033;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.45;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+  overflow-wrap: anywhere;
+}
+.serviceOption:hover {
+  border-color: #1967d2;
+  background: #f8faff;
+}
+.serviceOption:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.serviceOption[aria-pressed='true'] {
+  color: #155bbd;
+  border-color: #1967d2;
+  background: #edf4ff;
+  box-shadow: inset 0 0 0 0.5px #1967d2;
+}
+.selectionBox {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid #9ba9bb;
+  border-radius: 5px;
+  background: white;
+}
+.serviceOption[aria-pressed='true'] .selectionBox {
+  background: #1967d2;
+  border-color: #1967d2;
+  color: #fff;
+}
+.selectionBox svg {
+  width: 17px;
+  height: 17px;
+}
+.selectionCount {
+  margin: 13px 0 0;
+  color: #65758b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.serviceSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f2f6fc;
+  color: #344158;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.serviceSummary > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.serviceSummary button {
+  flex: none;
+  max-width: 110px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid #b7c9e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #1967d2;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 600;
+  cursor: pointer;
+}
+.textButton,
+.directLink {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: #1967d2;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.directLink {
+  order: 1;
+  margin-top: -14px;
+}
+.feedbackLink {
+  order: 2;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.loadingLines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 340px;
+  margin-top: 28px;
+}
+.loadingLines span {
+  height: 12px;
+  border-radius: 6px;
+  background: #eaf0f8;
+  animation: customer-review-pulse 1.5s ease-in-out infinite;
+}
+.loadingLines span:nth-child(2) {
+  width: 88%;
+  animation-delay: 0.15s;
+}
+.loadingLines span:nth-child(3) {
+  width: 65%;
+  animation-delay: 0.3s;
+}
+@keyframes customer-review-pulse {
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .editor {
@@ -147,12 +396,12 @@
   min-width: 0;
   min-height: 176px;
   margin: 0;
-  padding: 18px;
+  padding: 16px;
   border: 1px solid #b8cdef;
   border-radius: 12px;
   background: #f8faff;
   color: #172033;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 400;
   line-height: 1.65;
   resize: vertical;
@@ -182,12 +431,11 @@
   display: flex;
   min-width: 0;
   margin: 0;
-  padding: 14px;
+  padding: 0;
   align-items: flex-start;
   gap: 10px;
-  border: 1px solid #d3ece2;
-  border-radius: 12px;
-  background: #eef8f4;
+  border: 0;
+  background: transparent;
   color: #344158;
   cursor: pointer;
 }
@@ -198,7 +446,7 @@
   min-height: 22px;
   margin: 1px 0 0;
   flex: none;
-  accent-color: #188038;
+  accent-color: #1967d2;
   cursor: pointer;
 }
 
@@ -206,22 +454,34 @@
   display: block;
   min-width: 0;
   flex: 1;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 400;
   line-height: 1.55;
 }
 
 .confirm[data-confirmed='true'] {
-  border-color: #bddfcf;
-  background: #e8f6ee;
+  color: #172033;
 }
 
 .actions {
-  display: flex;
+  display: grid;
   min-width: 0;
   margin-top: 18px;
-  flex-direction: column;
-  gap: 12px;
+  grid-template-columns: minmax(100px, 0.75fr) minmax(0, 1.65fr);
+  gap: 10px;
+}
+
+.actions :is(.primaryButton, .secondaryButton) {
+  min-height: 52px;
+  padding: 10px 8px;
+  font-size: 14px;
+}
+.actions .icon {
+  width: 17px;
+  height: 17px;
+}
+.actions .buttonContent {
+  gap: 6px;
 }
 
 .secondaryButton,
@@ -240,7 +500,7 @@
   background: #ffffff;
   color: #1967d2;
   font-size: 16px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.5;
   text-align: center;
   text-decoration: none;
@@ -503,15 +763,30 @@
 
 @media (max-width: 560px) {
   .page {
-    padding: 20px 16px;
+    padding: 12px 12px 24px;
   }
 
   .card {
     padding: 20px;
   }
 
+  .progress {
+    margin: 20px 0 25px;
+  }
+
+  .serviceGrid {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .serviceOption {
+    min-height: 55px;
+    padding: 10px 13px;
+    font-size: 15px;
+  }
+
   .identity {
-    margin-bottom: 24px;
+    margin-bottom: 0;
     gap: 10px;
   }
 
@@ -524,7 +799,26 @@
   }
 
   .confirm {
-    padding: 12px;
+    padding: 0;
+  }
+}
+
+@media (max-width: 370px) {
+  .card {
+    padding: 20px 16px;
+  }
+  .serviceOption {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .businessName {
+    font-size: 20px;
+  }
+  .identityCaption {
+    font-size: 12px;
+  }
+  .actions {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -534,6 +828,13 @@
   .retryButton,
   .manualLink {
     transition: none;
+  }
+
+  .serviceOption {
+    transition: none;
+  }
+  .loadingLines span {
+    animation: none;
   }
 
   .spinner {

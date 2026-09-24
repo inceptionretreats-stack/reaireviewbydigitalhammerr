@@ -1,6 +1,9 @@
 import { notFound, redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { db } from '@/lib/db';
-import { resolveBySlug } from '@/lib/public-business';
+import { loadPublicServices, resolveBySlug } from '@/lib/public-business';
+import { resolveAnonymousSession } from '@/lib/anonymous-session';
+import { loadLatestDraft } from '@/lib/generation-service';
 import { ReviewFlow } from '@/components/ReviewFlow';
 import styles from '@/components/CustomerReview.module.css';
 
@@ -21,6 +24,15 @@ export default async function SlugReviewPage({ params }: { params: Promise<{ slu
   if (!('config' in resolution)) notFound();
 
   const { config } = resolution;
+  const database = db();
+  const session = await resolveAnonymousSession(
+    new Request('https://internal', { headers: await headers() }),
+    config.businessId,
+  );
+  const [services, existingDraft] = await Promise.all([
+    loadPublicServices(database, config.businessId),
+    session ? loadLatestDraft(database, session.sessionId) : Promise.resolve(null),
+  ]);
 
   return (
     <main className={styles.page}>
@@ -31,7 +43,9 @@ export default async function SlugReviewPage({ params }: { params: Promise<{ slu
           logoUrl: config.logoUrl,
           reviewUrl: config.reviewUrl,
           reviewPlatformLabel: config.reviewPlatformLabel,
+          services,
         }}
+        initialDraft={existingDraft}
       />
     </main>
   );

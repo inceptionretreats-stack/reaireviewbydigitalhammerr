@@ -22,8 +22,10 @@ export default function PrivacyPage() {
         <h2>Information the application handles</h2>
         <ul>
           <li>
-            <strong>Account information:</strong> your name, email, mobile number, password hash,
-            session information and account-security activity.
+            <strong>Account information:</strong> your name, email, mobile number, password hash
+            when you set a password, session information and account-security activity. If you
+            choose Google sign-in, we also store Google’s stable account identifier to recognize
+            your account on future sign-ins.
           </li>
           <li>
             <strong>Business information:</strong> profile details, location, branding, public
@@ -51,6 +53,11 @@ export default function PrivacyPage() {
           pages, generate drafts, route private feedback, manage plan allowances and payments, and
           show activity to the relevant business. Session and technical information also support
           abuse prevention and troubleshooting.
+        </p>
+        <p>
+          Continue with Google confirms a vendor’s identity; it does not give this application
+          access to their Google Business Profile or automatically import a review destination.
+          Business details and the Google review link are still provided during setup.
         </p>
         <p>
           Activity includes QR-page visits, draft generation, editing, copying and opening a review

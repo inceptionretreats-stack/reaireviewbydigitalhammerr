@@ -22,8 +22,8 @@ import { ReviewFlowIcon } from './ReviewFlowIcon';
  * refused — a permissions prompt declined on HTTPS — is reported the same way on this page,
  * which stays open behind the new tab. "Copied" is only ever shown after the write resolved.
  *
- * The confirmation checkbox stays, and still gates the whole thing. V1 asks the customer nothing,
- * so the model knows nothing about their actual experience — the draft is a suggestion until a
+ * The confirmation checkbox stays, and still gates the whole thing. Service choices do not
+ * establish sentiment or outcomes — the draft is a suggestion until a
  * real person affirms it is true (ADR-008, AC-008). It is a tick rather than a tap, which is why
  * two buttons do not touch it.
  *
@@ -59,7 +59,6 @@ export function DraftEditor(props: DraftEditorProps) {
   const canCopy = confirmed && draft.trim().length > 0 && !tooLong;
   const copyLabel = (
     <span className={styles.buttonContent}>
-      <ReviewFlowIcon name="copy" />
       <span>Copy &amp; open {platformLabel}</span>
       <ReviewFlowIcon name="arrow" />
     </span>
@@ -78,8 +77,7 @@ export function DraftEditor(props: DraftEditorProps) {
   return (
     <div className={styles.editor}>
       <label className={styles.editorHeading} htmlFor="review-draft">
-        <ReviewFlowIcon name="edit" />
-        Your review — edit anything you like
+        Your review
       </label>
       <textarea
         ref={editorRef}
@@ -112,10 +110,7 @@ export function DraftEditor(props: DraftEditorProps) {
 
       <div className={styles.actions}>
         <button type="button" className={styles.secondaryButton} onClick={props.onRegenerate}>
-          <span className={styles.buttonContent}>
-            <ReviewFlowIcon name="shuffle" />
-            New review
-          </span>
+          <span className={styles.buttonContent}>New review</span>
         </button>
 
         {reviewUrl ? (

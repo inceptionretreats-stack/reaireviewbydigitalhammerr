@@ -1,12 +1,24 @@
 import { and, eq } from 'drizzle-orm';
 import {
   assets,
+  aiBusinessContexts,
   businessSlugs,
   businesses,
   qrCodes,
   reviewDestinations,
   type Database,
 } from '@ai-review/db';
+import { getSelectableServices } from './customer-services';
+
+/** Publish only service labels, never the vendor's internal AI instructions or context. */
+export async function loadPublicServices(db: Database, businessId: string): Promise<string[]> {
+  const [context] = await db
+    .select({ services: aiBusinessContexts.services })
+    .from(aiBusinessContexts)
+    .where(eq(aiBusinessContexts.businessId, businessId))
+    .limit(1);
+  return getSelectableServices(context?.services);
+}
 
 /**
  * Resolves a public visitor to a tenant, by QR code or by slug.

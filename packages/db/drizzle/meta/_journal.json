@@ -57,6 +57,13 @@
       "when": 1789711806823,
       "tag": "0007_maintenance_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790225392316,
+      "tag": "0008_bent_darkstar",
+      "breakpoints": true
     }
   ]
 }

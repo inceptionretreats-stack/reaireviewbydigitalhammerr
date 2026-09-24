@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
 // Browser plugin not available. Use the existing Chrome/Playwright setup for these
@@ -16,7 +17,13 @@ const VIEWPORTS = [
 ] as const;
 
 async function capturePricing(section: Locator, filename: string) {
-  if (!process.env.PRICING_SCREENSHOT_DIR) return;
+  const screenshotDirectory =
+    process.env.PRICING_SCREENSHOT_DIR ??
+    (process.env.VENDOR_UI_ARTIFACT_DIR
+      ? path.join(process.env.VENDOR_UI_ARTIFACT_DIR, 'pricing')
+      : undefined);
+  if (!screenshotDirectory) return;
+  await mkdir(screenshotDirectory, { recursive: true });
   const page = section.page();
   const viewport = page.viewportSize()!;
   await page.setViewportSize({
@@ -28,7 +35,7 @@ async function capturePricing(section: Locator, filename: string) {
       element.scrollIntoView({ block: 'start', behavior: 'instant' }),
     );
     await section.screenshot({
-      path: path.join(process.env.PRICING_SCREENSHOT_DIR, filename),
+      path: path.join(screenshotDirectory, filename),
       animations: 'disabled',
       style:
         'header:has(a[aria-label="Ai Review home"]), nextjs-portal { visibility: hidden !important; }',
@@ -36,6 +43,57 @@ async function capturePricing(section: Locator, filename: string) {
   } finally {
     await page.setViewportSize(viewport);
   }
+}
+
+async function expectProfessionalPrice(price: Locator, expectedCopy: string) {
+  await expect(price).toHaveText(expectedCopy);
+  await expect(price).toHaveCSS('font-weight', '600');
+  const typography = await price.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const priceBox = element.getBoundingClientRect();
+    const cardBox = element.closest('article')!.getBoundingClientRect();
+    const billingBox = element.nextElementSibling!.getBoundingClientRect();
+    const textBounds: DOMRect[] = [];
+    let amountBounds: DOMRect | undefined;
+    const textNodes = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let textNode: Node | null;
+    while ((textNode = textNodes.nextNode())) {
+      if (!textNode.textContent?.trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(textNode);
+      textBounds.push(...range.getClientRects());
+      if (/\d/.test(textNode.textContent)) amountBounds = range.getBoundingClientRect();
+    }
+    const period = element.querySelector('span')?.getBoundingClientRect();
+    const number = amountBounds!;
+    return {
+      numericStyle: style.fontVariantNumeric,
+      relativeTracking: Number.parseFloat(style.letterSpacing) / Number.parseFloat(style.fontSize),
+      fontFamily: style.fontFamily,
+      expectedFontFamily: style.getPropertyValue('--font-plan-price').trim(),
+      priceInsideCard: priceBox.left >= cardBox.left && priceBox.right <= cardBox.right,
+      // Font line boxes may extend slightly above the CSS line-height without clipping.
+      // The card clips overflow, so use its vertical boundary and the billing copy below.
+      textFits: textBounds.every(
+        (bounds) =>
+          bounds.left >= priceBox.left - 1 &&
+          bounds.right <= priceBox.right + 1 &&
+          bounds.top >= cardBox.top &&
+          bounds.bottom <= billingBox.top + 1,
+      ),
+      periodBesidePrice: !period || (period.left >= number.right - 1 && period.top < number.bottom),
+    };
+  });
+  expect(typography.numericStyle).toContain('lining-nums');
+  expect(typography.numericStyle).toContain('tabular-nums');
+  expect(typography.relativeTracking).toBeCloseTo(-0.025, 3);
+  expect(typography.expectedFontFamily).not.toBe('');
+  expect(typography.fontFamily.replaceAll('"', '')).toContain(
+    typography.expectedFontFamily.split(',')[0]!.trim().replaceAll('"', ''),
+  );
+  expect(typography.priceInsideCard).toBe(true);
+  expect(typography.textFits).toBe(true);
+  expect(typography.periodBesidePrice).toBe(true);
 }
 
 async function expectReadableCard(card: Locator, page: Page, descriptionText: string) {
@@ -83,7 +141,7 @@ async function expectReadableCard(card: Locator, page: Page, descriptionText: st
   }
 }
 
-test.describe('readable compact pricing plans', () => {
+test.describe('readable concept-aligned pricing plans', () => {
   for (const route of ENTRY_ROUTES) {
     for (const viewport of VIEWPORTS) {
       test(`${route} keeps both plans readable and signup actions working at ${viewport.width}x${viewport.height}px`, async ({
@@ -130,8 +188,12 @@ test.describe('readable compact pricing plans', () => {
           has: page.getByRole('heading', { name: 'Free', exact: true }),
         });
         const pro = cards.filter({ has: page.getByRole('heading', { name: 'Pro', exact: true }) });
-        await expect(free.getByText('₹0', { exact: true })).toBeVisible();
-        await expect(pro.locator('p').filter({ hasText: /^₹999\s*\/\s*year$/ })).toBeVisible();
+        const freePrice = free.getByText('₹0', { exact: true });
+        const proPrice = pro.locator('p').filter({ hasText: /^₹999\s*\/\s*year$/ });
+        await expect(freePrice).toBeVisible();
+        await expect(proPrice).toBeVisible();
+        await expectProfessionalPrice(freePrice, '₹0');
+        await expectProfessionalPrice(proPrice, '₹999 / year');
         await expect(free).toContainText(/(?:Ten|10)\s+Ai(?: review)? drafts per business/i, {
           useInnerText: true,
         });
@@ -143,10 +205,12 @@ test.describe('readable compact pricing plans', () => {
 
         const freeBox = (await free.boundingBox())!;
         const proBox = (await pro.boundingBox())!;
-        if (viewport.width > 820) {
-          // Includes the accessible 44px Show more link added beneath the features.
-          expect(freeBox.height).toBeLessThan(550);
-          expect(proBox.height).toBeLessThan(550);
+        if (Math.abs(freeBox.y - proBox.y) <= 1) {
+          // Keep paired cards aligned without stretching them across a wide desktop.
+          const heroWidth = (await page.locator('#home').boundingBox())!.width;
+          const plansWidth = proBox.x + proBox.width - freeBox.x;
+          expect(plansWidth).toBeGreaterThanOrEqual(Math.min(heroWidth - 32, 1000));
+          expect(plansWidth).toBeLessThanOrEqual(Math.min(heroWidth, 1081));
           expect(Math.abs(freeBox.y - proBox.y)).toBeLessThanOrEqual(1);
           expect(Math.abs(freeBox.height - proBox.height)).toBeLessThanOrEqual(1);
           expect(Math.abs(freeBox.width - proBox.width)).toBeLessThanOrEqual(1);

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { migrationMaintenanceResponse } from './lib/migration-maintenance';
 
 /**
  * Mints the anonymous visitor token.
@@ -7,8 +8,8 @@ import { NextResponse, type NextRequest } from 'next/server';
  * only from proxy/middleware, a Route Handler or a Server Action. The QR landing page is an
  * RSC, so minting there threw at runtime and took out the product's primary entry point.
  *
- * Uses Web Crypto, not node:crypto: this runs in the Edge runtime, where Node built-ins are
- * unavailable. Nothing here touches the database; the session row is created lazily by
+ * Uses Web Crypto. Next.js 16 Proxy runs in the Node.js runtime. Nothing here touches the
+ * database; the session row is created lazily by
  * whichever request first needs it (see lib/anonymous-session.ts).
  *
  * Named proxy.ts per the Next.js 16 convention that replaces middleware.ts.
@@ -17,6 +18,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 const COOKIE_NAME = 'dh_anon';
 const TTL_DAYS = 30;
 const TOKEN_BYTES = 32;
+const AUTH_ALIAS_HOST = 'ai-review-dh.vercel.app';
+const AUTH_CANONICAL_ORIGIN = 'https://aireview.digitalhammerr.com';
+const AUTH_PAGES = new Set(['/login', '/signup', '/signup/google']);
 
 function mintToken(): string {
   const bytes = new Uint8Array(TOKEN_BYTES);
@@ -28,6 +32,30 @@ function mintToken(): string {
 }
 
 export default function proxy(request: NextRequest): NextResponse {
+  const maintenance = migrationMaintenanceResponse(request);
+  if (maintenance) return maintenance;
+
+  // Google Identity Services permits the canonical production origin, not the legacy Vercel
+  // alias. Move only vendor auth page visits there; customer QR links keep their own origin.
+  if (
+    (request.method === 'GET' || request.method === 'HEAD') &&
+    request.nextUrl.hostname === AUTH_ALIAS_HOST &&
+    AUTH_PAGES.has(request.nextUrl.pathname)
+  ) {
+    return NextResponse.redirect(
+      new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, AUTH_CANONICAL_ORIGIN),
+      307,
+    );
+  }
+
+  // Preserve the old matcher's anonymous-cookie scope now that the migration gate needs to
+  // intercept every route. APIs, authenticated subroutes, and Next assets still pass unchanged
+  // when maintenance is off. This also avoids setting cookies on exempt static reads.
+  if (
+    /^\/(?:_next\/(?:static|image)|favicon\.ico|api\/|app\/|admin\/)/.test(request.nextUrl.pathname)
+  ) {
+    return NextResponse.next();
+  }
   if (request.cookies.get(COOKIE_NAME)) return NextResponse.next();
 
   const token = mintToken();
@@ -54,7 +82,7 @@ export default function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Public surfaces only. The dashboard and admin carry their own authenticated session and
-  // gain nothing from an anonymous token.
-  matcher: ['/r/:path*', '/((?!_next/static|_next/image|favicon.ico|api/|app/|admin/).*)'],
+  // Keep this literal and comprehensive: API/cron/webhook requests, page GETs (which can
+  // write analytics), prefetch/RSC requests, and POST Server Actions all need the gate.
+  matcher: ['/:path*'],
 };

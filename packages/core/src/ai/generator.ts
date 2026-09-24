@@ -5,6 +5,7 @@ import { checkVariation, DEFAULT_SIMILARITY_THRESHOLD } from './similarity';
 import {
   buildPrompt,
   checkOutputCompliance,
+  mentionsUnselectedService,
   MAX_PREVIOUS_DRAFTS,
   type GenerationRequest,
 } from './prompt-builder';
@@ -197,6 +198,7 @@ export class ReviewGenerator {
 
       const text = result.output.review_text.trim();
       const compliance = checkOutputCompliance(text);
+      const serviceScopePassed = !mentionsUnselectedService(text, options.request);
       // The same window the prompt disclosed, not the whole history. The two used to diverge:
       // the prompt showed the last three drafts while the gate compared against every one, so a
       // long session eventually rejected a draft for resembling something the model had no way
@@ -207,7 +209,7 @@ export class ReviewGenerator {
         threshold,
       );
 
-      if (compliance.passed && variation.passed) {
+      if (compliance.passed && variation.passed && serviceScopePassed) {
         return {
           reviewText: text,
           output: result.output,
@@ -224,6 +226,7 @@ export class ReviewGenerator {
 
       lastRejections = [
         ...compliance.rejections,
+        ...(serviceScopePassed ? [] : ['UNSELECTED_SERVICE']),
         ...(variation.passed ? [] : [`TOO_SIMILAR:${variation.score.toFixed(3)}`]),
       ];
     }

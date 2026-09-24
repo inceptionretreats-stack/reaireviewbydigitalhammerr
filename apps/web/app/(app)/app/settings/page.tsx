@@ -64,7 +64,19 @@ export default async function Page() {
 
       <AccountDetailsForm initial={settings.account} />
       <BillingDetailsForm initial={settings.billing} />
-      <PasswordChangeForm />
+      {settings.account.hasPassword ? (
+        <PasswordChangeForm />
+      ) : (
+        <Card
+          title="Sign-in method"
+          titleAs="h2"
+          description="This account uses Google sign-in. No password is stored for it."
+        >
+          <p className="text-sm text-ink-muted">
+            Use Continue with Google on the sign-in page to access your account.
+          </p>
+        </Card>
+      )}
       <SessionsCard otherSessions={settings.otherLiveSessions} />
       <BusinessStatusCard business={settings.business} />
     </div>

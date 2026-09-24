@@ -18,13 +18,14 @@ import {
  * writes are exercised. Native destination popups are also served locally, never by Google.
  * Run this scoped file with a Temp output directory and the installed-Chrome Playwright runtime.
  */
-const ORIGIN = 'http://127.0.0.1:3000';
+const ORIGIN = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3000';
 const SLUG = 'demo-south-cafe';
 const REVIEW_ROUTE = `${ORIGIN}/${SLUG}/review`;
+const SELECTED_SERVICES = ['Website development', 'SEO'];
 const REVIEW =
-  'A helpful team for website and app development. Clear communication and thoughtful graphic design.';
+  'I used their website development and SEO services. The team explained the options clearly and made it easy to share my requirements.';
 const OTHER_REVIEW =
-  'Thoughtful website design and practical app development advice. The team explained the process clearly.';
+  'Website development and SEO were the services I came for. I could discuss what I needed and understand the next steps clearly.';
 const GENERATION_IDS = [
   '00000000-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-000000000002',
@@ -41,6 +42,7 @@ interface GenerationRequest {
   slug?: string;
   qr_code?: string;
   previous_generation_id?: string;
+  selected_services?: string[];
 }
 interface TrackedEvent {
   name: string;
@@ -62,7 +64,7 @@ interface MockHarness {
   ) => GenerationReply | Promise<GenerationReply>;
 }
 
-function success(index = 0): GenerationReply {
+function success(index = 0, selectedServices = SELECTED_SERVICES): GenerationReply {
   return {
     status: 200,
     body: {
@@ -70,6 +72,7 @@ function success(index = 0): GenerationReply {
       review_text: index === 0 ? REVIEW : OTHER_REVIEW,
       prompt_version: 'local-ui-fixture',
       requires_experience_confirmation: true,
+      selected_services: selectedServices,
     },
   };
 }
@@ -107,7 +110,7 @@ const test = base.extend<{ mocked: MockHarness }>({
       events: [],
       externalNavigations: [],
       clipboardMode: 'success',
-      answerGeneration: (index) => success(index),
+      answerGeneration: (index, request) => success(index, request.selected_services),
     };
 
     page.on('pageerror', (error) => runtimeErrors.push(error.message));
@@ -238,8 +241,22 @@ async function arrive(page: Page, context: BrowserContext, mocked: MockHarness) 
 
 async function ready(page: Page, context: BrowserContext, mocked: MockHarness) {
   const flow = await arrive(page, context, mocked);
+  await chooseServicesAndGenerate(page);
   await expect(flow.getByRole('textbox', { name: /your review/i })).toHaveValue(REVIEW);
   return flow;
+}
+
+async function chooseServicesAndGenerate(page: Page) {
+  await expect(page.getByRole('heading', { name: 'What did you try?' })).toBeVisible();
+  for (const service of SELECTED_SERVICES) {
+    const choice = page.getByRole('button', { name: service, exact: true });
+    await expect(choice).toBeEnabled();
+    await choice.click();
+    await expect(choice).toHaveAttribute('aria-pressed', 'true');
+  }
+  const generate = page.getByRole('button', { name: 'Create my draft', exact: true });
+  await expect(generate).toBeEnabled();
+  await generate.click();
 }
 
 async function evidence(page: Page, testInfo: TestInfo, name: string) {
@@ -265,7 +282,83 @@ async function expectFullSelection(page: Page) {
 
 test.describe('backend-safe customer review editor', () => {
   for (const viewport of [
+    { name: 'small-phone', width: 320, height: 740 },
+    { name: 'narrow-phone', width: 375, height: 812 },
     { name: 'mobile', width: 390, height: 844 },
+    { name: 'large-phone', width: 430, height: 932 },
+    { name: 'tablet', width: 768, height: 1024 },
+    { name: 'desktop', width: 1440, height: 1000 },
+  ]) {
+    test(`shows a readable service picker before generation on ${viewport.name}`, async ({
+      page,
+      context,
+      mocked,
+    }, testInfo) => {
+      await page.setViewportSize(viewport);
+      const flow = await arrive(page, context, mocked);
+      await expect(flow.getByRole('heading', { name: 'What did you try?' })).toBeVisible();
+      const generate = flow.getByRole('button', { name: 'Create my draft', exact: true });
+      await expect(generate).toBeDisabled();
+      await expect(flow.locator('button[aria-pressed="true"]')).toHaveCount(0);
+      await expect(flow.locator('#review-draft')).toHaveCount(0);
+      expect(mocked.generationRequests).toEqual([]);
+      expect(mocked.events.map((event) => event.name)).not.toContain('ai_generate_click');
+      const dimensions = await flow.evaluate((element) => ({
+        viewportWidth: document.documentElement.clientWidth,
+        pageWidth: document.documentElement.scrollWidth,
+        controls: Array.from(element.querySelectorAll<HTMLElement>('button[aria-pressed]')).map(
+          (control) => {
+            const bounds = control.getBoundingClientRect();
+            return { left: bounds.left, right: bounds.right, height: bounds.height };
+          },
+        ),
+      }));
+      expect(dimensions.pageWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
+      expect(dimensions.controls.length).toBeGreaterThanOrEqual(SELECTED_SERVICES.length);
+      for (const control of dimensions.controls) {
+        expect(control.left).toBeGreaterThanOrEqual(0);
+        expect(control.right).toBeLessThanOrEqual(dimensions.viewportWidth);
+        expect(control.height).toBeGreaterThanOrEqual(44);
+      }
+      await evidence(page, testInfo, `customer-services-${viewport.name}`);
+    });
+  }
+
+  test('supports keyboard multi-selection and deselection without drafting until requested', async ({
+    page,
+    context,
+    mocked,
+  }) => {
+    const flow = await arrive(page, context, mocked);
+    const website = flow.getByRole('button', { name: 'Website development', exact: true });
+    const seo = flow.getByRole('button', { name: 'SEO', exact: true });
+    const generate = flow.getByRole('button', { name: 'Create my draft', exact: true });
+    await expect(website).toBeEnabled();
+    await website.focus();
+    await page.keyboard.press('Space');
+    await expect(website).toHaveAttribute('aria-pressed', 'true');
+    await seo.focus();
+    await page.keyboard.press('Enter');
+    await expect(seo).toHaveAttribute('aria-pressed', 'true');
+    expect(mocked.generationRequests).toEqual([]);
+    await seo.click();
+    await expect(seo).toHaveAttribute('aria-pressed', 'false');
+    await website.click();
+    await expect(generate).toBeDisabled();
+    await website.click();
+    await seo.click();
+    await generate.click();
+    await expect(flow.locator('#review-draft')).toHaveValue(REVIEW);
+    expect(mocked.generationRequests).toEqual([
+      { slug: SLUG, selected_services: SELECTED_SERVICES },
+    ]);
+  });
+
+  for (const viewport of [
+    { name: 'small-phone', width: 320, height: 740 },
+    { name: 'mobile', width: 390, height: 844 },
+    { name: 'large-phone', width: 430, height: 932 },
+    { name: 'tablet', width: 768, height: 1024 },
     { name: 'desktop', width: 1440, height: 1000 },
   ]) {
     test(`stays light, readable and contained in dark OS mode on ${viewport.name}`, async ({
@@ -337,11 +430,13 @@ test.describe('backend-safe customer review editor', () => {
       await expect(flow.getByRole('link', { name: 'Copy & open Google' })).toHaveCount(0);
       await expect(flow.locator('[type="radio"], [role="radiogroup"]')).toHaveCount(0);
       await expect(flow.locator('form input[type="text"]')).toHaveCount(0);
-      await expect(flow.getByText(/written with Ai assistance/)).toBeVisible();
+      await expect(flow.getByText('AI helps with wording. You decide what to post.')).toBeVisible();
       expect(await flow.innerText()).not.toMatch(
         /review submitted|submitted your review|posted your review/i,
       );
-      expect(mocked.generationRequests).toEqual([{ slug: SLUG }]);
+      expect(mocked.generationRequests).toEqual([
+        { slug: SLUG, selected_services: SELECTED_SERVICES },
+      ]);
       expect(mocked.externalNavigations).toEqual([]);
       await evidence(page, testInfo, `customer-editor-${viewport.name}`);
     });
@@ -358,6 +453,7 @@ test.describe('backend-safe customer review editor', () => {
       return success();
     };
     const flow = await arrive(page, context, mocked);
+    await chooseServicesAndGenerate(page);
     try {
       await expect.poll(() => mocked.generationRequests.length).toBe(1);
       await expect(flow.locator('[aria-busy="true"]')).toBeVisible();
@@ -369,7 +465,9 @@ test.describe('backend-safe customer review editor', () => {
     await expect(flow.locator('#review-draft')).toHaveValue(REVIEW);
     await expect(flow.locator('[aria-busy="true"]')).toHaveCount(0);
     await expect(flow.getByRole('button', { name: 'Copy & open Google' })).toBeDisabled();
-    expect(mocked.generationRequests).toEqual([{ slug: SLUG }]);
+    expect(mocked.generationRequests).toEqual([
+      { slug: SLUG, selected_services: SELECTED_SERVICES },
+    ]);
   });
 
   test('counts edits, confirms genuine experience and copies into a locally served native popup', async ({
@@ -434,8 +532,12 @@ test.describe('backend-safe customer review editor', () => {
     await flow.getByRole('button', { name: 'New review' }).click();
     await expect(flow.locator('#review-draft')).toHaveValue(OTHER_REVIEW);
     expect(mocked.generationRequests).toEqual([
-      { slug: SLUG },
-      { slug: SLUG, previous_generation_id: GENERATION_IDS[0] },
+      { slug: SLUG, selected_services: SELECTED_SERVICES },
+      {
+        slug: SLUG,
+        previous_generation_id: GENERATION_IDS[0],
+        selected_services: SELECTED_SERVICES,
+      },
     ]);
     await expect(flow.getByRole('checkbox', { name: /genuine experience/i })).not.toBeChecked();
     await expect(flow.getByRole('button', { name: 'Copy & open Google' })).toBeDisabled();
@@ -447,6 +549,61 @@ test.describe('backend-safe customer review editor', () => {
       .poll(() => mocked.events.map((event) => event.name))
       .toContain('ai_regenerate_click');
     expect(mocked.externalNavigations).toEqual([]);
+  });
+
+  test('lets the customer change services without discarding their draft on cancel', async ({
+    page,
+    context,
+    mocked,
+  }) => {
+    const flow = await ready(page, context, mocked);
+    const edited = `${REVIEW} My own words.`;
+    await flow.locator('#review-draft').fill(edited);
+    await flow.getByRole('button', { name: 'Change services', exact: true }).click();
+    await expect(flow.getByRole('heading', { name: 'What did you try?' })).toBeVisible();
+    await flow.getByRole('button', { name: 'SEO', exact: true }).click();
+    await flow.getByRole('button', { name: 'App development', exact: true }).click();
+    await flow.getByRole('button', { name: 'Return to draft', exact: true }).click();
+    await expect(flow.locator('#review-draft')).toHaveValue(edited);
+    expect(mocked.generationRequests).toHaveLength(1);
+    await flow.getByRole('button', { name: 'Change services', exact: true }).click();
+    await expect(flow.getByRole('button', { name: 'SEO', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(
+      flow.getByRole('button', { name: 'App development', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('preserves the current draft when regeneration is unavailable', async ({
+    page,
+    context,
+    mocked,
+  }) => {
+    const flow = await ready(page, context, mocked);
+    mocked.answerGeneration = () => unavailable();
+    await flow.getByRole('button', { name: 'New review', exact: true }).click();
+    await expect(flow.getByRole('alert')).toContainText(/writing assistant is unavailable/i);
+    await expect(flow.locator('#review-draft')).toHaveValue(REVIEW);
+    await expect(flow.getByRole('button', { name: 'Change services', exact: true })).toBeVisible();
+    expect(mocked.generationRequests).toHaveLength(3);
+    expect(mocked.generationRequests.slice(1)).toEqual([
+      {
+        slug: SLUG,
+        selected_services: SELECTED_SERVICES,
+        previous_generation_id: GENERATION_IDS[0],
+      },
+      {
+        slug: SLUG,
+        selected_services: SELECTED_SERVICES,
+        previous_generation_id: GENERATION_IDS[0],
+      },
+    ]);
+    mocked.answerGeneration = () => success(1);
+    await flow.getByRole('button', { name: 'New review', exact: true }).click();
+    await expect(flow.locator('#review-draft')).toHaveValue(OTHER_REVIEW);
+    await expect(flow.getByRole('alert')).toHaveCount(0);
   });
 
   test('selects the complete draft after a refused clipboard write without claiming Copied', async ({
@@ -507,6 +664,7 @@ test.describe('backend-safe customer review editor', () => {
       return success();
     };
     const flow = await arrive(page, context, mocked);
+    await chooseServicesAndGenerate(page);
     try {
       await expect.poll(() => mocked.generationRequests.length).toBe(2);
       await expect(flow.locator('[aria-busy="true"]')).toBeVisible();
@@ -519,7 +677,10 @@ test.describe('backend-safe customer review editor', () => {
     await expect(flow.locator('[aria-busy="true"]')).toHaveCount(0);
     await expect(flow.getByRole('alert')).toHaveCount(0);
     await expect(flow.getByRole('button', { name: 'Copy & open Google' })).toBeDisabled();
-    expect(mocked.generationRequests).toEqual([{ slug: SLUG }, { slug: SLUG }]);
+    expect(mocked.generationRequests).toEqual([
+      { slug: SLUG, selected_services: SELECTED_SERVICES },
+      { slug: SLUG, selected_services: SELECTED_SERVICES },
+    ]);
     expect(mocked.externalNavigations).toEqual([]);
   });
 
@@ -530,11 +691,15 @@ test.describe('backend-safe customer review editor', () => {
   }) => {
     mocked.answerGeneration = () => unavailable();
     const flow = await arrive(page, context, mocked);
+    await chooseServicesAndGenerate(page);
     await expect(flow.getByRole('alert')).toContainText(/writing assistant is unavailable/i);
-    expect(mocked.generationRequests).toEqual([{ slug: SLUG }, { slug: SLUG }]);
+    expect(mocked.generationRequests).toEqual([
+      { slug: SLUG, selected_services: SELECTED_SERVICES },
+      { slug: SLUG, selected_services: SELECTED_SERVICES },
+    ]);
     await expect(flow.locator('[aria-busy="true"]')).toHaveCount(0);
     await expect(flow.locator('#review-draft')).toHaveCount(0);
-    const direct = flow.getByRole('link', { name: /write your own review on Google/i });
+    const direct = flow.getByRole('link', { name: /write my own review/i });
     await expect(direct).toHaveAttribute('href', /^https?:\/\//);
     await expect(direct).toHaveAttribute('target', '_blank');
     await expect(direct).toHaveAttribute('rel', /noopener/);
@@ -543,6 +708,17 @@ test.describe('backend-safe customer review editor', () => {
       `/${SLUG}/feedback`,
     );
     expect(mocked.externalNavigations).toEqual([]);
+    const retry = flow.getByRole('button', { name: 'Try again', exact: true });
+    await expect(retry).toBeVisible();
+    mocked.answerGeneration = () => success();
+    await retry.click();
+    await expect(flow.locator('#review-draft')).toHaveValue(REVIEW);
+    expect(mocked.generationRequests).toHaveLength(3);
+    expect(mocked.generationRequests[2]).toEqual({
+      slug: SLUG,
+      selected_services: SELECTED_SERVICES,
+    });
+    await expect(flow.getByRole('alert')).toHaveCount(0);
   });
 
   test('uses the real draft length and prevents blank or over-limit text from copying', async ({
@@ -559,12 +735,17 @@ test.describe('backend-safe customer review editor', () => {
     for (const value of ['', '   ', 'x'.repeat(1201)]) {
       await editor.fill(value);
       await expect(editor).toHaveValue(value);
+      await expect(flow.getByRole('checkbox', { name: /genuine experience/i })).not.toBeChecked();
+      await flow.getByRole('checkbox', { name: /genuine experience/i }).check();
       await expect(flow.getByText(new RegExp(`^${value.length} / 1200 characters`))).toBeVisible();
       await expect(flow.getByRole('button', { name: 'Copy & open Google' })).toBeDisabled();
       await expect(flow.getByRole('link', { name: 'Copy & open Google' })).toHaveCount(0);
     }
     await expect(flow.getByText(/please shorten before copying/i)).toBeVisible();
     await editor.fill('x'.repeat(1200));
+    await expect(flow.getByRole('checkbox', { name: /genuine experience/i })).not.toBeChecked();
+    await expect(flow.getByRole('button', { name: 'Copy & open Google' })).toBeDisabled();
+    await flow.getByRole('checkbox', { name: /genuine experience/i }).check();
     await expect(flow.getByRole('link', { name: 'Copy & open Google' })).toBeVisible();
     expect(mocked.externalNavigations).toEqual([]);
     expect(await page.evaluate(() => window.__customerReviewFixtureClipboard)).toEqual([]);

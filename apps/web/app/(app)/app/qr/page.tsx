@@ -106,9 +106,7 @@ export default async function Page() {
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold tracking-tight text-ink">QR codes</h1>
         <p className="max-w-prose text-sm text-ink-muted">
-          One source for each place you print a code, so you can tell later which one your customers
-          actually use. The printed code never changes, so renaming a source or changing where your
-          reviews go never means reprinting a standee.
+          Create a QR for each counter or location. Download it, print it, and let customers scan.
         </p>
       </header>
 

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import styles from './MarketingSite.module.css';
 
 /**
- * Keeps the headline's playful interaction isolated from the server-rendered marketing page.
+ * Keeps the headline's subtle interaction isolated from the server-rendered marketing page.
  * Re-keying only the decorative layers restarts their short animation without moving focus from
  * the button, so mouse, touch, Enter and Space all get the same response.
  */
@@ -28,9 +28,7 @@ export function HeroAiAccent() {
         Ai
       </span>
       {hasInteracted && (
-        <span className={styles.heroAiClickEffect} key={`effect-${animationCycle}`} aria-hidden>
-          <i />
-        </span>
+        <span className={styles.heroAiClickEffect} key={`effect-${animationCycle}`} aria-hidden />
       )}
     </button>
   );

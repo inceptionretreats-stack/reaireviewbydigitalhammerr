@@ -58,12 +58,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const database = db();
     const [account] = await database
-      .select({ id: users.id })
+      .select({ id: users.id, passwordHash: users.passwordHash })
       .from(users)
       .where(and(eq(users.email, email), isNull(users.deletedAt)))
       .limit(1);
 
-    if (!account) return accepted();
+    // A Google-only account has no local password to reset. In particular, Google may not be
+    // authoritative for an external mailbox that has since changed hands. Keep the same neutral
+    // response as an unknown address, without creating a recovery path around the Google subject.
+    if (!account?.passwordHash) return accepted();
 
     const { token, tokenHash } = issueToken();
 

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { revealMarketingNavigation } from './helpers/marketing-navigation';
 
 const MARKETING_ROUTES = ['/'] as const;
+const DEMO_VIDEOS = 'main [data-hero-video], main [data-how-video]';
 
 const NAVIGATION = [
   { label: 'Home', href: '/#home', target: 'home' },
@@ -29,7 +31,7 @@ const HOW_STEPS = [
     id: 'publish',
     label: 'Step 3',
     title: 'Copy, Paste & Post',
-    caption: 'Copy your review, then paste and post it yourself on Google.',
+    caption: 'Copy, paste & post it yourself.',
   },
 ] as const;
 
@@ -72,6 +74,7 @@ test.describe('marketing site', () => {
     await expect(hero.getByText('Help others choose us!', { exact: true })).toHaveCount(0);
     await expect(message.locator('[data-hero-flow-step]')).toHaveText([
       'Scan',
+      'Ai draft',
       'Copy',
       'Paste',
       'Review',
@@ -93,7 +96,7 @@ test.describe('marketing site', () => {
       };
     });
     expect(typography.kicker).toBeLessThan(800);
-    expect(typography.headline).toBe(800);
+    expect(typography.headline).toBe(700);
 
     const primaryAction = message.getByRole('link', { name: 'Create your free QR', exact: true });
     await expect(primaryAction).toHaveCount(1);
@@ -124,13 +127,33 @@ test.describe('marketing site', () => {
         ];
         return {
           expected,
-          families: elements.map((element) => primaryFamily(getComputedStyle(element).fontFamily)),
+          families: elements.map((element) => {
+            const style = getComputedStyle(element);
+            const headingToken =
+              element.id === 'review-opportunity-title'
+                ? '--font-opportunity-heading'
+                : element.id === 'review-video-title'
+                  ? '--font-promo-heading'
+                  : null;
+            const expectedFamily = headingToken
+              ? primaryFamily(style.getPropertyValue(headingToken))
+              : expected;
+            return {
+              actual: primaryFamily(style.fontFamily),
+              expected: expectedFamily,
+              loaded:
+                expectedFamily.length > 0 &&
+                document.fonts.check(`${style.fontWeight} 16px "${expectedFamily}"`),
+            };
+          }),
           fontLoaded: expected.length > 0 && document.fonts.check(`16px "${expected}"`),
         };
       });
       expect(fonts.expected).not.toBe('');
       expect(fonts.fontLoaded).toBe(true);
-      expect(fonts.families.every((family) => family === fonts.expected)).toBe(true);
+      expect(
+        fonts.families.every((family) => family.actual === family.expected && family.loaded),
+      ).toBe(true);
     }
 
     for (const viewport of [
@@ -165,15 +188,15 @@ test.describe('marketing site', () => {
           headingScrollWidth: element.scrollWidth,
         };
       });
-      expect(typography.weight).toBe(800);
+      expect(typography.weight).toBe(700);
       expect(typography.textTransform).toBe('none');
       expect(
         await page
           .locator('#home [data-hero-flow-step]')
           .evaluateAll((steps) => steps.map((step) => getComputedStyle(step).textTransform)),
-      ).toEqual(['none', 'none', 'none', 'none']);
-      expect(typography.lineHeight).toBeGreaterThanOrEqual(1.1);
-      expect(typography.letterSpacing).toBeGreaterThanOrEqual(-0.025);
+      ).toEqual(['none', 'none', 'none', 'none', 'none']);
+      expect(typography.lineHeight).toBeGreaterThanOrEqual(1.08);
+      expect(typography.letterSpacing).toBeGreaterThanOrEqual(-0.0451);
       expect(typography.left).toBeGreaterThanOrEqual(0);
       expect(typography.right).toBeLessThanOrEqual(typography.clientWidth);
       expect(typography.scrollWidth).toBeLessThanOrEqual(typography.clientWidth);
@@ -181,15 +204,16 @@ test.describe('marketing site', () => {
     }
   });
 
-  test('uses bold coordinated headline gradients with clear word gaps and a readable forced-color fallback', async ({
+  test('uses a restrained solid-color headline with clear word gaps and a readable forced-color fallback', async ({
     page,
   }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     const words = ['Review', 'Ai', 'likh', 'dega'];
-    const gradientTokens = {
-      Review: ['rgb(55,48,163)', 'rgb(116,64,189)', 'rgb(170,52,153)'],
-      Ai: ['rgb(170,52,153)', 'rgb(211,44,112)', 'rgb(230,83,57)'],
-      likh: ['rgb(55,48,163)', 'rgb(116,64,189)', 'rgb(170,52,153)'],
-      dega: ['rgb(170,52,153)', 'rgb(211,44,112)', 'rgb(230,83,57)'],
+    const wordColors = {
+      Review: 'rgb(20, 35, 59)',
+      Ai: 'rgb(25, 103, 210)',
+      likh: 'rgb(20, 35, 59)',
+      dega: 'rgb(20, 35, 59)',
     };
     for (const viewport of [
       { width: 320, height: 568 },
@@ -219,21 +243,19 @@ test.describe('marketing site', () => {
           const computed = getComputedStyle(element);
           return {
             image: computed.backgroundImage,
-            clip: computed.backgroundClip,
-            webkitClip: computed.getPropertyValue('-webkit-background-clip'),
+            color: computed.color,
+            shadow: computed.textShadow,
             fill: computed.getPropertyValue('-webkit-text-fill-color'),
             weight: Number.parseInt(computed.fontWeight, 10),
             textTransform: computed.textTransform,
           };
         });
-        expect(style.image).toMatch(/^linear-gradient\(/);
-        expect(style.clip === 'text' || style.webkitClip === 'text').toBe(true);
-        expect(style.fill).toMatch(/^transparent$|rgba\([^)]*,\s*0\)$/);
-        expect(style.weight).toBe(800);
+        expect(style.image).toBe('none');
+        expect(style.color).toBe(wordColors[word as keyof typeof wordColors]);
+        expect(style.shadow).toBe('none');
+        expect(style.fill).not.toMatch(/^transparent$|rgba\([^)]*,\s*0\)$/);
+        expect(style.weight).toBe(700);
         expect(style.textTransform).toBe('none');
-        for (const token of gradientTokens[word as keyof typeof gradientTokens]) {
-          expect(style.image.replace(/\s+/g, '')).toContain(token);
-        }
       }
 
       const geometry = await message.evaluate((element) => {
@@ -284,7 +306,9 @@ test.describe('marketing site', () => {
       expect(geometry.accentShadow).toBe('none');
       expect(geometry.descriptionFontSize).toBeGreaterThanOrEqual(16);
       expect(geometry.descriptionWeight).toBeLessThanOrEqual(500);
-      expect(geometry.descriptionLineHeight).toBeGreaterThanOrEqual(1.6);
+      expect(geometry.descriptionLineHeight).toBeGreaterThanOrEqual(
+        viewport.width <= 600 ? 1.55 : 1.6,
+      );
       expect(geometry.immediatelyAfterHeading).toBe(true);
       expect(geometry.descriptionBeforeAction).toBe(true);
       expect(geometry.headingGap).toBeGreaterThanOrEqual(16);
@@ -336,7 +360,7 @@ test.describe('marketing site', () => {
   test('keeps the icon-led hero process rail readable and the headline on two lines', async ({
     page,
   }) => {
-    const labels = ['Scan', 'Copy', 'Paste', 'Review'];
+    const labels = ['Scan', 'Ai draft', 'Copy', 'Paste', 'Review'];
     for (const viewport of [
       { width: 320, height: 568 },
       { width: 390, height: 844 },
@@ -354,7 +378,7 @@ test.describe('marketing site', () => {
       const workflow = message.locator('[data-hero-flow]');
       const steps = workflow.locator('[data-hero-flow-step]');
       await expect(workflow).toHaveRole('list');
-      await expect(steps).toHaveCount(4);
+      await expect(steps).toHaveCount(5);
       await expect(steps).toHaveText(labels);
       expect((await workflow.innerText()).replace(/\s+/g, ' ').trim()).toBe(labels.join(' '));
       await expect(workflow.getByRole('link')).toHaveCount(0);
@@ -406,6 +430,9 @@ test.describe('marketing site', () => {
           return {
             iconWidth: iconBox.width,
             iconHeight: iconBox.height,
+            labelWidth: labelBox.width,
+            labelLeft: labelBox.left,
+            labelRight: labelBox.right,
             iconInsideItem: inside(iconBox, itemBox),
             labelInsideItem: inside(labelBox, itemBox),
             itemInsideRail: inside(itemBox, railBox),
@@ -454,7 +481,10 @@ test.describe('marketing site', () => {
         expect(item.iconWidth).toBeGreaterThanOrEqual(32);
         expect(item.iconHeight).toBeGreaterThanOrEqual(32);
         expect(item.iconInsideItem).toBe(true);
-        expect(item.labelInsideItem).toBe(true);
+        expect(
+          item.labelInsideItem,
+          `${viewport.width}px ${labels[index]}: ${JSON.stringify(item)}`,
+        ).toBe(true);
         expect(item.itemInsideRail).toBe(true);
         expect(item.iconAndLabelSeparated).toBe(true);
         if (index > 0) expect(item.left).toBeGreaterThanOrEqual(geometry.items[index - 1]!.right);
@@ -512,7 +542,7 @@ test.describe('marketing site', () => {
     ).toBe('none');
   });
 
-  test('places a compact business-type rail without a title or controls between the hero and journey', async ({
+  test('places an icon-led business-type rail without a title or controls between the hero and journey', async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -527,9 +557,11 @@ test.describe('marketing site', () => {
     await expect(audience.locator('[data-business-marquee-control], [data-paused]')).toHaveCount(0);
     await expect(audience).not.toHaveAttribute('data-paused');
     await expect(
-      page.locator('main > #home + [data-business-audience] + #how-it-works'),
+      page.locator('main > #home + [data-business-audience] + #review-opportunity + #how-it-works'),
     ).toHaveCount(1);
     await expect(original.locator('li')).toHaveCount(48);
+    await expect(original.locator('li svg')).toHaveCount(48);
+    await expect(copy.locator('li svg')).toHaveCount(48);
     const names = (await original.locator('li').allTextContents()).map((name) => name.trim());
     expect(names.every((name) => name.length > 0)).toBe(true);
     expect(new Set(names.map((name) => name.toLowerCase())).size).toBe(48);
@@ -682,6 +714,7 @@ test.describe('marketing site', () => {
           scroll: document.documentElement.scrollWidth,
           fontSize: Number.parseFloat(nameStyle.fontSize),
           fontWeight: nameStyle.fontWeight,
+          iconSize: items[0]!.querySelector('svg')!.getBoundingClientRect().width,
           itemGap: Number.parseFloat(getComputedStyle(list).columnGap),
           lineTops: items.map((item) => item.getBoundingClientRect().top),
         };
@@ -689,10 +722,11 @@ test.describe('marketing site', () => {
       expect(geometry.left).toBeGreaterThanOrEqual(0);
       expect(geometry.right).toBeLessThanOrEqual(geometry.viewport);
       expect(geometry.scroll).toBeLessThanOrEqual(geometry.viewport);
-      expect(geometry.height).toBeLessThanOrEqual(viewport.width <= 600 ? 90 : 100);
-      expect(geometry.fontSize).toBe(viewport.width <= 600 ? 19 : 24);
-      expect(geometry.fontWeight).toBe('650');
-      expect(geometry.itemGap).toBe(viewport.width <= 600 ? 24 : 34);
+      expect(geometry.height).toBeLessThanOrEqual(viewport.width <= 600 ? 96 : 112);
+      expect(geometry.fontSize).toBe(viewport.width <= 600 ? 17 : 19);
+      expect(geometry.fontWeight).toBe('550');
+      expect(geometry.iconSize).toBe(viewport.width <= 600 ? 28 : 30);
+      expect(geometry.itemGap).toBe(viewport.width <= 600 ? 36 : 48);
       expect(Math.max(...geometry.lineTops) - Math.min(...geometry.lineTops)).toBeLessThan(1);
 
       await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -748,7 +782,7 @@ test.describe('marketing site', () => {
     expect(contrast.every((ratio) => ratio >= 4.5)).toBe(true);
   });
 
-  test('keeps a compact three-step journey with meaningful videos after the business rail', async ({
+  test('keeps a compact three-step journey after the business rail and review opportunity section', async ({
     page,
   }) => {
     await page.goto('/');
@@ -759,7 +793,9 @@ test.describe('marketing site', () => {
       await page.locator('main').evaluate((main) => {
         const sections = Array.from(main.children);
         return (
-          sections[1]?.hasAttribute('data-business-audience') && sections[2]?.id === 'how-it-works'
+          sections[1]?.hasAttribute('data-business-audience') &&
+          sections[2]?.id === 'review-opportunity' &&
+          sections[3]?.id === 'how-it-works'
         );
       }),
     ).toBe(true);
@@ -836,7 +872,7 @@ test.describe('marketing site', () => {
       await expect(robot).toHaveCount(1);
       await expect(robot).toHaveAttribute(
         'alt',
-        'Friendly Ai robot representing the editable review draft assistant',
+        'Friendly waving Ai robot representing the editable review draft assistant',
       );
       await growth.scrollIntoViewIfNeeded();
       await expect(growth).toBeInViewport();
@@ -846,8 +882,8 @@ test.describe('marketing site', () => {
             (element) =>
               element instanceof HTMLImageElement &&
               element.complete &&
-              element.naturalWidth >= 200 &&
-              element.naturalHeight >= 240,
+              element.naturalWidth > 0 &&
+              element.naturalHeight > 0,
           ),
         )
         .toBe(true);
@@ -855,7 +891,7 @@ test.describe('marketing site', () => {
       const currentSrc = await robot.evaluate((element) =>
         decodeURIComponent((element as HTMLImageElement).currentSrc),
       );
-      expect(currentSrc).toContain('/marketing/ai-review-robot-mascot.png');
+      expect(currentSrc).toContain('/marketing/ai-review-floating-robot-v1.png');
       expect((await page.request.get(currentSrc)).ok()).toBe(true);
 
       expect(
@@ -884,7 +920,7 @@ test.describe('marketing site', () => {
               sectionBox.left >= 0 && sectionBox.right <= document.documentElement.clientWidth,
             directlyBelowPricing: pricingBox.bottom <= sectionBox.top,
           };
-        }, 820),
+        }, 600),
       ).toEqual({
         copyInside: true,
         robotInside: true,
@@ -896,6 +932,17 @@ test.describe('marketing site', () => {
     }
 
     await expect(page.locator('#how-it-works img[src*="ai-review-robot-mascot"]')).toHaveCount(0);
+    const originalArtwork = await page.evaluate(
+      () =>
+        new Promise<{ width: number; height: number }>((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+          image.onerror = () => reject(new Error('Floating robot artwork did not load'));
+          image.src = '/marketing/ai-review-floating-robot-v1.png';
+        }),
+    );
+    expect(originalArtwork.width).toBeGreaterThanOrEqual(1024);
+    expect(originalArtwork.height).toBeGreaterThanOrEqual(1024);
     await expect(page.locator('main > #pricing + #review-growth')).toHaveCount(1);
     expect(
       await page.locator('main').evaluate((main) => {
@@ -954,8 +1001,10 @@ test.describe('marketing site', () => {
 
     const body = (await page.locator('body').innerText()).toLowerCase().replace(/\s+/g, ' ');
     expect(body).toContain('₹999');
-    expect(body).toContain('editable drafts in your own words');
-    expect(body).toContain('your experience. your words. you choose what to post.');
+    expect(body).toContain(
+      'customers share what happened in their own words—with ai there to help.',
+    );
+    expect(body).toContain('nothing posts automatically.');
     expect(body).not.toContain('built for trust, not shortcuts.');
     expect(body).not.toContain('ready to make every visit easier to share?');
     expect(body).not.toContain('simple tools. a more human review experience.');
@@ -975,15 +1024,19 @@ test.describe('marketing site', () => {
     await expect(pricing).not.toContainText(/lifetime/i);
   });
 
-  test('shows the reference-inspired benefits block with responsive metrics and working actions', async ({
+  test('shows truthful benefits alongside a real business photo with working actions', async ({
     page,
   }) => {
-    const metricValues = ['1 QR', 'Ai', '10 free', 'You'];
-    const metricDescriptions = [
-      'One simple scan to get started',
-      'A draft to edit in your own words',
-      'Ai review drafts on the Free plan',
-      'Choose what to post on Google',
+    const featureLabels = [
+      'Branded QR',
+      'Service-based drafts',
+      'Editable words',
+      'Private feedback',
+    ];
+    const stepDescriptions = [
+      'Customers scan your QR and choose the service(s) they actually used.',
+      'Ai helps turn their selections into an editable draft they can make their own.',
+      'They can copy and post their review on Google or send private feedback. Nothing posts automatically.',
     ];
 
     for (const viewport of [
@@ -1000,59 +1053,89 @@ test.describe('marketing site', () => {
       await expect(benefits).toHaveCount(1);
       await expect(benefits).toHaveAttribute('aria-labelledby', 'review-benefits-title');
       await expect(
-        benefits.getByRole('heading', { name: 'What sets Ai Review apart?', exact: true }),
-      ).toBeVisible();
-      await expect(benefits).toContainText(
-        'A simple, smarter review experience for your business.',
-      );
-      await expect(benefits).toContainText(
-        'Less effort for your customers. More possibilities for your business.',
-      );
-      const metrics = benefits.locator('[data-review-benefit]');
-      await expect(metrics).toHaveCount(4);
-      await expect(metrics.locator('dt')).toHaveText(metricValues);
-      await expect(metrics.locator('dd')).toHaveText(metricDescriptions, { useInnerText: true });
-      await expect(benefits).toContainText('Your experience. Your words. You choose what to post.');
-      await expect(benefits).not.toContainText(/10[×x]|review boost|guarantee/i);
-      await expect(
-        benefits.getByText('Ai helps with writing; customers decide whether to publish.', {
+        benefits.getByRole('heading', {
+          name: 'A simpler path from visit to review.',
           exact: true,
         }),
       ).toBeVisible();
+      await expect(benefits).toContainText(
+        'Customers share what happened in their own words—with Ai there to help.',
+      );
+      await expect(
+        benefits.getByRole('list', { name: 'Ai Review features' }).locator('li'),
+      ).toHaveText(featureLabels);
+      const steps = benefits.locator('[data-review-benefit]');
+      await expect(steps).toHaveCount(3);
+      await expect(steps.locator('h3')).toHaveText([
+        'Start with a scan',
+        'Shape a personal draft',
+        'Customer decides',
+      ]);
+      await expect(steps.locator('[data-benefit-description]')).toHaveText(stepDescriptions, {
+        useInnerText: true,
+      });
+      await expect(benefits.getByText('Example draft', { exact: true }).first()).toBeVisible();
+      await expect(
+        benefits.getByText('Illustrative draft preview, not a customer result.', { exact: true }),
+      ).toBeVisible();
+      const photo = benefits.getByRole('img', {
+        name: 'Two people talking across a local shop counter',
+      });
+      await expect(photo).toBeVisible();
+      await expect
+        .poll(() =>
+          photo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0),
+        )
+        .toBe(true);
+      await expect(benefits).not.toContainText(
+        /10[×x]|review boost|guarantee|trusted by|customers served|reviews posted|posted successfully/i,
+      );
 
       const geometry = await benefits.evaluate((element) => {
         const grid = element.querySelector<HTMLElement>('[data-benefits-grid]')!;
+        const [content, media] = Array.from(grid.children) as HTMLElement[];
         const items = Array.from(element.querySelectorAll<HTMLElement>('[data-review-benefit]'));
         const sectionBox = element.getBoundingClientRect();
         return {
           columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+          content: content!.getBoundingClientRect().toJSON(),
+          media: media!.getBoundingClientRect().toJSON(),
           items: items.map((item) => {
             const box = item.getBoundingClientRect();
-            return { top: box.top, left: box.left, right: box.right, bottom: box.bottom };
+            const description = item.querySelector<HTMLElement>('[data-benefit-description]')!;
+            const descriptionBox = description.getBoundingClientRect();
+            return {
+              top: box.top,
+              left: box.left,
+              right: box.right,
+              bottom: box.bottom,
+              descriptionRight: descriptionBox.right,
+            };
           }),
           sectionLeft: sectionBox.left,
           sectionRight: sectionBox.right,
           viewportWidth: document.documentElement.clientWidth,
           scrollWidth: document.documentElement.scrollWidth,
           hasClippedText: items.some((item) =>
-            Array.from(item.querySelectorAll<HTMLElement>('dt, dd')).some(
+            Array.from(item.querySelectorAll<HTMLElement>('h3, [data-benefit-description]')).some(
               (text) => text.scrollWidth > text.clientWidth,
             ),
           ),
         };
       });
-      expect(geometry.columns).toBe(viewport.width > 600 ? 4 : 2);
+      expect(geometry.columns).toBe(viewport.width > 900 ? 2 : 1);
       expect(geometry.sectionLeft).toBeGreaterThanOrEqual(0);
       expect(geometry.sectionRight).toBeLessThanOrEqual(geometry.viewportWidth);
       expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth);
       expect(geometry.hasClippedText).toBe(false);
-      expect(Math.abs(geometry.items[0]!.top - geometry.items[1]!.top)).toBeLessThanOrEqual(1);
-      expect(geometry.items[0]!.right).toBeLessThanOrEqual(geometry.items[1]!.left + 1);
-      if (viewport.width > 600) {
-        expect(Math.abs(geometry.items[0]!.top - geometry.items[3]!.top)).toBeLessThanOrEqual(1);
+      if (viewport.width > 900) {
+        expect(geometry.content.right).toBeLessThanOrEqual(geometry.media.left + 1);
       } else {
-        expect(geometry.items[2]!.top).toBeGreaterThanOrEqual(geometry.items[0]!.bottom);
-        expect(Math.abs(geometry.items[2]!.top - geometry.items[3]!.top)).toBeLessThanOrEqual(1);
+        expect(geometry.media.top).toBeGreaterThanOrEqual(geometry.content.bottom);
+      }
+      for (const [index, item] of geometry.items.entries()) {
+        if (index > 0) expect(item.top).toBeGreaterThanOrEqual(geometry.items[index - 1]!.bottom);
+        expect(item.descriptionRight).toBeLessThanOrEqual(item.right);
       }
 
       const signup = benefits.getByRole('link', { name: 'Create your free QR', exact: true });
@@ -1069,7 +1152,40 @@ test.describe('marketing site', () => {
     }
   });
 
-  test('keeps the brand colors and soft Google-blue treatment on the aligned three steps', async ({
+  test('lets visitors edit the clearly labeled example draft locally without generating or posting a review', async ({
+    page,
+  }) => {
+    const mutations: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'GET' && request.method() !== 'HEAD') mutations.push(request.url());
+    });
+    await page.goto('/', { waitUntil: 'networkidle' });
+    const benefits = page.locator('#why-ai-review');
+    const example = benefits.getByRole('textbox', { name: 'Edit the example review draft' });
+    const edit = benefits.getByRole('button', { name: 'Edit the example draft', exact: true });
+    await benefits.scrollIntoViewIfNeeded();
+    await expect(example).toHaveValue('The team explained everything clearly.');
+    await expect(example).toHaveAttribute('readonly', '');
+    await expect(example).toHaveAttribute('tabindex', '-1');
+    await expect(edit).toHaveAttribute('aria-pressed', 'false');
+    await edit.focus();
+    await page.keyboard.press('Enter');
+    await expect(example).toBeFocused();
+    await expect(example).not.toHaveAttribute('readonly');
+    await expect(example).toHaveAttribute('tabindex', '0');
+    await example.fill('My own words in this illustrative draft.');
+    const done = benefits.getByRole('button', { name: 'Finish editing the example draft' });
+    await done.click();
+    await expect(edit).toHaveAttribute('aria-pressed', 'false');
+    await expect(example).toHaveAttribute('readonly', '');
+    await expect(example).toHaveValue('My own words in this illustrative draft.');
+    await expect(benefits).toContainText('Illustrative draft preview, not a customer result.');
+    expect(mutations).toEqual([]);
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(example).toHaveValue('The team explained everything clearly.');
+  });
+
+  test('keeps the brand colors with open, understated columns for the three steps', async ({
     page,
   }) => {
     for (const route of MARKETING_ROUTES) {
@@ -1101,8 +1217,27 @@ test.describe('marketing site', () => {
     await page.goto('/');
     const cards = page.locator('#how-it-works [data-how-step]');
     await expect(cards).toHaveCount(3);
-    expect(await cards.nth(1).evaluate((card) => getComputedStyle(card).borderColor)).toBe(
-      'rgb(166, 200, 250)',
+    expect(
+      await cards.evaluateAll((elements) =>
+        elements.map((card) => {
+          const style = getComputedStyle(card);
+          return {
+            topBorder: style.borderTopWidth,
+            topBorderColor: style.borderTopColor,
+            sideBorder: style.borderLeftWidth,
+            shadow: style.boxShadow,
+            background: style.backgroundImage,
+          };
+        }),
+      ),
+    ).toEqual(
+      ['rgb(169, 201, 247)', 'rgb(243, 194, 188)', 'rgb(188, 229, 201)'].map((color) => ({
+        topBorder: '1px',
+        topBorderColor: color,
+        sideBorder: '0px',
+        shadow: 'none',
+        background: 'none',
+      })),
     );
     expect(
       await cards.evaluateAll((elements) =>
@@ -1240,7 +1375,7 @@ test.describe('marketing site', () => {
     await page.setViewportSize({ width: 1440, height: 3600 });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/', { waitUntil: 'networkidle' });
-    const videos = page.locator('main video');
+    const videos = page.locator(DEMO_VIDEOS);
     await expect(videos).toHaveCount(4);
     await expect(page.locator('[data-how-video-control], [data-hero-video-control]')).toHaveCount(
       0,
@@ -1368,7 +1503,7 @@ test.describe('marketing site', () => {
     await expect
       .poll(() =>
         page
-          .locator('main video')
+          .locator(DEMO_VIDEOS)
           .evaluateAll((videos) => videos.every((video) => (video as HTMLVideoElement).paused)),
       )
       .toBe(true);
@@ -1385,7 +1520,7 @@ test.describe('marketing site', () => {
     await page.setViewportSize({ width: 1440, height: 3600 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/', { waitUntil: 'networkidle' });
-    const reducedVideos = page.locator('main video');
+    const reducedVideos = page.locator(DEMO_VIDEOS);
     await expect(reducedVideos).toHaveCount(4);
     await expect
       .poll(() =>
@@ -1546,10 +1681,24 @@ test.describe('marketing site', () => {
               Number.parseFloat(cardStyle.paddingLeft) -
               Number.parseFloat(cardStyle.paddingRight);
             const expectedMediaWidth = Math.min(
-              contentWidth,
-              window.innerWidth <= 820
-                ? 240
-                : Math.min(400, Math.max(180, window.innerHeight - 360)) * (8 / 15),
+              window.innerWidth <= 820 ? contentWidth : contentWidth - 32,
+              window.innerWidth <= 360
+                ? 136
+                : window.innerWidth <= 600
+                  ? Math.min(150, Math.max(112, window.innerWidth * 0.35))
+                  : window.innerWidth <= 680
+                    ? 132
+                    : window.innerWidth <= 820
+                      ? 210
+                      : Math.min(
+                          284,
+                          Math.max(
+                            170,
+                            window.innerHeight * 0.5 -
+                              194 +
+                              Math.max(0, window.innerWidth * 0.1 - 144),
+                          ),
+                        ),
             );
             return {
               cardInside: inside(layoutCardBox, rect),
@@ -1560,11 +1709,18 @@ test.describe('marketing site', () => {
               noTextOverflow: [title, caption].every(
                 (element) => element.scrollWidth <= element.clientWidth,
               ),
-              textCentered: [title, caption].every(
-                (element) => getComputedStyle(element).textAlign === 'center',
+              textAlignmentMatchesLayout: [title, caption].every(
+                (element) =>
+                  getComputedStyle(element).textAlign ===
+                  (window.innerWidth <= 360 || window.innerWidth > 600 ? 'center' : 'left'),
               ),
               captionBelowCopy: captionBox.top >= copyBox.bottom,
-              figureBelowCopy: figureBox.top - captionBox.bottom >= 13.5,
+              figurePlacementMatchesLayout:
+                window.innerWidth <= 360
+                  ? figureBox.top - captionBox.bottom >= 13.5
+                  : window.innerWidth <= 600
+                    ? figureBox.left >= Math.max(copyBox.right, captionBox.right)
+                    : figureBox.top - captionBox.bottom >= 13.5,
               videoInside: inside(video.getBoundingClientRect(), figureBox),
               objectFit: getComputedStyle(video).objectFit,
               posterSize: getComputedStyle(figure).backgroundSize,
@@ -1572,9 +1728,13 @@ test.describe('marketing site', () => {
               figureAspect: figureBox.width / figureBox.height,
               mediaMatchesCompactSlot: Math.abs(figureBox.width - expectedMediaWidth) <= 1,
               mediaCentered:
-                Math.abs(
-                  figureBox.left + figureBox.width / 2 - (cardBox.left + cardBox.width / 2),
-                ) <= 0.5,
+                window.innerWidth > 360 && window.innerWidth <= 600
+                  ? Math.abs(
+                      figureBox.top + figureBox.height / 2 - (cardBox.top + cardBox.height / 2),
+                    ) <= 0.5
+                  : Math.abs(
+                      figureBox.left + figureBox.width / 2 - (cardBox.left + cardBox.width / 2),
+                    ) <= 0.5,
               titleSize: Number.parseFloat(titleStyle.fontSize),
               titleWeight: Number.parseInt(titleStyle.fontWeight, 10),
               titleSingleLine:
@@ -1586,7 +1746,7 @@ test.describe('marketing site', () => {
           }),
         };
       });
-      const columns = viewport.width <= 820 ? 1 : 3;
+      const columns = viewport.width <= 680 ? 1 : 3;
       expect(geometry.columns).toBe(columns);
       expect(new Set(geometry.tops.map((top) => Math.round(top))).size).toBe(3 / columns);
       expect(geometry.left).toBeGreaterThanOrEqual(0);
@@ -1597,9 +1757,9 @@ test.describe('marketing site', () => {
         expect(card.cardInside).toBe(true);
         expect(card.allContentInside).toBe(true);
         expect(card.noTextOverflow).toBe(true);
-        expect(card.textCentered).toBe(true);
+        expect(card.textAlignmentMatchesLayout).toBe(true);
         expect(card.captionBelowCopy).toBe(true);
-        expect(card.figureBelowCopy).toBe(true);
+        expect(card.figurePlacementMatchesLayout).toBe(true);
         expect(card.videoInside).toBe(true);
         expect(card.objectFit).toBe('contain');
         expect(card.posterSize).toBe('contain');
@@ -1607,7 +1767,7 @@ test.describe('marketing site', () => {
         expect(card.figureAspect).toBeCloseTo(8 / 15, 2);
         expect(card.mediaMatchesCompactSlot).toBe(true);
         expect(card.mediaCentered).toBe(true);
-        expect(card.titleSize).toBe(viewport.width <= 560 ? 20 : 22);
+        expect(card.titleSize).toBe(20);
         expect(card.titleWeight).toBe(700);
         expect(card.titleSingleLine).toBe(true);
         expect(card.titleLeading).toBeCloseTo(1.3, 2);
@@ -1757,7 +1917,7 @@ test.describe('marketing site', () => {
     await expect(media.locator('[data-hero-flow-step],[data-hero-trust-line]')).toHaveCount(0);
     await expect(hero.locator('[data-hero-qr]')).toHaveCount(0);
     await expect(hero.getByRole('link', { name: 'Open live demo', exact: true })).toHaveCount(0);
-    await expect(page.locator('video')).toHaveCount(4);
+    await expect(page.locator('main video')).toHaveCount(5);
     await expect(page.locator('#review-journey video')).toHaveCount(0);
   });
 
@@ -1925,9 +2085,10 @@ test.describe('marketing site', () => {
       page.locator('#review-journey, [data-story-media], [data-story-video]'),
     ).toHaveCount(0);
     await expect(page.locator('a[href$="#review-journey"]')).toHaveCount(0);
-    await expect(page.locator('main video')).toHaveCount(4);
+    await expect(page.locator('main video')).toHaveCount(5);
     await expect(page.locator('[data-hero-video]')).toHaveCount(1);
     await expect(page.locator('[data-how-video]')).toHaveCount(3);
+    await expect(page.locator('[data-promo-video]')).toHaveCount(1);
   });
 
   test('keeps the single marketing page and its anchors inside every viewport', async ({
@@ -1963,8 +2124,10 @@ test.describe('marketing site', () => {
         await expect(headerCta).toBeVisible();
         expect((await headerCta.boundingBox())!.height).toBeGreaterThanOrEqual(44);
         const signIn = page.getByRole('banner').getByRole('link', { name: 'Sign in' });
+        if (viewport.width <= 600) await revealMarketingNavigation(page);
         await expect(signIn).toBeVisible();
         expect((await signIn.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        if (viewport.width <= 600) await page.keyboard.press('Escape');
 
         const hero = page.locator('#home');
         const heroMedia = hero.locator('[data-hero-media="video"]');
@@ -1981,7 +2144,7 @@ test.describe('marketing site', () => {
         await expect(hero.getByRole('link', { name: 'Open live demo', exact: true })).toHaveCount(
           0,
         );
-        await expect(hero.locator('[data-hero-flow-step]')).toHaveCount(4);
+        await expect(hero.locator('[data-hero-flow-step]')).toHaveCount(5);
         await expect(hero.locator('[data-hero-trust-line]')).toHaveCount(0);
         expect((await heroAction.boundingBox())!.height).toBeGreaterThanOrEqual(44);
         expect(
@@ -1999,6 +2162,9 @@ test.describe('marketing site', () => {
             const mediaBox = media.getBoundingClientRect();
             const videoBox = video.getBoundingClientRect();
             const actionBox = action.getBoundingClientRect();
+            const flowBox = section
+              .querySelector<HTMLElement>('[data-hero-flow]')!
+              .getBoundingClientRect();
 
             return {
               mediaInsideFrame:
@@ -2006,11 +2172,11 @@ test.describe('marketing site', () => {
                 mediaBox.right <= frameBox.right &&
                 mediaBox.top >= frameBox.top &&
                 mediaBox.bottom <= frameBox.bottom,
-              videoCoversMedia:
-                videoBox.left <= mediaBox.left &&
-                videoBox.right >= mediaBox.right &&
-                videoBox.top <= mediaBox.top &&
-                videoBox.bottom >= mediaBox.bottom,
+              videoFillsMediaContent:
+                Math.abs(videoBox.left - mediaBox.left) <= 1 &&
+                Math.abs(videoBox.right - mediaBox.right) <= 1 &&
+                Math.abs(videoBox.top - mediaBox.top) <= 1 &&
+                Math.abs(videoBox.bottom - mediaBox.bottom) <= 1,
               mediaHasSize: mediaBox.width > 0 && mediaBox.height > 0,
               videoHasMetadata:
                 video.readyState >= 1 && video.videoWidth > 0 && video.videoHeight > 0,
@@ -2019,35 +2185,45 @@ test.describe('marketing site', () => {
               controlCount: media.querySelectorAll('button, [data-hero-video-control]').length,
               actionInsideViewport: actionBox.left >= 0 && actionBox.right <= viewportWidth,
               sectionContainsChildren:
-                sectionBox.bottom >= Math.max(copyBox.bottom, frameBox.bottom),
+                sectionBox.bottom >= Math.max(copyBox.bottom, frameBox.bottom, flowBox.bottom),
               layoutOrder:
-                viewportWidth > 820
-                  ? copyBox.right <= frameBox.left
-                  : copyBox.bottom <= frameBox.top,
-              desktopTopAlignment:
-                viewportWidth <= 820 || Math.abs(copyBox.top - frameBox.top) <= 1,
+                viewportWidth <= 600
+                  ? actionBox.bottom <= flowBox.top && flowBox.bottom <= frameBox.top
+                  : viewportWidth > 820
+                    ? copyBox.right <= frameBox.left
+                    : copyBox.bottom <= frameBox.top,
+              desktopCenterAlignment:
+                viewportWidth <= 820 ||
+                Math.abs(copyBox.top + copyBox.height / 2 - (frameBox.top + frameBox.height / 2)) <=
+                  1,
+              squareFrame: Math.abs(mediaBox.width - mediaBox.height) <= 1,
+              mediaShadow: getComputedStyle(media).boxShadow,
             };
           }, viewport.width),
         ).toEqual({
           mediaInsideFrame: true,
-          videoCoversMedia: true,
+          videoFillsMediaContent: true,
           mediaHasSize: true,
           videoHasMetadata: true,
-          objectFit: 'cover',
+          objectFit: 'contain',
           mediaOverflow: 'hidden',
           controlCount: 0,
           actionInsideViewport: true,
           sectionContainsChildren: true,
           layoutOrder: true,
-          desktopTopAlignment: true,
+          desktopCenterAlignment: true,
+          squareFrame: true,
+          mediaShadow: 'none',
         });
 
         for (const item of NAVIGATION.slice(1)) {
+          await revealMarketingNavigation(page);
           const navLink = page
-            .getByRole('banner')
-            .getByRole('link', { name: item.label, exact: true });
+            .locator('#marketing-navigation')
+            .getByRole('link', { name: item.label, exact: true, includeHidden: true });
           expect((await navLink.boundingBox())!.height).toBeGreaterThanOrEqual(44);
           await navLink.click();
+          await expect(page).toHaveURL(new RegExp(`/#${item.target}$`));
           const targetBox = await page.locator(`#${item.target}`).boundingBox();
           const stickyHeaderBox = await page.getByRole('banner').boundingBox();
           expect(stickyHeaderBox?.y).toBe(0);

@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <SignupForm />;
+  return <SignupForm googleClientId={process.env.GOOGLE_CLIENT_ID?.trim() || null} />;
 }

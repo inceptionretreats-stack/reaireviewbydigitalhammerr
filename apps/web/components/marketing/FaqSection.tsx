@@ -9,9 +9,9 @@ const QUESTIONS = [
     id: 'qr',
     question: 'How do I get started with my QR?',
     answer:
-      'Create your account, add your business details and Google review link, then download your branded QR as a PNG or SVG. Print it at your counter or tables so customers can scan and open your review page.',
-    image: '/marketing/faq/qr-setup.webp',
-    alt: 'Digital Hammerr branded QR standee shown in the Ai Review product',
+      'Create your account, add your business details and Google review link, then download your branded QR.',
+    image: '/marketing/faq/qr-counter-scene-v1.webp',
+    alt: 'Illustrative QR counter display',
   },
   {
     id: 'edit',
@@ -58,11 +58,14 @@ const QUESTIONS = [
 type Question = (typeof QUESTIONS)[number];
 
 function FaqScreenshot({ item, mobile = false }: { item: Question; mobile?: boolean }) {
+  const isPhoto = item.id === 'qr';
+
   return (
     <figure
       className={mobile ? styles.mobilePreview : styles.desktopPreview}
       data-faq-preview
       data-faq-preview-for={item.id}
+      data-faq-photo={isPhoto || undefined}
     >
       <div className={styles.screenshotStage}>
         <div className={styles.screenshotFrame} key={item.image}>
@@ -71,15 +74,19 @@ function FaqScreenshot({ item, mobile = false }: { item: Question; mobile?: bool
             href={item.image}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={`View full screenshot: ${item.question}`}
+            aria-label={
+              isPhoto
+                ? 'View illustrative QR counter display'
+                : `View full screenshot: ${item.question}`
+            }
           >
             <Image
               data-faq-screenshot
               src={item.image}
-              alt={`Example product screen: ${item.alt}`}
+              alt={isPhoto ? item.alt : `Example product screen: ${item.alt}`}
               fill
               unoptimized
-              sizes="(max-width: 820px) calc(100vw - 80px), (max-width: 1280px) 44vw, 550px"
+              sizes="(max-width: 560px) calc(100vw - 32px), (max-width: 820px) calc(100vw - 48px), (max-width: 1280px) 44vw, 550px"
               className={styles.screenshot}
             />
           </a>
@@ -103,9 +110,9 @@ export function FaqSection() {
   return (
     <section className={styles.section} id="faq" aria-labelledby="faq-title" data-marketing-faq>
       <header className={styles.heading}>
+        <div className={styles.eyebrow}>FAQ</div>
         <h2 id="faq-title">
-          Everything you need to know
-          <span>about Ai Review.</span>
+          Everything you need to know <span>about Ai Review.</span>
         </h2>
       </header>
 
@@ -135,8 +142,7 @@ export function FaqSection() {
                       strokeLinecap="round"
                       aria-hidden="true"
                     >
-                      <path d="M5 12h14" />
-                      <path className={styles.plusStem} d="M12 5v14" />
+                      <path d="m5 9 7 7 7-7" />
                     </svg>
                   </button>
                 </h3>

@@ -3,15 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Badge } from '@ai-review/ui';
 import { DASHBOARD_NAV, isCurrentNavItem } from './nav-items';
+import { SignOutButton } from './SignOutButton';
 
 const ITEM =
   'dashboard-nav-item flex min-h-11 items-center gap-3 rounded-control px-3 text-sm no-underline';
 const LINK = `${ITEM} font-medium text-ink hover:bg-surface`;
 const CURRENT = `${ITEM} dashboard-nav-item--current font-bold text-accent`;
-const PLANNED = `${ITEM} dashboard-nav-item--planned text-ink-muted`;
-const TONES = ['nav-tone-blue', 'nav-tone-red', 'nav-tone-yellow', 'nav-tone-green'] as const;
+const GROUPS: Readonly<Record<string, string>> = {
+  Dashboard: 'Workspace',
+  'Ai Review': 'Review setup',
+  Customers: 'Customer activity',
+  Subscription: 'Account',
+};
 
 const ICONS: Readonly<Record<string, ReactNode>> = {
   Dashboard: (
@@ -147,28 +151,12 @@ export function DashboardNav() {
       </button>
 
       <ul id="dashboard-navigation" className="dashboard-nav-list">
-        {DASHBOARD_NAV.map((item, index) => {
-          const tone = TONES[index % TONES.length] ?? TONES[0];
-          const startsPlannedGroup = item.label === 'Custom Domain';
-
-          if (item.href === undefined) {
-            return (
-              <li
-                key={item.label}
-                className={`${tone}${startsPlannedGroup ? ' dashboard-nav-planned-start' : ''}`}
-              >
-                <span className={PLANNED}>
-                  <NavIcon>{ICONS[item.label]}</NavIcon>
-                  <span className="dashboard-nav-text">{item.label}</span>
-                  <Badge tone="neutral">Soon</Badge>
-                </span>
-              </li>
-            );
-          }
-
+        {DASHBOARD_NAV.filter((item) => item.href !== undefined).map((item) => {
+          if (item.href === undefined) return null;
           const current = isCurrentNavItem(pathname, item.href);
           return (
-            <li key={item.label} className={tone}>
+            <li key={item.label}>
+              {GROUPS[item.label] && <p className="vendor-nav-group">{GROUPS[item.label]}</p>}
               <Link
                 href={item.href}
                 aria-current={current ? 'page' : undefined}
@@ -181,6 +169,9 @@ export function DashboardNav() {
             </li>
           );
         })}
+        <li className="vendor-mobile-signout">
+          <SignOutButton />
+        </li>
       </ul>
     </nav>
   );
@@ -189,7 +180,7 @@ export function DashboardNav() {
 function NavIcon({ children }: { children: ReactNode }) {
   return (
     <span className="dashboard-nav-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
         {children}
       </svg>
     </span>

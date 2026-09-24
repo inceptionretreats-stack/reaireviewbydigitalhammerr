@@ -1250,6 +1250,15 @@ paths:
         because it also carries source attribution, and its disabled state must win over the
         business merely being reachable (QR-01-02).
 
+        When the business has configured services, `selected_services` must contain at least
+        one of those exact public labels. Customers may choose several. Unknown labels,
+        malformed values and missing/empty choices return `422` before rate-limit consumption,
+        quota reservation or provider work. Duplicate labels are deduplicated in business-list
+        order. The joined labels may total no more than 600 characters. Businesses without a
+        configured service list accept an omitted field or `[]` for a general draft. Older
+        clients of a business with services must refresh and choose; the server never silently
+        assumes every service was used. Service choices are not a rating or proof of satisfaction.
+
         No star rating is accepted or returned at any point (D-009, AC-006), and no response ever
         suggests the review was posted — the platform only observes that Google was opened
         (D-028, AC-025).
@@ -1319,7 +1328,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '422':
-          description: The body was not JSON.
+          description: Malformed JSON/body fields or missing, invalid, unknown or overly long service choices.
           x-error-codes: [VALIDATION_FAILED]
           content:
             application/json:
@@ -2220,6 +2229,14 @@ components:
             Recorded as the parent of this draft, so a regeneration chain is traceable (AC-009).
             The similarity gate compares against the previous drafts for the anonymous session,
             not against this id.
+        selected_services:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 80 }
+          description: |
+            Exact labels from this business's public service list. Required and nonempty when
+            services exist; omitted or empty only when no services exist. Server validates
+            membership, deduplicates, and caps comma-separated labels at 600 characters.
 
     ReviewGeneration:
       type: object
@@ -2242,6 +2259,11 @@ components:
             A constant, not a flag. ADR-008 and AC-008 make the confirmation gate mandatory, so no
             valid response has it false and no client can be written against a shape where Copy is
             enabled without it.
+        selected_services:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 80 }
+          description: Canonical service choices used for this draft; empty for a general draft.
 
     PublicEventRequest:
       type: object

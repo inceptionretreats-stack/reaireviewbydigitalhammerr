@@ -3,18 +3,21 @@ import { BusinessAudienceStrip } from './BusinessAudienceStrip';
 import { HeroAiAccent } from './HeroAiAccent';
 import { HowItWorksVideos } from './HowItWorksVideos';
 import { PricingPlanCards } from './PricingMarketingPage';
+import { PromoVideoSection } from './PromoVideoSection';
+import { ReviewOpportunitySection } from './ReviewOpportunitySection';
 import { RobotClaimBand } from './RobotClaimBand';
+import { ReviewBenefits } from './ReviewBenefits';
 import { FaqSection } from './FaqSection';
 import {
   ActionLink,
   MarketingShell,
   HeroVideoVisual,
-  TrustBand,
   marketingStyles as styles,
 } from './MarketingSite';
 
 const HERO_FLOW_STEPS = [
   { label: 'Scan', tone: 'green', icon: 'scan' },
+  { label: 'Ai draft', tone: 'blue', icon: 'draft' },
   { label: 'Copy', tone: 'blue', icon: 'copy' },
   { label: 'Paste', tone: 'yellow', icon: 'clipboard' },
   { label: 'Review', tone: 'red', icon: 'star' },
@@ -36,6 +39,12 @@ function HeroFlowIcon({ name }: { name: (typeof HERO_FLOW_STEPS)[number]['icon']
     >
       {name === 'scan' ? (
         <path d="M8 4H5a1 1 0 0 0-1 1v3m12-4h3a1 1 0 0 1 1 1v3M4 16v3a1 1 0 0 0 1 1h3m12-4v3a1 1 0 0 1-1 1h-3" />
+      ) : null}
+      {name === 'draft' ? (
+        <>
+          <path d="M11 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M8 12h5m-5 4h8" />
+          <path d="m18 2 1.3 3.7L23 7l-3.7 1.3L18 12l-1.3-3.7L13 7l3.7-1.3L18 2Z" />
+        </>
       ) : null}
       {name === 'copy' ? (
         <>
@@ -103,11 +112,13 @@ export function HomeMarketingPage({ demo }: { demo: LandingDemo | null }) {
 
       <BusinessAudienceStrip />
 
+      <ReviewOpportunitySection />
+
       <HowItWorksVideos />
 
-      {/* Keep the promotional story video off the homepage until its claims and dialogue are verified. */}
+      <PromoVideoSection />
 
-      <TrustBand />
+      <ReviewBenefits />
 
       <section className={styles.homePricing} id="pricing" aria-labelledby="pricing-title">
         <header className={styles.pricingIntro}>

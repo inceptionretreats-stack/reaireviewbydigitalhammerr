@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CSSProperties, FormEvent } from 'react';
+import type { FormEvent } from 'react';
 import { submitFeedbackRequest } from '@ai-review/contracts';
+import styles from './PrivateFeedback.module.css';
 
 /**
  * FB-01 — private feedback.
@@ -40,9 +41,14 @@ export function FeedbackForm({ slug, businessName }: FeedbackFormProps) {
   const [status, setStatus] = useState<Status>('default');
   const [formError, setFormError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
+  const [interactive, setInteractive] = useState(false);
 
   const statusRef = useRef<HTMLDivElement | null>(null);
   const messageRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Until hydration, the client-side validator and submit handler cannot run. Do not let an
+  // early tap navigate away with private feedback in a native form submission.
+  useEffect(() => setInteractive(true), []);
 
   // AC-037: after submitting, focus moves to whichever region now carries the outcome, so a
   // keyboard or screen-reader user is not left on a control that has been replaced.
@@ -103,19 +109,17 @@ export function FeedbackForm({ slug, businessName }: FeedbackFormProps) {
 
   if (status === 'success') {
     return (
-      <div className="stack">
-        <div className="notice" role="status" tabIndex={-1} ref={statusRef}>
+      <div>
+        <div className={styles.successNotice} role="status" tabIndex={-1} ref={statusRef}>
           <p>Thank you. Your feedback has gone to {businessName}.</p>
           {/*
             FB-01-02 and AC-039: this is private. Saying so is the point of the screen — the
             customer has just handed over a complaint and possibly their phone number, and
             13_Security_Privacy_Compliance.md keeps both off every public surface.
           */}
-          <p className="muted">
-            It is private: only {businessName} can read it, and nothing is posted publicly.
-          </p>
+          <p>It is private: only {businessName} can read it, and nothing is posted publicly.</p>
         </div>
-        <a className="btn btn-secondary" href={`/${slug}`}>
+        <a className={styles.backLink} href={`/${slug}`}>
           Back to {businessName}
         </a>
       </div>
@@ -133,15 +137,15 @@ export function FeedbackForm({ slug, businessName }: FeedbackFormProps) {
     : 'feedback-message-hint';
 
   return (
-    <form className="stack" onSubmit={(event) => void submit(event)} noValidate>
+    <form method="post" className={styles.form} onSubmit={(event) => void submit(event)} noValidate>
       {formError && (
-        <p className="notice notice-error" role="alert">
+        <p className={styles.errorNotice} role="alert">
           {formError}
         </p>
       )}
 
-      <div>
-        <label className="muted" style={LABEL_STYLE} htmlFor="feedback-name">
+      <div className={styles.field}>
+        <label className={styles.label} htmlFor="feedback-name">
           Your name (optional)
         </label>
         <input
@@ -152,12 +156,12 @@ export function FeedbackForm({ slug, businessName }: FeedbackFormProps) {
           maxLength={NAME_MAX}
           value={name}
           onChange={(event) => setName(event.target.value)}
-          style={FIELD_STYLE}
+          className={styles.input}
         />
       </div>
 
-      <div>
-        <label className="muted" style={LABEL_STYLE} htmlFor="feedback-mobile">
+      <div className={styles.field}>
+        <label className={styles.label} htmlFor="feedback-mobile">
           Mobile number (optional)
         </label>
         <input
@@ -170,18 +174,18 @@ export function FeedbackForm({ slug, businessName }: FeedbackFormProps) {
           value={mobile}
           onChange={(event) => setMobile(event.target.value)}
           aria-describedby="feedback-mobile-hint"
-          style={FIELD_STYLE}
+          className={styles.input}
         />
-        <p className="muted" id="feedback-mobile-hint">
+        <p className={styles.hint} id="feedback-mobile-hint">
           Only so the business can reply to you.
         </p>
       </div>
 
-      <div>
-        <label className="muted" style={LABEL_STYLE} htmlFor="feedback-message">
+      <div className={styles.field}>
+        <label className={styles.label} htmlFor="feedback-message">
           What would you like the business to know?
         </label>
-        <p className="muted" id="feedback-message-hint">
+        <p className={`${styles.hint} ${styles.messageHint}`} id="feedback-message-hint">
           Required, at least {MESSAGE_MIN} characters.
         </p>
         <textarea
@@ -197,22 +201,27 @@ export function FeedbackForm({ slug, businessName }: FeedbackFormProps) {
           }}
           aria-invalid={messageError !== null}
           aria-describedby={describedBy}
+          className={styles.textarea}
         />
         {messageError && (
-          <p className="notice notice-error" id="feedback-message-error" role="alert">
+          <p className={styles.errorNotice} id="feedback-message-error" role="alert">
             {messageError}
           </p>
         )}
-        <p className="muted" aria-live="polite">
+        <p className={styles.counter} aria-live="polite">
           {remaining} characters remaining
         </p>
       </div>
 
-      <button type="submit" className="btn btn-primary" disabled={status === 'submitting'}>
+      <button
+        type="submit"
+        className={styles.submitButton}
+        disabled={!interactive || status === 'submitting'}
+      >
         {status === 'submitting' ? 'Sending…' : 'Submit Feedback'}
       </button>
 
-      <a className="btn btn-text" href={`/${slug}`}>
+      <a className={styles.backLink} href={`/${slug}`}>
         Back
       </a>
     </form>
@@ -227,23 +236,3 @@ function extractMessage(payload: unknown): string {
   const error = (payload as { error: { message?: string } }).error;
   return error.message ?? fallback;
 }
-
-/**
- * Inline styles rather than utility classes: apps/web ships a hand-written stylesheet
- * (app/globals.css) with no Tailwind entrypoint, so utility class names would render unstyled.
- * These two rules deliberately mirror the stylesheet's existing `textarea` rule — same tokens,
- * same 48px minimum touch target — so text inputs and the message box stay visually identical
- * and share one AA-contrast palette (AC-038).
- */
-const FIELD_STYLE: CSSProperties = {
-  width: '100%',
-  minHeight: '48px',
-  padding: '0.75rem',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  font: 'inherit',
-  color: 'inherit',
-  background: 'var(--bg)',
-};
-
-const LABEL_STYLE: CSSProperties = { display: 'block', marginBottom: '0.35rem' };

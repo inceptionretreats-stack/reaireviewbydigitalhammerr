@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { AppBrand } from '@/components/brand/AppBrand';
+import styles from '@/components/onboarding/VendorOnboarding.module.css';
 import { getSession } from '@/lib/session';
 
 /** Authenticated setup shell shared by every onboarding step. */
@@ -11,18 +12,18 @@ export default async function OnboardingLayout({ children }: { children: ReactNo
   if (session.role === 'SUPER_ADMIN') redirect('/admin');
 
   return (
-    <div className="onboarding-shell">
-      <aside className="onboarding-aside">
-        <Link href="/" className="onboarding-brand" aria-label="Ai Review home">
+    <div className={`onboarding-shell ${styles.shell}`}>
+      <aside className={styles.aside}>
+        <Link href="/" className={styles.brand} aria-label="Ai Review home">
           <AppBrand />
         </Link>
 
-        <div className="onboarding-story">
+        <div className={styles.story}>
           <h2>Build your review experience, step by step.</h2>
           <p>A focused setup for your business page, Google link and Ai writing help.</p>
         </div>
 
-        <div className="onboarding-aside-footer">
+        <div className={styles.asideFooter}>
           <span className="app-mini-signature" aria-hidden="true">
             <i />
             <i />
@@ -33,15 +34,15 @@ export default async function OnboardingLayout({ children }: { children: ReactNo
         </div>
       </aside>
 
-      <div className="onboarding-workspace">
-        <header className="onboarding-topbar">
+      <div className={styles.workspace}>
+        <header className={styles.topbar}>
           <span>Setting up your business</span>
           <Link href="/app">Go to dashboard</Link>
         </header>
 
-        <main className="onboarding-main">{children}</main>
+        <main className={styles.main}>{children}</main>
 
-        <footer className="onboarding-footer">Ai Review by Digital Hammerr</footer>
+        <footer className={styles.footer}>Ai Review by Digital Hammerr</footer>
       </div>
     </div>
   );

@@ -32,6 +32,7 @@ export class TeamError extends Error {
       | 'ALREADY_MEMBER'
       | 'INVITE_INVALID'
       | 'UNSUPPORTED_ROLE'
+      | 'CREDENTIAL_REQUIRED'
       | 'WEAK_PASSWORD',
     message: string,
   ) {
@@ -262,6 +263,12 @@ export class TeamService {
       throw new TeamError('SELF_TARGET', 'change your own role from another admin account');
     await this.db.transaction(async (tx) => {
       const target = await this.lock(tx, targetUserId);
+      if (!target.passwordHash) {
+        throw new TeamError(
+          'CREDENTIAL_REQUIRED',
+          'a passwordless account cannot use admin sign-in',
+        );
+      }
       if (target.role === 'SUPER_ADMIN' && input.role !== 'SUPER_ADMIN') {
         await this.assertNotLastSuperAdmin(tx, targetUserId);
       }
@@ -336,7 +343,12 @@ export class TeamService {
 
   private async lock(tx: Executor, userId: string) {
     const [target] = await tx
-      .select({ id: users.id, role: users.role, disabledAt: users.disabledAt })
+      .select({
+        id: users.id,
+        role: users.role,
+        passwordHash: users.passwordHash,
+        disabledAt: users.disabledAt,
+      })
       .from(users)
       .where(and(eq(users.id, userId), isNull(users.deletedAt)))
       .for('update')

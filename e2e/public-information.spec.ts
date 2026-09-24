@@ -22,12 +22,6 @@ const VIEWPORTS = [
   { width: 390, height: 844 },
   { width: 320, height: 760 },
 ] as const;
-const SHARED_PRICING_TOPICS = [
-  'One business profile',
-  'What counts as a draft?',
-  'Retries and previews',
-  'When drafts run out',
-] as const;
 const evidenceDirectory =
   process.env.PUBLIC_INFORMATION_SCREENSHOT_DIR ??
   path.join(os.tmpdir(), 'ai-review-public-information-qa');
@@ -184,7 +178,7 @@ test.describe('public information without an account', () => {
       await screenshot(page, `signup-preserved-${viewport.width}.png`);
     });
 
-    test(`Show more opens separate plan pages and preserves card size at ${viewport.width}px`, async ({
+    test(`Show more opens one plan comparison page and preserves card size at ${viewport.width}px`, async ({
       page,
     }) => {
       await page.setViewportSize(viewport);
@@ -213,7 +207,7 @@ test.describe('public information without an account', () => {
         ['Free', free],
         ['Pro', pro],
       ] as const) {
-        const route = `/legal/pricing/${plan.toLowerCase()}`;
+        const route = '/legal/pricing';
         const link = card.getByRole('link', { name: `Show more about the ${plan} plan` });
         await expect(link).toHaveAttribute('href', route);
         if (plan === 'Free') {
@@ -224,33 +218,24 @@ test.describe('public information without an account', () => {
         }
         await expect(page).toHaveURL(`${ORIGIN}${route}`);
         expect((await page.reload())?.status()).toBe(200);
-        await expect(page).toHaveTitle(`${plan} plan details | Ai Review by Digital Hammerr`);
+        await expect(page).toHaveTitle('Free and Pro plan details | Ai Review by Digital Hammerr');
         await expect(
-          page.getByRole('heading', { level: 1, name: `${plan} plan details` }),
+          page.getByRole('heading', { level: 1, name: 'Free and Pro plan details' }),
         ).toBeVisible();
-        const details = page.getByRole('region', { name: `${plan} pricing details` });
-        const topics =
-          plan === 'Free'
-            ? ['Free allowance', ...SHARED_PRICING_TOPICS, 'No payment or renewal']
-            : [
-                'Pro allowance and expiry',
-                ...SHARED_PRICING_TOPICS,
-                'Payment and taxes',
-                'Renewal and cancellation',
-              ];
-        await expect(details.locator('dt')).toHaveCount(topics.length);
-        for (const topic of topics) {
-          await expect(details.locator('dt').filter({ hasText: topic })).toBeVisible();
-        }
-        await expect(details).toContainText(
-          plan === 'Free' ? '10 Ai drafts in total' : '12 calendar months and 2,000 Ai drafts',
-        );
-        if (plan === 'Pro') await expect(details).toContainText('no automatic recurring charge');
+        await expect(page.getByRole('heading', { level: 2, name: 'Free plan' })).toBeVisible();
+        await expect(page.getByRole('heading', { level: 2, name: 'Pro plan' })).toBeVisible();
+        const comparison = page.getByRole('table', { name: 'Free and Pro plan comparison' });
+        await expect(comparison).toBeVisible();
+        await expect(comparison.getByRole('columnheader', { name: /^Free\b/ })).toBeVisible();
+        await expect(comparison.getByRole('columnheader', { name: /^Pro\b/ })).toBeVisible();
+        await expect(comparison).toContainText('₹0');
+        await expect(comparison).toContainText('₹999');
+        await expect(comparison).toContainText('2,000');
+        await expect(page.getByRole('main')).toContainText('10 Ai drafts');
+        await expect(page.getByRole('main')).toContainText('12 calendar months');
+        await expect(page.getByRole('main')).toContainText('no automatic recurring charge');
         await expectHealthyLayout(page);
-        await screenshot(page, `pricing-${plan.toLowerCase()}-page-${viewport.width}.png`);
-        const otherPlan = plan === 'Free' ? 'Pro' : 'Free';
-        await page.getByRole('link', { name: `Compare with the ${otherPlan} plan →` }).click();
-        await expect(page).toHaveURL(`${ORIGIN}/legal/pricing/${otherPlan.toLowerCase()}`);
+        await screenshot(page, `pricing-comparison-page-${viewport.width}.png`);
         await page.getByRole('link', { name: '← Back to pricing' }).click();
         await expect(page).toHaveURL(`${ORIGIN}/#pricing`);
         await expectHealthyLayout(page);
@@ -262,13 +247,17 @@ test.describe('public information without an account', () => {
         );
         expect(returnedSizes).toEqual(originalSizes);
       }
-      await page.goto('/legal/pricing/pro');
-      await page
-        .getByRole('region', { name: 'Pro pricing details' })
-        .getByRole('link', { name: 'Cancellation and refunds' })
-        .click();
+      for (const legacyRoute of ['/legal/pricing/free', '/legal/pricing/pro']) {
+        await page.goto(legacyRoute);
+        await expect(page).toHaveURL(`${ORIGIN}/legal/pricing`);
+        await expect(
+          page.getByRole('heading', { level: 1, name: 'Free and Pro plan details' }),
+        ).toBeVisible();
+      }
+      await page.goto('/legal/pricing');
+      await page.getByRole('link', { name: 'Cancellation and refunds' }).click();
       await expect(page).toHaveURL(`${ORIGIN}/legal/cancellation-refunds`);
-      await page.goto('/legal/pricing/pro');
+      await page.goto('/legal/pricing');
       await page.getByRole('link', { name: 'Ask a billing question' }).click();
       await expect(page).toHaveURL(`${ORIGIN}/legal/contact`);
     });

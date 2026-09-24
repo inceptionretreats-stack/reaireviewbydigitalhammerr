@@ -69,6 +69,13 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const changingEmail = emailChanged(details.email, account.email);
 
   if (changingEmail) {
+    if (!account.passwordHash) {
+      return apiError(
+        'VALIDATION_FAILED',
+        'Set an account password through password reset before changing your email.',
+        { details: { fields: ['current_password'] } },
+      );
+    }
     if (details.currentPassword === null) {
       return apiError('VALIDATION_FAILED', 'Enter your current password to change your email.', {
         details: { fields: ['current_password'] },

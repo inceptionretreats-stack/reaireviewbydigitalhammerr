@@ -30,7 +30,7 @@ export function SubscriptionCard({ subscription, timezone }: SubscriptionCardPro
       <Card
         title="Subscription"
         titleAs="h2"
-        className="dashboard-section-card dashboard-section-card--yellow"
+        className="vendor-plan-card dashboard-section-card dashboard-section-card--yellow"
       >
         <InlineError role="status">
           We could not find a plan for this business. Please contact Digital Hammerr.
@@ -48,9 +48,9 @@ export function SubscriptionCard({ subscription, timezone }: SubscriptionCardPro
     <Card
       title="Subscription"
       titleAs="h2"
-      className="dashboard-section-card dashboard-section-card--yellow"
+      className="vendor-plan-card dashboard-section-card dashboard-section-card--yellow"
     >
-      <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-2 text-sm">
+      <dl className="vendor-plan-summary grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-4 gap-y-3 text-sm">
         <dt className="text-ink-muted">Plan</dt>
         <dd>
           <StatusBadge status={plan.badge} label={plan.label} />
@@ -71,10 +71,10 @@ export function SubscriptionCard({ subscription, timezone }: SubscriptionCardPro
       </dl>
 
       <p className="mt-3 text-sm text-ink-muted">{plan.note}</p>
-      <p className="mt-2 text-sm">
+      <p className="vendor-plan-actions mt-2 text-sm">
         <Link
           href="/app/subscription"
-          className="font-medium text-ink underline underline-offset-2"
+          className="vendor-plan-link inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {plan.badge === 'PRO' ? 'Manage your plan' : 'Upgrade to Pro'}
         </Link>

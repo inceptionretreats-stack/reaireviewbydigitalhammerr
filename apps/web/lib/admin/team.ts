@@ -38,6 +38,14 @@ export function teamErrorResponse(error: unknown): NextResponse | null {
       return apiError('VALIDATION_FAILED', 'Only admin roles can be invited here.', {
         details: { fields: ['role'] },
       });
+    case 'CREDENTIAL_REQUIRED':
+      return apiError(
+        'VALIDATION_FAILED',
+        'This account uses Google only and cannot use admin sign-in.',
+        {
+          details: { fields: ['role'] },
+        },
+      );
     case 'WEAK_PASSWORD':
       return apiError('VALIDATION_FAILED', error.message, { details: { fields: ['password'] } });
   }

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './CustomerReview.module.css';
 import { DraftEditor, type CopyStatus } from './DraftEditor';
 import { ReviewFlowIcon } from './ReviewFlowIcon';
+import { ServicePicker } from './ServicePicker';
+import { MAX_SELECTED_SERVICE_CHARACTERS } from '@/lib/customer-services';
 
 /**
  * The customer review flow: REV-01 (generate), REV-02 (edit/regenerate/confirm/copy) and
@@ -14,7 +16,8 @@ import { ReviewFlowIcon } from './ReviewFlowIcon';
  *  - No star rating anywhere before Google (D-009, AC-006). There is no sentiment branch
  *    either — with nothing to branch on there can be no rating gate, which is what keeps this
  *    on the right side of Google's fake-engagement policy.
- *  - No questionnaire (D-008). Generation starts on arrival — a scan is the tap.
+ *  - Service selection is factual and optional to bypass via the direct review link. It never
+ *    asks for a rating or controls who can leave public/private feedback.
  *  - Nothing claims the review was submitted (D-028, AC-025). The furthest this goes is
  *    opening Google, because that is the last thing the platform can actually observe.
  */
@@ -25,6 +28,7 @@ export interface PublicBusiness {
   logoUrl: string | null;
   reviewUrl: string | null;
   reviewPlatformLabel: string;
+  services?: string[];
 }
 
 export interface ReviewFlowProps {
@@ -34,14 +38,14 @@ export interface ReviewFlowProps {
   /**
    * A draft this anonymous session already has, read server-side.
    *
-   * Present on a refresh or a return visit, and the reason arriving does not spend a generation
-   * every time. A free tenant has ten for the lifetime of the account, so without this a handful
-   * of curious reloads would empty the allowance before anyone posted anything.
+   * Available behind an explicit Return to draft action on a refresh or return visit. It must
+   * never skip the services screen, preselect services for a new visit, or spend another draft.
    */
   initialDraft?: { text: string; generationId: string } | null;
 }
 
-type Phase = 'ready' | 'generating' | 'draft';
+type Phase = 'choose' | 'generating' | 'draft';
+const NO_SERVICES: string[] = [];
 
 interface FlowError {
   code: string;
@@ -49,7 +53,12 @@ interface FlowError {
 }
 
 export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) {
-  const [phase, setPhase] = useState<Phase>(initialDraft ? 'draft' : 'generating');
+  const services = business.services ?? NO_SERVICES;
+  // A scan always starts with a fresh service choice. A saved draft is an optional recovery
+  // action, not the entry screen — even for a returning anonymous session.
+  const [phase, setPhase] = useState<Phase>('choose');
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [draftServices, setDraftServices] = useState<string[]>([]);
   const [draft, setDraft] = useState(initialDraft?.text ?? '');
   const [generationId, setGenerationId] = useState<string | null>(
     initialDraft?.generationId ?? null,
@@ -58,6 +67,41 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
   const [error, setError] = useState<FlowError | null>(null);
   const [edited, setEdited] = useState(false);
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
+  const [interactive, setInteractive] = useState(false);
+  const inFlight = useRef(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const focusNextPhase = useRef(false);
+  const selectionKey = `ai-review:services:v1:${business.slug ?? qrCode ?? ''}`;
+
+  // Server-rendered buttons have no click handlers until hydration finishes. Show them as
+  // temporarily disabled so an early tap on a slow phone cannot look accepted but do nothing.
+  useEffect(() => setInteractive(true), []);
+
+  useEffect(() => {
+    if (!initialDraft) return;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(selectionKey) ?? 'null') as {
+        generationId?: unknown;
+        services?: unknown;
+      } | null;
+      if (saved?.generationId !== initialDraft.generationId || !Array.isArray(saved.services))
+        return;
+      const savedServices = saved.services;
+      const valid = services.filter((service) => savedServices.includes(service));
+      // Removed/renamed vendor services require a fresh choice, not a partial old selection.
+      if (valid.length !== saved.services.length) return;
+      // Keep these only for the saved draft. Do not check choices on the services entry screen.
+      setDraftServices(valid);
+    } catch {
+      // Storage may be blocked. The saved draft is still usable; only reselection is needed.
+    }
+  }, [initialDraft, selectionKey, services]);
+
+  useEffect(() => {
+    if (!focusNextPhase.current || phase === 'generating') return;
+    headingRef.current?.focus();
+    focusNextPhase.current = false;
+  }, [phase]);
 
   const track = useCallback(
     (name: string, properties: Record<string, unknown> = {}) => {
@@ -84,6 +128,14 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
 
   const generate = useCallback(
     async (isRegeneration: boolean) => {
+      if (inFlight.current) return;
+      if (services.length > 0 && selectedServices.length === 0) {
+        focusNextPhase.current = true;
+        setPhase('choose');
+        return;
+      }
+      inFlight.current = true;
+      focusNextPhase.current = true;
       setError(null);
       setCopyStatus('idle');
       setPhase('generating');
@@ -101,6 +153,7 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
               slug: business.slug ?? undefined,
               qr_code: qrCode ?? undefined,
               previous_generation_id: isRegeneration ? generationId : undefined,
+              selected_services: selectedServices,
             }),
           });
 
@@ -120,13 +173,31 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
 
         if (!response.ok) {
           setError(extractError(payload));
-          setPhase(draft ? 'draft' : 'ready');
+          setPhase(isRegeneration && draft ? 'draft' : 'choose');
           return;
         }
 
-        const result = payload as { generation_id: string; review_text: string };
+        const result = payload as {
+          generation_id: string;
+          review_text: string;
+          selected_services?: string[];
+        };
+        const usedServices = result.selected_services ?? selectedServices;
         setGenerationId(result.generation_id);
         setDraft(result.review_text);
+        setDraftServices(usedServices);
+        try {
+          // Store only selection metadata, not the customer's review or confirmation.
+          sessionStorage.setItem(
+            selectionKey,
+            JSON.stringify({
+              generationId: result.generation_id,
+              services: usedServices,
+            }),
+          );
+        } catch {
+          /* The flow also works without browser storage. */
+        }
         setEdited(false);
         // A regenerated draft is text the customer has not read yet, so an earlier
         // confirmation cannot carry over to it (ADR-008).
@@ -138,10 +209,21 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
           message:
             'The writing assistant is unavailable right now. You can still write your own review.',
         });
-        setPhase(draft ? 'draft' : 'ready');
+        setPhase(isRegeneration && draft ? 'draft' : 'choose');
+      } finally {
+        inFlight.current = false;
       }
     },
-    [draft, generationId, business.slug, qrCode, track],
+    [
+      draft,
+      generationId,
+      business.slug,
+      qrCode,
+      track,
+      services.length,
+      selectedServices,
+      selectionKey,
+    ],
   );
 
   /**
@@ -176,27 +258,19 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
     return true;
   }, [draft, edited, generationId, track]);
 
-  /**
-   * Generate on arrival.
-   *
-   * A scan is already an intent to write a review, so making the customer tap "Generate" first
-   * is a step that asks nothing and decides nothing. Skipped when the session already has a
-   * draft — see initialDraft.
-   *
-   * The ref guards React 18's double-invoke in development, which would otherwise spend two
-   * generations for one visit and make the free allowance half what it says.
-   */
-  const autoStarted = useRef(false);
-  useEffect(() => {
-    if (initialDraft || autoStarted.current) return;
-    autoStarted.current = true;
-    void generate(false);
-  }, [initialDraft, generate]);
-
   const openGoogle = useCallback(() => {
     // REV-03-01: recorded immediately before navigation, never after — the page is leaving.
     track('google_open', { generation_id: generationId });
   }, [generationId, track]);
+
+  const changeServices = () => {
+    setSelectedServices(draftServices);
+    setError(null);
+    setCopyStatus('idle');
+    focusNextPhase.current = true;
+    setPhase('choose');
+  };
+  const activeStep = phase === 'choose' ? 0 : copyStatus === 'copied' ? 2 : 1;
 
   return (
     <article className={styles.card} data-customer-review-flow>
@@ -214,10 +288,52 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
               .toUpperCase() || '•'}
           </span>
         )}
-        <h1 className={styles.businessName}>{business.name}</h1>
+        <div className={styles.identityText}>
+          <h1 className={styles.businessName}>{business.name}</h1>
+          <p className={styles.identityCaption}>Your experience. Your words.</p>
+        </div>
       </header>
 
+      <ol className={styles.progress} aria-label="Review progress">
+        {[services.length ? 'Services' : 'Start', 'Your draft', 'Share'].map((label, index) => (
+          <li
+            key={label}
+            data-state={
+              index < activeStep ? 'complete' : index === activeStep ? 'current' : 'upcoming'
+            }
+            aria-current={index === activeStep ? 'step' : undefined}
+          >
+            <span className={styles.progressDot} aria-hidden="true">
+              {index < activeStep && (
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m4 10 4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </span>
+            <span>{label}</span>
+          </li>
+        ))}
+      </ol>
+
       <div className={styles.flowBody}>
+        {phase !== 'generating' && (
+          <div className={styles.introduction}>
+            <h2 ref={headingRef} tabIndex={-1} className={styles.flowTitle}>
+              {phase === 'draft'
+                ? 'Make it your own'
+                : services.length
+                  ? 'What did you try?'
+                  : 'Share your experience'}
+            </h2>
+            <p>
+              {phase === 'draft'
+                ? 'Read your draft and change anything you like.'
+                : services.length
+                  ? 'Select the services you used. You can choose more than one.'
+                  : 'Start with an AI draft, then make it your own.'}
+            </p>
+          </div>
+        )}
         {error && (
           <p className={styles.errorNotice} role="alert">
             {error.message}
@@ -228,49 +344,113 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
           <div className={styles.loadingState} aria-live="polite" aria-busy="true">
             <ReviewFlowIcon name="spinner" className={styles.spinner} />
             <p className={styles.loadingTitle}>Writing your review…</p>
+            <p className={styles.loadingText}>
+              {selectedServices.length
+                ? `Based on ${selectedServices.join(', ')}.`
+                : 'Preparing a starting point for your own words.'}
+            </p>
+            <div className={styles.loadingLines} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
           </div>
         )}
 
-        {/*
-        'ready' is now only reachable by failing before a first draft exists. AC-036 requires the
-        direct route to stay open when the assistant is down, so this offers writing it by hand
-        rather than a Generate button that has just been shown not to work.
-      */}
-        {phase === 'ready' && (
-          <p className={styles.readyState}>
-            You can still write your own review — the link below opens{' '}
-            {business.reviewPlatformLabel}.
-          </p>
+        {phase === 'choose' && (
+          <>
+            {services.length > 0 && (
+              <ServicePicker
+                services={services}
+                selected={selectedServices}
+                disabled={!interactive}
+                onChange={(next) => {
+                  setSelectedServices(next);
+                  setError(null);
+                }}
+              />
+            )}
+            <div>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                disabled={
+                  !interactive ||
+                  (services.length > 0 && selectedServices.length === 0) ||
+                  selectedServices.join(', ').length > MAX_SELECTED_SERVICE_CHARACTERS
+                }
+                onClick={() => void generate(false)}
+              >
+                <span className={styles.buttonContent}>
+                  {error ? 'Try again' : 'Create my draft'}
+                  <ReviewFlowIcon name="arrow" />
+                </span>
+              </button>
+              <p className={styles.helper}>You can edit every word before sharing.</p>
+            </div>
+            {draft && (
+              <button
+                className={styles.textButton}
+                type="button"
+                onClick={() => {
+                  setSelectedServices(draftServices);
+                  setError(null);
+                  focusNextPhase.current = true;
+                  setPhase('draft');
+                }}
+              >
+                Return to draft
+              </button>
+            )}
+          </>
         )}
 
         {phase === 'draft' && (
-          <DraftEditor
-            draft={draft}
-            confirmed={confirmed}
-            copyStatus={copyStatus}
-            platformLabel={business.reviewPlatformLabel}
-            reviewUrl={business.reviewUrl}
-            onChange={(value) => {
-              setDraft(value);
-              setCopyStatus('idle');
-              setError(null);
-              if (!edited) {
-                setEdited(true);
-                track('review_edit', { generation_id: generationId });
-              }
-            }}
-            onConfirmChange={(next) => {
-              setConfirmed(next);
-              if (!next) {
+          <>
+            {services.length > 0 && (
+              <div className={styles.serviceSummary}>
+                <span>
+                  {draftServices.length
+                    ? draftServices.join(' · ')
+                    : 'Choose services for a new draft'}
+                </span>
+                <button type="button" onClick={changeServices}>
+                  Change services
+                </button>
+              </div>
+            )}
+            <DraftEditor
+              draft={draft}
+              confirmed={confirmed}
+              copyStatus={copyStatus}
+              platformLabel={business.reviewPlatformLabel}
+              reviewUrl={business.reviewUrl}
+              onChange={(value) => {
+                setDraft(value);
+                setConfirmed(false);
                 setCopyStatus('idle');
                 setError(null);
-              }
-              if (next) track('experience_confirmed', { generation_id: generationId });
-            }}
-            onRegenerate={() => void generate(true)}
-            onCopy={copyReview}
-            onOpenGoogle={openGoogle}
-          />
+                if (!edited) {
+                  setEdited(true);
+                  track('review_edit', { generation_id: generationId });
+                }
+              }}
+              onConfirmChange={(next) => {
+                setConfirmed(next);
+                if (!next) {
+                  setCopyStatus('idle');
+                  setError(null);
+                }
+                if (next) track('experience_confirmed', { generation_id: generationId });
+              }}
+              onRegenerate={() => {
+                if (services.length && !draftServices.length) changeServices();
+                else void generate(true);
+              }}
+              onCopy={copyReview}
+              onOpenGoogle={openGoogle}
+            />
+          </>
         )}
 
         {/*
@@ -298,16 +478,16 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
       */}
         {/* Only when there is no draft to copy. The draft path reveals its destination after a
           successful copy or after presenting the explicit manual-copy fallback. */}
-        {phase === 'ready' && business.reviewUrl && (
+        {phase === 'choose' && business.reviewUrl && (
           <a
-            className={styles.secondaryButton}
+            className={styles.directLink}
             href={business.reviewUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={openGoogle}
           >
             <span className={styles.buttonContent}>
-              Write your own review on {business.reviewPlatformLabel}
+              Write my own review
               <ReviewFlowIcon name="arrow" />
             </span>
           </a>
@@ -315,10 +495,7 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
       </div>
 
       <footer className={styles.footer}>
-        <p className={styles.disclosure}>
-          This draft is written with Ai assistance. Please edit it so it reflects your own
-          experience before you post it.
-        </p>
+        <p className={styles.disclosure}>AI helps with wording. You decide what to post.</p>
         <div className={styles.brandBars} aria-hidden="true">
           <span />
           <span />

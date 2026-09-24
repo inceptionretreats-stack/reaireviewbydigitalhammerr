@@ -1,6 +1,6 @@
 import { Card, EmptyState } from '@ai-review/ui';
 import { CopyLinkButton } from './CopyLinkButton';
-import { SECONDARY_LINK } from './link-styles';
+import { PRIMARY_LINK } from './link-styles';
 
 /**
  * The tenant's canonical public address (PUB-01), which is the one thing an owner comes here to
@@ -31,7 +31,7 @@ export function PublicPageCard({ publicUrl, isLive, statusNote, liveSince }: Pub
       <Card
         title="Your public page"
         titleAs="h2"
-        className="dashboard-section-card dashboard-section-card--red"
+        className="vendor-public-card dashboard-section-card dashboard-section-card--red"
       >
         {/* Deliberately does not say a QR code points at this address, because none does. A QR
             encodes /r/{code} — a permanent code that resolves through us (ADR-002, D-026) — which
@@ -56,25 +56,26 @@ export function PublicPageCard({ publicUrl, isLive, statusNote, liveSince }: Pub
     <Card
       title="Your public page"
       titleAs="h2"
-      className="dashboard-section-card dashboard-section-card--red"
+      className="vendor-public-card dashboard-section-card dashboard-section-card--red"
       description={statusNote}
-      footer={liveSince ? `Live since ${liveSince}.` : undefined}
     >
       {/* break-all because a long slug on a narrow phone must wrap rather than widen the page. */}
-      <p>
-        <code className="rounded-control bg-surface px-2 py-1 font-mono text-sm break-all text-ink">
+      <p className="vendor-public-url rounded-control border border-line bg-surface p-3">
+        <code className="block font-mono text-sm leading-relaxed break-all text-ink">
           {publicUrl}
         </code>
       </p>
 
+      {liveSince && <p className="mt-2 text-sm text-ink-muted">Live since {liveSince}.</p>}
+
       {isLive && (
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <a href={publicUrl} target="_blank" rel="noreferrer" className={SECONDARY_LINK}>
+        <div className="vendor-public-actions mt-3 flex flex-wrap items-center gap-3">
+          <a href={publicUrl} target="_blank" rel="noreferrer" className={PRIMARY_LINK}>
             Open page
             {/* The new tab is announced rather than left as a surprise change of context. */}
             <span className="sr-only"> (opens in a new tab)</span>
           </a>
-          <CopyLinkButton value={publicUrl} what="your public page address" />
+          <CopyLinkButton value={publicUrl} what="your public page address" label="Copy link" />
         </div>
       )}
     </Card>

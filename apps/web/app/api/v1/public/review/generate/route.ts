@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
 import { aiGenerations, analyticsEvents } from '@ai-review/db';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
@@ -15,6 +16,14 @@ import {
   selectProvider,
 } from '@/lib/generation-service';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
+import { validateSelectedServices } from '@/lib/customer-services';
+
+const requestSchema = z.object({
+  slug: z.string().min(1).max(160).optional(),
+  qr_code: z.string().min(1).max(160).optional(),
+  previous_generation_id: z.uuid().optional(),
+  selected_services: z.unknown().optional(),
+});
 
 /**
  * POST /api/v1/public/review/generate — REV-01 and Flow D.
@@ -38,13 +47,17 @@ import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  let body: { slug?: string; qr_code?: string; previous_generation_id?: string };
+  let rawBody: unknown;
 
   try {
-    body = (await request.json()) as typeof body;
+    rawBody = await request.json();
   } catch {
     return apiError('VALIDATION_FAILED', 'Malformed request body.');
   }
+
+  const parsedBody = requestSchema.safeParse(rawBody);
+  if (!parsedBody.success) return apiError('VALIDATION_FAILED', 'Malformed request body.');
+  const body = parsedBody.data;
 
   const resolved = await resolvePublicRef({ slug: body.slug, qrCode: body.qr_code });
   if (!resolved.ok) {
@@ -79,6 +92,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       'The writing assistant is unavailable right now. You can still write your own review.',
     );
   }
+
+  const context = await loadGenerationContext(database, businessId);
+  if (!context) {
+    return apiError(
+      'AI_PROVIDER_UNAVAILABLE',
+      'The writing assistant is unavailable right now. You can still write your own review.',
+    );
+  }
+
+  // Check the customer choice before rate-limit consumption, quota reservation or model work.
+  // The business context comes from the resolved QR/slug, never from browser-supplied context.
+  const selection = validateSelectedServices(body.selected_services, context.business.services);
+  if (!selection.ok) return apiError('VALIDATION_FAILED', selection.message);
 
   // AC-032, and before anything expensive: a denied request must not reach the provider, and
   // must not consume the free quota either. Four dimensions in one atomic decision — session
@@ -123,16 +149,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const context = await loadGenerationContext(database, businessId);
-  if (!context) {
-    // No active prompt version, or the tenant vanished. Either way the customer sees the same
-    // safe message, and the direct review link on the page still works (AC-036).
-    return apiError(
-      'AI_PROVIDER_UNAVAILABLE',
-      'The writing assistant is unavailable right now. You can still write your own review.',
-    );
-  }
-
   const previousDrafts = session ? await loadPreviousDrafts(database, session.sessionId) : [];
   const provider = selectProvider(providerKeys());
   const generator = buildGenerator(database, provider);
@@ -145,6 +161,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       previousDrafts,
       generationNumber: previousDrafts.length + 1,
       draftLanguage: context.draftLanguage,
+      ...(selection.services.length > 0 ? { selectedServices: selection.services } : {}),
       // Stable across the retries inside this request, different between customers. A visitor
       // without the cookie gets a per-request id: still varied, just not repeatable.
       variationSeed: session?.sessionId ?? crypto.randomUUID(),
@@ -216,6 +233,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       model: draft.model,
       latency_ms: draft.latencyMs,
       quota_type: draft.quotaType,
+      selected_services: selection.services,
     },
   });
 
@@ -223,6 +241,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     generation_id: row.id,
     review_text: draft.reviewText,
     prompt_version: context.promptVersion.version,
+    selected_services: selection.services,
     // The client must not enable Copy without this (AC-008, ADR-008).
     requires_experience_confirmation: true,
   });
