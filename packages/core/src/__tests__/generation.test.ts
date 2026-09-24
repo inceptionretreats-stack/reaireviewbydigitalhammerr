@@ -222,8 +222,29 @@ describe('output compliance gates', () => {
     'Great place, 5 stars from me. Staff were helpful when I asked and I would come back another time soon.',
     'Would rate 4/5 overall. Staff were helpful when I asked and I would come back another time soon enough.',
     'I rated it 5 after my visit. Staff were helpful when I asked and I would come back another time soon.',
+    // A run of star emoji is a rating with no word in it — and the ACTIVE prompt version's
+    // emoji_rules actively invite emoji, so this is the likeliest form to slip through.
+    'Lovely filter coffee here ⭐⭐⭐⭐⭐ and the staff were helpful when I asked, would come back again.',
+    'Really enjoyed it ★★★★ and the staff were helpful when I asked, would come back again soon.',
+    // A scale other than five.
+    'Honestly a 10/10 experience. Staff were helpful when I asked and I would come back another time soon.',
+    'I would say eight out of ten. Staff were helpful when I asked and I would come back another time soon.',
+    'Five out of five from me here. Staff were helpful when I asked and I would come back another time soon.',
+    'Full marks to the team here. Staff were helpful when I asked and I would come back another time soon.',
   ])('rejects a stated rating', (text) => {
     expect(checkOutputCompliance(text).rejections).toContain('STATES_A_RATING');
+  });
+
+  /**
+   * The gate must not swallow ordinary writing. A single decorative emoji is what the prompt
+   * asks for, and a lone "5" in a sentence about something else is not a rating.
+   */
+  it.each([
+    'The filter coffee was the star of the evening ☕ and the staff were helpful when I asked about it.',
+    'We were a table of 5 and the staff were helpful throughout, would happily come back another time.',
+    'Open until 10 on weekends, which suited us, and the staff were helpful when I asked about the menu.',
+  ])('does not mistake ordinary writing for a rating', (text) => {
+    expect(checkOutputCompliance(text).rejections).not.toContain('STATES_A_RATING');
   });
 
   /** AC-012: specifics the customer never supplied, because V1 asks them nothing. */

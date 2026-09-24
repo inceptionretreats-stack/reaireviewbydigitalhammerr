@@ -7,6 +7,7 @@ import {
 } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireAdmin } from '@/lib/require-admin';
 
 export const runtime = 'nodejs';
@@ -26,12 +27,9 @@ export async function PATCH(request: Request) {
   const auth = await requireAdmin(request, { stepUp: true });
   if (!auth.ok) return auth.response;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = adminSettingsPatch.safeParse(raw);
   if (!parsed.success) {
     const fields = [...new Set(parsed.error.issues.map((i) => String(i.path[0] ?? 'body')))];

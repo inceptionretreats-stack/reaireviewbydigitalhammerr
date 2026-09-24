@@ -164,10 +164,18 @@ export class RedisRateLimitStore implements RateLimitStore {
    * other client interleaves, which is all this needs.
    */
   async countDistinct(request: DistinctCountRequest): Promise<number> {
-    const replies = await this.redis
+    // A cookieless caller has no session to add to the set — it reads the size and leaves.
+    // Adding a per-request member would let it inflate the very allowance it is measured
+    // against, one request at a time.
+    const transaction = this.redis
       .multi()
-      .zremrangebyscore(request.key, '-inf', String(request.now - request.windowMs))
-      .zadd(request.key, String(request.now), request.member)
+      .zremrangebyscore(request.key, '-inf', String(request.now - request.windowMs));
+
+    if (request.member !== null) {
+      transaction.zadd(request.key, String(request.now), request.member);
+    }
+
+    const replies = await transaction
       .zcard(request.key)
       .pexpire(request.key, request.windowMs + TTL_SLACK_MS)
       .exec();
@@ -175,7 +183,7 @@ export class RedisRateLimitStore implements RateLimitStore {
     // exec() resolves to null when the transaction was discarded, e.g. a WATCH conflict or a
     // connection reset mid-transaction. Treated as a failure so the caller's degraded path
     // decides what to do, rather than silently reporting zero distinct sessions.
-    const zcard = replies?.[2];
+    const zcard = replies?.[request.member === null ? 1 : 2];
     if (!zcard) throw new RedisRateLimitError('distinct-count transaction was discarded');
 
     const [error, value] = zcard;

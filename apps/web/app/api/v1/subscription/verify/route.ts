@@ -5,6 +5,7 @@ import { CheckoutError, CheckoutService } from '@ai-review/core';
 import type { EventPayload } from '@ai-review/analytics';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireTenant } from '@/lib/require-tenant';
 import { loadSubscriptionView, razorpayConfig, subscriptionToWire } from '@/lib/subscription';
 import { recordActivity } from '@/lib/activity';
@@ -33,12 +34,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return apiError('PAYMENTS_NOT_CONFIGURED', 'Online payment is not set up on this platform.');
   }
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = checkoutVerifyRequest.safeParse(raw);
   if (!parsed.success) {
     return apiError('PAYMENT_VERIFICATION_FAILED', 'We could not verify this payment.', {

@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
 import { resolvePublicRef } from '@/lib/resolve-public-ref';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 
 /**
  * Public analytics ingestion.
@@ -19,18 +20,15 @@ import { apiError } from '@/lib/api-error';
  * even though the QR relation still belongs in the database column.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  let body: {
+  const bodyResult = await readJsonObject(request);
+  if (!bodyResult.ok) return bodyResult.response;
+
+  const body = bodyResult.body as {
     name?: string;
     properties?: Record<string, unknown>;
     slug?: string;
     qr_code?: string;
   };
-
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
 
   const { name, properties = {} } = body;
   if (!name) return apiError('VALIDATION_FAILED', 'Event name is required.');

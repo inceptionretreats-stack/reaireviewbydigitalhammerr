@@ -105,6 +105,7 @@ function scaledConfig(): RateLimitConfig {
     mfaFailuresPerUserPerDay: scale(DEFAULT_RATE_LIMIT_CONFIG.mfaFailuresPerUserPerDay),
     feedbackPerSession: scale(DEFAULT_RATE_LIMIT_CONFIG.feedbackPerSession),
     feedbackPerIpPrefix: scale(DEFAULT_RATE_LIMIT_CONFIG.feedbackPerIpPrefix),
+    signupsPerIpPrefix: scale(DEFAULT_RATE_LIMIT_CONFIG.signupsPerIpPrefix),
   };
 }
 

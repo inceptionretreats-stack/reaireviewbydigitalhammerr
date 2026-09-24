@@ -5,6 +5,7 @@ import { buildQrUrl } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
 import { parseQrSourcePatch, isQrSourceId, toQrSourceWire } from '../qr-source';
 import { qrDataUri } from '@/lib/qr-image';
@@ -49,12 +50,9 @@ export async function PATCH(
   const { id } = await params;
   if (!isQrSourceId(id)) return notFound();
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = parseQrSourcePatch(raw);
   if (!parsed.ok) {

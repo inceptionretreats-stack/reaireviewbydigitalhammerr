@@ -296,6 +296,24 @@ const RATING_PATTERNS = [
   /\bstar[\s-]*rating\b/i,
   /\b\d(?:\.\d)?\s*\/\s*5\b/,
   /\brated?\s+(?:it\s+)?\d/i,
+
+  // A run of star emoji is a rating written without a word, and it is the form the shipped
+  // prompt most invites: the ACTIVE version's emoji_rules tell the model to "use one to three
+  // emoji the way people do in Google reviews". A draft carrying ⭐⭐⭐⭐⭐ to the clipboard is
+  // the product supplying rating-manipulation wording, which is the exact Google
+  // fake-engagement exposure AC-011 exists to prevent. Two or more, so a single decorative
+  // star in "the ⭐ of the evening was the filter coffee" is not a false positive.
+  /[⭐★☆🌟]{2,}/u,
+  // ...and a single one adjacent to a number or a rating word still is one.
+  /\b\d\s*[⭐★☆]/u,
+  /[⭐★☆]\s*(?:out\s+of|\/)\s*\d/iu,
+
+  // "10/10", "8 out of 10", "full marks" — a rating on a scale other than five.
+  /\b\d{1,2}\s*(?:\/|\s+out\s+of\s+)\s*(?:5|10)\b/i,
+  /\bfull\s+marks\b/i,
+  /\btop\s+marks\b/i,
+  // "five out of five", "ten out of ten" — the same thing spelled out.
+  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+out\s+of\s+(?:five|ten)\b/i,
   // Roman Hindi (CHANGE-003): "paanch star", "5 sitare", "4 ki rating", "star deta hoon".
   /\b(?:paanch|panch|chaar|char|teen|do|ek|\d)[\s-]*(?:sitare|sitaare|sitara|taare|stars?)\b/i,
   /\b\d(?:\.\d)?\s*(?:ki\s+)?rating\b/i,

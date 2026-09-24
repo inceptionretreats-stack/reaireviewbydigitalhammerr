@@ -4,6 +4,7 @@ import { businessLinks, businesses } from '@ai-review/db';
 import { normalizePhone } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
 import {
   SECTION_LABEL_MAX,
@@ -66,12 +67,9 @@ export async function PATCH(
   // which would surface as a 500 for what is plainly a request for something that does not exist.
   if (!UUID_PATTERN.test(id)) return notFound();
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const read = readPatch(raw);
   if (!read.ok) {

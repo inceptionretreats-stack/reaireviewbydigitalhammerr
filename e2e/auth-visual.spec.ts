@@ -91,15 +91,14 @@ test.describe('signed-out account screens', () => {
       for (const route of AUTH_ROUTES) {
         await page.goto(route.path);
 
+        // The illustration is desktop-only: AuthShell.module.css drops `.mediaPanel` to
+        // `display: none` at 1050px and again at 768px, and the four Google colours it carried
+        // move onto the form panel's ::before rail. e2e/auth-responsive.spec.ts asserts the
+        // same rule. The assertions this replaces waited for an image that is deliberately
+        // not rendered at phone widths.
         const heading = page.getByRole('heading', { level: 1, name: route.heading });
-        const image = page.getByRole('img', {
-          name: 'A friendly Ai robot holding a phone at a café table',
-        });
-        const positions = await Promise.all([heading.boundingBox(), image.boundingBox()]);
-
-        expect(positions[0]).not.toBeNull();
-        expect(positions[1]).not.toBeNull();
-        expect(positions[0]!.y).toBeLessThan(positions[1]!.y);
+        await expect(heading).toBeVisible();
+        await expect(page.locator('aside[aria-label="Ai robot review story"]')).toBeHidden();
 
         const email = page.getByLabel('Email');
         const submit = page.getByRole('button', {
@@ -126,17 +125,10 @@ test.describe('signed-out account screens', () => {
           expect(control.right).toBeLessThanOrEqual(geometry.clientWidth);
         }
 
-        const panelOrder = await page.evaluate(() => {
-          const formPanel = document.querySelector('form')?.closest('section');
-          const mediaPanel = document.querySelector('aside');
-          if (!formPanel || !mediaPanel) return null;
-          return {
-            formBottom: formPanel.getBoundingClientRect().bottom,
-            mediaTop: mediaPanel.getBoundingClientRect().top,
-          };
-        });
-        expect(panelOrder).not.toBeNull();
-        expect(panelOrder!.formBottom).toBeLessThanOrEqual(panelOrder!.mediaTop + 1);
+        // Nothing here asserted the form's order against the media panel any more: the panel is
+        // hidden at these widths, so it returns an all-zero rect and the comparison was
+        // meaningless. The 44px touch-target and no-horizontal-overflow checks below are the
+        // part of this test that still proves something about the phone layout.
       }
     }
   });
@@ -218,9 +210,17 @@ test.describe('signed-out account screens', () => {
     ]) {
       await page.goto(route.path);
       await expect(page.getByRole('heading', { level: 1, name: route.heading })).toBeVisible();
-      await expect(
-        page.getByRole('img', { name: 'A friendly Ai robot holding a phone at a café table' }),
-      ).toBeVisible();
+      // Same shell, minus the desktop-only illustration: the brand links stay reachable and the
+      // form panel carries the four-colour Google rail that the media canvas carries on desktop.
+      await expect(page.locator('aside[aria-label="Ai robot review story"]')).toBeHidden();
+      await expect(page.getByRole('link', { name: 'Ai Review home' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Back to website' })).toBeVisible();
+      const rail = await page
+        .locator('main > section')
+        .first()
+        .evaluate((element) => getComputedStyle(element, '::before').backgroundImage);
+      expect(rail).toMatch(/rgb\(66, 133, 244\)/);
+      expect(rail).toMatch(/rgb\(52, 168, 83\)/);
       const width = await page.evaluate(() => ({
         client: document.documentElement.clientWidth,
         scroll: document.documentElement.scrollWidth,

@@ -34,7 +34,19 @@ const reviewPolicyRules = {
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/.next/**', '**/coverage/**', '**/drizzle/**'],
+    // tmp/ is gitignored scratch work and .agents/ is vendored third-party skill material:
+    // neither is ours to lint, and 262 no-undef errors there kept the gate permanently red,
+    // which is how an unformatted route reached main unnoticed.
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.next/**',
+      '**/coverage/**',
+      '**/drizzle/**',
+      'tmp/**',
+      '.agents/**',
+      '.dev/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

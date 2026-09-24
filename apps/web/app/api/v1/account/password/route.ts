@@ -5,6 +5,7 @@ import { privacyHash, validatePasswordStrength } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireTenant } from '@/lib/require-tenant';
 import { passwordHasher } from '@/lib/auth-helpers';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
@@ -37,12 +38,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = parsePasswordChange(raw);
   if (!parsed.ok) {

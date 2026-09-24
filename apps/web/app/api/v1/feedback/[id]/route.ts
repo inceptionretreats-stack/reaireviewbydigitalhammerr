@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { privateFeedback } from '@ai-review/db';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireTenant } from '@/lib/require-tenant';
 import type { AssignableFeedbackStatus } from '@/components/dashboard/feedback/filters';
 import { recordActivity } from '@/lib/activity';
@@ -60,12 +61,9 @@ export async function PATCH(
   // which would surface as a 500 for what is plainly a request for something that does not exist.
   if (!UUID_PATTERN.test(id)) return notFound();
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const status = readStatus(raw);
   if (status === null) {

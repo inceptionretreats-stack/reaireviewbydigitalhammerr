@@ -392,6 +392,12 @@ export function ReviewFlow({ business, qrCode, initialDraft }: ReviewFlowProps) 
               <button
                 className={styles.textButton}
                 type="button"
+                // Server-rendered and tappable before React hydrates, exactly like the primary
+                // button above — but without this guard the first tap was swallowed in 5 of 6
+                // runs. This is the only way back to a draft the customer was part-way through,
+                // so a dead tap either loses them or sends them to "Create my draft", spending
+                // another of the tenant's ten lifetime free drafts.
+                disabled={!interactive}
                 onClick={() => {
                   setSelectedServices(draftServices);
                   setError(null);

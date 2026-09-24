@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
-import { TenantGuard, type ResolvedTenant, type SessionContext } from '@ai-review/core';
+import {
+  isAdminRole,
+  TenantGuard,
+  type ResolvedTenant,
+  type SessionContext,
+} from '@ai-review/core';
 import { db } from './db';
 import { apiError } from './api-error';
 import { verifyCsrf } from './csrf';
-import { getSession } from './session';
+import { adminMfaRequired, getSession } from './session';
 
 /**
  * The single entry point for an authenticated tenant-scoped route handler.
@@ -36,6 +41,19 @@ export async function requireTenant(request: Request): Promise<TenantOutcome> {
   const session = await getSession();
   if (!session) {
     return { ok: false, response: apiError('AUTH_REQUIRED', 'Please sign in and try again.') };
+  }
+
+  // AMENDMENT-027: an admin who has given only their password holds a ten-minute *pending*
+  // session that "can reach only the MFA screens". requireAdmin enforced that for /admin, but
+  // nothing enforced it here — so the password alone was enough to change that admin's own
+  // password (sweeping the real admin's live sessions) and their sign-in email, and to read
+  // and modify any business the account owns. That is the entire account-recovery surface,
+  // which is precisely what the second factor is there to protect.
+  if (isAdminRole(session.role) && adminMfaRequired() && !session.mfaVerifiedAt) {
+    return {
+      ok: false,
+      response: apiError('AUTH_MFA_REQUIRED', 'Enter your authenticator code to continue.'),
+    };
   }
 
   const guard = new TenantGuard(db());

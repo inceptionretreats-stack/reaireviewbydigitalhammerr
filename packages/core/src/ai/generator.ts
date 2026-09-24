@@ -1,5 +1,5 @@
 import type { QuotaService } from '../quota/service';
-import type { Entitlement } from '../quota/types';
+import type { Entitlement, QuotaReservation } from '../quota/types';
 import { DEFAULT_GUIDANCE, type PromptGuidance } from './guidance';
 import { checkVariation, DEFAULT_SIMILARITY_THRESHOLD } from './similarity';
 import {
@@ -74,7 +74,20 @@ export type GenerationFailure =
   | { code: 'AI_OUTPUT_REJECTED'; rejections: string[] };
 
 export type GenerationOutcome =
-  { ok: true; draft: GeneratedDraft } | { ok: false; failure: GenerationFailure };
+  | {
+      ok: true;
+      draft: GeneratedDraft;
+      /**
+       * The reservation this draft was charged to, already committed.
+       *
+       * Exposed so the caller can hand it back if it cannot persist or return the draft.
+       * AC-014's principle is that a customer who got no usable draft must not lose a
+       * generation, and a draft that was written but never reached them is exactly that case —
+       * but by then the generator has returned and only the caller knows it went wrong.
+       */
+      reservation: QuotaReservation;
+    }
+  | { ok: false; failure: GenerationFailure };
 
 /**
  * Floor below which a retry is not attempted. Roughly the time a short structured generation
@@ -120,6 +133,7 @@ export class ReviewGenerator {
           countedTowardQuota: reservation.reservation.counted,
           quotaType: reservation.reservation.mode,
         },
+        reservation: reservation.reservation,
       };
     } catch (error) {
       // AC-014 and the AI_OUTPUT_REJECTED path both return the reservation: the customer got

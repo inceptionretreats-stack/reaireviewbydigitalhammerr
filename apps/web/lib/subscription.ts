@@ -1,6 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { businesses, subscriptions, users, type Database, type Payment } from '@ai-review/db';
-import { CheckoutService, PlatformSettingsService, RazorpayClient } from '@ai-review/core';
+import {
+  CheckoutService,
+  isPaidNow,
+  PlatformSettingsService,
+  RazorpayClient,
+} from '@ai-review/core';
 import { env } from './env';
 
 /**
@@ -61,7 +66,13 @@ export async function loadSubscriptionView(
     new CheckoutService(database).history(businessId),
   ]);
 
-  const paid = s.status === 'PRO_ACTIVE' || s.status === 'PAST_DUE';
+  // The period matters, not just the status. The nightly sweep is what flips a lapsed row to
+  // EXPIRED, so for up to 24 hours after a year ends the row still reads PRO_ACTIVE — while
+  // PostgresQuotaStore.resolveMode, which decides whether a customer actually gets a draft,
+  // has already dropped the tenant to FREE because it checks expires_at. The screen was
+  // telling the owner they had Pro drafts remaining at the exact moment their customers were
+  // being refused. isPaidNow() is the predicate the admin list and the quota engine both use.
+  const paid = isPaidNow(s);
   const now = Date.now();
   const daysLeft =
     paid && s.expiresAt ? Math.ceil((s.expiresAt.getTime() - now) / 86_400_000) : null;

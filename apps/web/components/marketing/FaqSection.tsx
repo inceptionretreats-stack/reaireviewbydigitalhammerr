@@ -1,61 +1,62 @@
 'use client';
 
 import Image from 'next/image';
+import type { CommercialTerms } from '@/lib/commercial-terms';
 import { useState } from 'react';
 import styles from './FaqSection.module.css';
 
-const QUESTIONS = [
-  {
-    id: 'qr',
-    question: 'How do I get started with my QR?',
-    answer:
-      'Create your account, add your business details and Google review link, then download your branded QR.',
-    image: '/marketing/faq/qr-counter-scene-v1.webp',
-    alt: 'Illustrative QR counter display',
-  },
-  {
-    id: 'edit',
-    question: 'Can customers edit the Ai review?',
-    answer:
-      'Yes. They can change every word or tap New review for another draft, then confirm it reflects their genuine experience. Ai gives them a starting point; the final words are always theirs.',
-    image: '/marketing/faq/edit-review.webp',
-    alt: 'Ai Review customer editor with an editable example review for Digital Hammerr',
-  },
-  {
-    id: 'google',
-    question: 'Does it post reviews to Google automatically?',
-    answer:
-      'No. Customers use Copy & open Google, then paste the review, choose their own star rating and post it themselves. Nothing is published automatically.',
-    image: '/marketing/faq/google-handoff.webp',
-    alt: 'Customer confirmation and Copy & open Google action in the Ai Review editor',
-  },
-  {
-    id: 'location',
-    question: 'Can I change my Google Maps location later?',
-    answer:
-      'Yes—update Google review location in your business profile. Your existing printed QR codes will use the saved location, so there is nothing to reprint.',
-    image: '/marketing/faq/change-location.webp',
-    alt: 'Google review location settings in the Ai Review business profile with an editable example review link',
-  },
-  {
-    id: 'plans',
-    question: 'What is included in Free and Pro?',
-    answer:
-      'Free includes ten Ai drafts per business, with no card needed to begin. Pro is ₹999 per year and includes 2,000 Ai review drafts per year.',
-    image: '/marketing/faq/plans.webp',
-    alt: 'Ai Review Free and Pro plans showing ₹0 and ₹999 per year pricing',
-  },
-  {
-    id: 'no-app',
-    question: 'Do customers need to download an app?',
-    answer:
-      'No app or Ai Review account is needed. Customers scan your QR with their phone camera and open the review page in their browser. They only need to sign in to Google when they choose to post.',
-    image: '/marketing/faq/edit-review.webp',
-    alt: 'Digital Hammerr customer review page available in a phone browser without an Ai Review account',
-  },
-] as const;
+const QUESTIONS = (t: CommercialTerms) =>
+  [
+    {
+      id: 'qr',
+      question: 'How do I get started with my QR?',
+      answer:
+        'Create your account, add your business details and Google review link, then download your branded QR.',
+      image: '/marketing/faq/qr-counter-scene-v1.webp',
+      alt: 'Illustrative QR counter display',
+    },
+    {
+      id: 'edit',
+      question: 'Can customers edit the Ai review?',
+      answer:
+        'Yes. They can change every word or tap New review for another draft, then confirm it reflects their genuine experience. Ai gives them a starting point; the final words are always theirs.',
+      image: '/marketing/faq/edit-review.webp',
+      alt: 'Ai Review customer editor with an editable example review for Digital Hammerr',
+    },
+    {
+      id: 'google',
+      question: 'Does it post reviews to Google automatically?',
+      answer:
+        'No. Customers use Copy & open Google, then paste the review, choose their own star rating and post it themselves. Nothing is published automatically.',
+      image: '/marketing/faq/google-handoff.webp',
+      alt: 'Customer confirmation and Copy & open Google action in the Ai Review editor',
+    },
+    {
+      id: 'location',
+      question: 'Can I change my Google Maps location later?',
+      answer:
+        'Yes—update Google review location in your business profile. Your existing printed QR codes will use the saved location, so there is nothing to reprint.',
+      image: '/marketing/faq/change-location.webp',
+      alt: 'Google review location settings in the Ai Review business profile with an editable example review link',
+    },
+    {
+      id: 'plans',
+      question: 'What is included in Free and Pro?',
+      answer: `Free includes ${t.freeDraftsLabel} Ai drafts per business, with no card needed to begin. Pro is ${t.priceLabel} per year and includes ${t.proDraftsLabel} Ai review drafts per year.`,
+      image: '/marketing/faq/plans.webp',
+      alt: `Ai Review Free and Pro plans showing ₹0 and ${t.priceLabel} per year pricing`,
+    },
+    {
+      id: 'no-app',
+      question: 'Do customers need to download an app?',
+      answer:
+        'No app or Ai Review account is needed. Customers scan your QR with their phone camera and open the review page in their browser. They only need to sign in to Google when they choose to post.',
+      image: '/marketing/faq/edit-review.webp',
+      alt: 'Digital Hammerr customer review page available in a phone browser without an Ai Review account',
+    },
+  ] as const;
 
-type Question = (typeof QUESTIONS)[number];
+type Question = ReturnType<typeof QUESTIONS>[number];
 
 function FaqScreenshot({ item, mobile = false }: { item: Question; mobile?: boolean }) {
   const isPhoto = item.id === 'qr';
@@ -96,9 +97,10 @@ function FaqScreenshot({ item, mobile = false }: { item: Question; mobile?: bool
   );
 }
 
-export function FaqSection() {
+export function FaqSection({ terms }: { terms: CommercialTerms }) {
   const [selection, setSelection] = useState({ index: 0, expanded: true });
-  const selected = QUESTIONS[selection.index]!;
+  const questions = QUESTIONS(terms);
+  const selected = questions[selection.index]!;
 
   function selectQuestion(index: number) {
     setSelection((current) => ({
@@ -118,7 +120,7 @@ export function FaqSection() {
 
       <div className={styles.layout}>
         <div className={styles.questions}>
-          {QUESTIONS.map((item, index) => {
+          {questions.map((item, index) => {
             const isExpanded = selection.index === index && selection.expanded;
 
             return (

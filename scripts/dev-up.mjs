@@ -59,6 +59,35 @@ if (await listening(5432)) {
   log('database', `started (pid ${state.db})`);
 }
 
+// 1b. Migrations.
+//
+// dev:up never ran these, so a developer who pulled a branch with a new migration got a schema
+// two versions behind and no sign of it: the integration suite went red on a migration
+// assertion, google_identities and maintenance_jobs simply did not exist, and the Google
+// sign-in route only avoided a 500 because GOOGLE_CLIENT_ID was unset locally. Drift that
+// silent is worth the couple of seconds this costs on every start.
+{
+  const url = readEnvValue('DIRECT_DATABASE_URL') || readEnvValue('DATABASE_URL');
+  if (!url) {
+    log('migrate', 'skipped — no DATABASE_URL in .env');
+  } else {
+    const result = spawnSync('pnpm', ['--filter', '@ai-review/db', 'migrate'], {
+      cwd: ROOT,
+      stdio: 'pipe',
+      encoding: 'utf8',
+      shell: true,
+      env: { ...process.env, DATABASE_URL: url },
+    });
+    if (result.status === 0) {
+      log('migrate', 'schema up to date');
+    } else {
+      // Not fatal: a developer may deliberately be running against a database they do not own.
+      const out = (result.stderr || result.stdout || '').trim();
+      log('migrate', `FAILED — ${out.slice(-300) || 'see the migration output'}`);
+    }
+  }
+}
+
 // 2. Tunnel.
 //
 // The trap here is DNS, and it cost a whole link once. cloudflared prints the hostname a few
@@ -189,6 +218,24 @@ console.log('  link stop resolving. That is the situation a dynamic QR exists fo
 console.log('  deployment pins the host once.\n');
 
 // ---------------------------------------------------------------------------------------------
+
+/** One value out of .env, without pulling in a dotenv dependency for a single read. */
+function readEnvValue(key) {
+  if (process.env[key]) return process.env[key];
+  try {
+    const line = readFileSync(join(ROOT, '.env'), 'utf8')
+      .split(/\r?\n/)
+      .find((l) => l.startsWith(`${key}=`));
+    return line
+      ? line
+          .slice(key.length + 1)
+          .trim()
+          .replace(/^["']|["']$/g, '')
+      : '';
+  } catch {
+    return '';
+  }
+}
 
 function detach(name, command, argv, cwd = ROOT) {
   const log = join(STATE_DIR, `${name}.log`);

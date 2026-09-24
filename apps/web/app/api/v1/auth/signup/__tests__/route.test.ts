@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
   setCookie: vi.fn(),
   recordActivity: vi.fn(),
+  signupGate: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({ db: () => ({ transaction: mocks.transaction }) }));
@@ -25,9 +26,14 @@ vi.mock('@/lib/session', () => ({
   setSessionCookie: mocks.setCookie,
   landingPathFor: () => '/onboarding/business',
 }));
-vi.mock('@/lib/rate-limit', () => ({ clientIp: () => '' }));
+vi.mock('@/lib/rate-limit', () => ({
+  clientIp: () => '',
+  isDenied: (decision: { allowed: boolean }) => !decision.allowed,
+  rateLimiter: () => ({ signup: mocks.signupGate }),
+}));
 vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
 vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
+vi.mock('@/lib/request-body', async () => import('../../../../../../lib/request-body'));
 vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
 vi.mock('@ai-review/core', () => ({
   normalizePhone: () => ({ ok: true, e164: '+919000000000' }),
@@ -57,6 +63,7 @@ function request(): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.hash.mockResolvedValue('test-hash');
+  mocks.signupGate.mockResolvedValue({ allowed: true });
   mocks.settings.mockResolvedValue({});
   mocks.transaction.mockResolvedValue('test-user-id');
   mocks.createSession.mockResolvedValue({ token: 'session-token', expiresAt: new Date() });
@@ -117,4 +124,31 @@ describe('signup failure recovery', () => {
       );
     },
   );
+});
+
+/**
+ * This endpoint had no rate limit at all: 25 rejections in 1.5 s, each confirming whether an
+ * address already has an account, and six real tenants minted in 428 ms.
+ */
+describe('rate limiting (AUTH-01)', () => {
+  it('refuses before reading the body, so a denied caller learns nothing about the address', async () => {
+    mocks.signupGate.mockResolvedValue({
+      allowed: false,
+      code: 'AUTH_RATE_LIMITED',
+      retryAfterSeconds: 900,
+    });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ error: { code: 'AUTH_RATE_LIMITED' } });
+    expect(response.headers.get('Retry-After')).toBe('900');
+    // Nothing was created, and the transaction was never opened.
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it('consumes the limit on every attempt, not only on failures', async () => {
+    await POST(request());
+    expect(mocks.signupGate).toHaveBeenCalledTimes(1);
+  });
 });

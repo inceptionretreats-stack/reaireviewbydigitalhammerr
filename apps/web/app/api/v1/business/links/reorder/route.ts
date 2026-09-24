@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { businessLinks, businesses } from '@ai-review/db';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireTenant } from '@/lib/require-tenant';
 import {
   MAX_ORDERED_SECTIONS,
@@ -43,12 +44,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return apiError('BUSINESS_NOT_ACTIVE', 'This business is not active.');
   }
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const order = readOrder(raw);
   if (order === null) {

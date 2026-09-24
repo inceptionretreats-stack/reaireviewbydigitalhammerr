@@ -3,6 +3,7 @@ import { businesses, googleIdentities, subscriptions, users } from '@ai-review/d
 import { normalizePhone, PlatformSettingsService } from '@ai-review/core';
 import { z } from 'zod';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { verifyCsrf } from '@/lib/csrf';
@@ -27,12 +28,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return apiError('AUTH_REQUIRED', 'Google sign-in expired. Please try again.');
   }
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = completeRequest.safeParse(raw);
   if (!parsed.success) {
     return apiError('VALIDATION_FAILED', 'Please check your details and accept the terms.', {

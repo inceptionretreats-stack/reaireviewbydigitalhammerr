@@ -23,6 +23,8 @@ vi.mock('@/lib/env', () => ({ env: () => ({ HASH_PEPPER: 'test', AI_REQUEST_TIME
 vi.mock('@/lib/resolve-public-ref', () => ({ resolvePublicRef: mocks.resolve }));
 vi.mock('@/lib/anonymous-session', () => ({ resolveAnonymousSession: mocks.session }));
 vi.mock('@/lib/api-error', async () => import('../../../../../../../lib/api-error'));
+vi.mock('@/lib/request-body', async () => import('../../../../../../../lib/request-body'));
+vi.mock('@/lib/safe-error', async () => import('../../../../../../../lib/safe-error'));
 vi.mock(
   '@/lib/customer-services',
   async () => import('../../../../../../../lib/customer-services'),

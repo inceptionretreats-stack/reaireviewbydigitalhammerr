@@ -3,6 +3,7 @@ import { promptVersionDraftInput } from '@ai-review/contracts';
 import { PromptVersionService } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireAdmin } from '@/lib/require-admin';
 import { promptVersionErrorResponse, toFields, toWire } from '@/lib/admin/prompt-versions';
 
@@ -27,12 +28,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   if (!UUID.test(id)) return apiError('RESOURCE_NOT_FOUND', 'No such prompt version.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = promptVersionDraftInput.safeParse(raw);
   if (!parsed.success) {
     return apiError(

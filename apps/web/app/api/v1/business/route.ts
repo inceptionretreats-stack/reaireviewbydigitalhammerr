@@ -5,6 +5,7 @@ import { SlugService } from '@ai-review/core';
 import { businessIdentityRequest } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
 import { recordActivity } from '@/lib/activity';
 
@@ -52,12 +53,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const frozen = refuseFrozenTenant(auth.context);
   if (frozen) return frozen;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = businessIdentityRequest.safeParse(raw);
   if (!parsed.success) {

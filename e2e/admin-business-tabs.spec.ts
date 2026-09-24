@@ -104,7 +104,7 @@ test.describe('admin business tabs and abuse controls', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Restore Ai' }).click();
     await expect(page.getByRole('status').filter({ hasText: /restore ai: done/i })).toBeVisible();
     const back = await page.request.post('/api/v1/public/review/generate', {
-      data: { slug: 'demo-south-cafe' },
+      data: { slug: 'demo-south-cafe', selected_services: ['Website development'] },
     });
     expect(back.status()).toBe(200);
 
@@ -137,7 +137,9 @@ test.describe('admin business tabs and abuse controls', () => {
     for (let i = 0; i < 3; i += 1) {
       const ctx = await page.context().browser()!.newContext();
       const r = await ctx.request.post('/api/v1/public/review/generate', {
-        data: { slug: 'demo-south-cafe' },
+        // SERVICE-01 requires the services step; without it the route answers 422 before the
+        // throttle is consulted, which silently retired this test's only assertion.
+        data: { slug: 'demo-south-cafe', selected_services: ['Website development'] },
       });
       statuses.push(r.status());
       await ctx.close();

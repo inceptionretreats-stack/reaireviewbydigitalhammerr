@@ -206,11 +206,20 @@ test.describe('readable concept-aligned pricing plans', () => {
         const freeBox = (await free.boundingBox())!;
         const proBox = (await pro.boundingBox())!;
         if (Math.abs(freeBox.y - proBox.y) <= 1) {
-          // Keep paired cards aligned without stretching them across a wide desktop.
+          // Keep paired cards aligned without stretching them across a wide desktop. The cap is
+          // the shipped pricing column in MarketingSite.module.css — `min(var(--m-content-width),
+          // 1160px)` — which is also the width of the `.pricingIntro` heading directly above the
+          // cards, so capping tighter would leave them visibly narrower than their own heading.
+          // The +1 is sub-pixel slack: the measured width lands exactly on 1160 at every desktop
+          // viewport, and this comes from a getBoundingClientRect float.
+          //
+          // The previous 1081 was an orphan: it matched no CSS token, and its window of
+          // [1000, 1081] was true of no committed state of this codebase — the layout it was
+          // written against measured 880, which fails its own lower bound.
           const heroWidth = (await page.locator('#home').boundingBox())!.width;
           const plansWidth = proBox.x + proBox.width - freeBox.x;
           expect(plansWidth).toBeGreaterThanOrEqual(Math.min(heroWidth - 32, 1000));
-          expect(plansWidth).toBeLessThanOrEqual(Math.min(heroWidth, 1081));
+          expect(plansWidth).toBeLessThanOrEqual(Math.min(heroWidth, 1161));
           expect(Math.abs(freeBox.y - proBox.y)).toBeLessThanOrEqual(1);
           expect(Math.abs(freeBox.height - proBox.height)).toBeLessThanOrEqual(1);
           expect(Math.abs(freeBox.width - proBox.width)).toBeLessThanOrEqual(1);

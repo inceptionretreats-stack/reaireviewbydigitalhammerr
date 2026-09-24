@@ -64,6 +64,13 @@
       "when": 1790225392316,
       "tag": "0008_bent_darkstar",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790237400000,
+      "tag": "0009_hot_path_indexes",
+      "breakpoints": true
     }
   ]
 }

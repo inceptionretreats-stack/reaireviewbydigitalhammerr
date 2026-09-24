@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { CommercialTerms } from '@/lib/commercial-terms';
 import localFont from 'next/font/local';
 import { MarketingShell } from './MarketingSite';
 import styles from './PricingPlanDetailsPage.module.css';
@@ -12,39 +13,41 @@ const priceFont = localFont({
   fallback: ['Arial', 'sans-serif'],
 });
 
-const FREE_DETAILS = [
-  {
-    title: 'Allowance and expiry',
-    text: 'Free includes 10 Ai drafts in total per business profile. There is no monthly or yearly reset, and no scheduled expiry for unused Free drafts.',
-  },
-  {
-    title: 'When drafts run out',
-    text: 'Further Ai drafting stops after the 10-draft allowance. Customers can still open Google and write their own review. Upgrade to Pro only if you need more Ai drafts.',
-  },
-  {
-    title: 'Payment and renewal',
-    text: 'Free costs ₹0 and does not require a card. There is no paid renewal to cancel. Contact us if you want to close your account or request data deletion.',
-  },
-] as const;
+const FREE_DETAILS = (t: CommercialTerms) =>
+  [
+    {
+      title: 'Allowance and expiry',
+      text: `Free includes ${t.freeDraftsLabel} Ai drafts in total per business profile. There is no monthly or yearly reset, and no scheduled expiry for unused Free drafts.`,
+    },
+    {
+      title: 'When drafts run out',
+      text: `Further Ai drafting stops after the ${t.freeDraftsLabel}-draft allowance. Customers can still open Google and write their own review. Upgrade to Pro only if you need more Ai drafts.`,
+    },
+    {
+      title: 'Payment and renewal',
+      text: 'Free costs ₹0 and does not require a card. There is no paid renewal to cancel. Contact us if you want to close your account or request data deletion.',
+    },
+  ] as const;
 
-const PRO_DETAILS = [
-  {
-    title: 'Allowance and expiry',
-    text: 'The standard Pro price is ₹999 for 12 calendar months and 2,000 Ai drafts for that paid period. Unused Pro drafts do not roll over into the next paid period. See your account for the exact dates.',
-  },
-  {
-    title: 'When drafts run out',
-    text: 'Further Ai drafting stops at the allowance limit. Customers can still open Google and write their own review. When Pro expires, only any unused Free drafts remain; the Free allowance does not restart.',
-  },
-  {
-    title: 'Payment and taxes',
-    text: '₹999 is the standard advertised annual price. Confirm the payable total in checkout before paying. The checkout does not add a separate tax surcharge; where applicable, tax is shown within the total on the invoice. Check your order and invoice for the seller’s tax details.',
-  },
-  {
-    title: 'Renewal and cancellation',
-    text: 'Renewal requires another annual payment; there is no automatic recurring charge. To stop future renewal, do not purchase another period. Contact us for an account-closure, early-cancellation or refund request.',
-  },
-] as const;
+const PRO_DETAILS = (t: CommercialTerms) =>
+  [
+    {
+      title: 'Allowance and expiry',
+      text: `The standard Pro price is ${t.priceLabel} for 12 calendar months and ${t.proDraftsLabel} Ai drafts for that paid period. Unused Pro drafts do not roll over into the next paid period. See your account for the exact dates.`,
+    },
+    {
+      title: 'When drafts run out',
+      text: 'Further Ai drafting stops at the allowance limit. Customers can still open Google and write their own review. When Pro expires, only any unused Free drafts remain; the Free allowance does not restart.',
+    },
+    {
+      title: 'Payment and taxes',
+      text: `${t.priceLabel} is the standard advertised annual price. Confirm the payable total in checkout before paying. The checkout does not add a separate tax surcharge; where applicable, tax is shown within the total on the invoice. Check your order and invoice for the seller’s tax details.`,
+    },
+    {
+      title: 'Renewal and cancellation',
+      text: 'Renewal requires another annual payment; there is no automatic recurring charge. To stop future renewal, do not purchase another period. Contact us for an account-closure, early-cancellation or refund request.',
+    },
+  ] as const;
 
 const SHARED_DETAILS = [
   {
@@ -61,23 +64,28 @@ const SHARED_DETAILS = [
   },
 ] as const;
 
-const COMPARISON = [
-  { feature: 'Standard price', free: '₹0', pro: '₹999 for 12 months' },
-  { feature: 'Ai draft allowance', free: '10 total', pro: '2,000 per paid period' },
-  {
-    feature: 'Unused draft expiry',
-    free: 'No scheduled expiry',
-    pro: 'At the end of the paid period',
-  },
-  { feature: 'Business profiles', free: 'One', pro: 'One' },
-  { feature: 'Primary Google review destination', free: 'One', pro: 'One' },
-  { feature: 'Branded QR and business page', free: 'Included', pro: 'Included' },
-  { feature: 'Customer-editable Ai drafts', free: 'Included', pro: 'Included' },
-  { feature: 'Private feedback and journey analytics', free: 'Included', pro: 'Included' },
-  { feature: 'Regeneration', free: 'Uses one draft', pro: 'Uses one draft' },
-  { feature: 'Renewal', free: 'Not applicable', pro: 'Another payment required' },
-  { feature: 'Posting to Google', free: 'Customer’s choice', pro: 'Customer’s choice' },
-] as const;
+const COMPARISON = (t: CommercialTerms) =>
+  [
+    { feature: 'Standard price', free: '₹0', pro: `${t.priceLabel} for 12 months` },
+    {
+      feature: 'Ai draft allowance',
+      free: `${t.freeDraftsLabel} total`,
+      pro: `${t.proDraftsLabel} per paid period`,
+    },
+    {
+      feature: 'Unused draft expiry',
+      free: 'No scheduled expiry',
+      pro: 'At the end of the paid period',
+    },
+    { feature: 'Business profiles', free: 'One', pro: 'One' },
+    { feature: 'Primary Google review destination', free: 'One', pro: 'One' },
+    { feature: 'Branded QR and business page', free: 'Included', pro: 'Included' },
+    { feature: 'Customer-editable Ai drafts', free: 'Included', pro: 'Included' },
+    { feature: 'Private feedback and journey analytics', free: 'Included', pro: 'Included' },
+    { feature: 'Regeneration', free: 'Uses one draft', pro: 'Uses one draft' },
+    { feature: 'Renewal', free: 'Not applicable', pro: 'Another payment required' },
+    { feature: 'Posting to Google', free: 'Customer’s choice', pro: 'Customer’s choice' },
+  ] as const;
 
 function PlanDetails({
   plan,
@@ -119,7 +127,7 @@ function PlanDetails({
   );
 }
 
-export function PricingPlanDetailsPage() {
+export function PricingPlanDetailsPage({ terms }: { terms: CommercialTerms }) {
   return (
     <MarketingShell>
       <div className={`${styles.page} ${priceFont.variable}`}>
@@ -138,17 +146,17 @@ export function PricingPlanDetailsPage() {
           <PlanDetails
             plan="Free"
             price="₹0"
-            allowance="10 Ai drafts in total"
+            allowance={`${terms.freeDraftsLabel} Ai drafts in total`}
             billing="No card needed to begin"
-            details={FREE_DETAILS}
+            details={FREE_DETAILS(terms)}
           />
           <PlanDetails
             plan="Pro"
-            price="₹999"
+            price={terms.priceLabel}
             period="/ year"
-            allowance="2,000 Ai drafts for 12 months"
+            allowance={`${terms.proDraftsLabel} Ai drafts for 12 months`}
             billing="Manual renewal; no automatic charge"
-            details={PRO_DETAILS}
+            details={PRO_DETAILS(terms)}
           />
         </section>
 
@@ -171,7 +179,7 @@ export function PricingPlanDetailsPage() {
                 </tr>
               </thead>
               <tbody>
-                {COMPARISON.map(({ feature, free, pro }) => (
+                {COMPARISON(terms).map(({ feature, free, pro }) => (
                   <tr key={feature}>
                     <th scope="row">{feature}</th>
                     <td>{free}</td>

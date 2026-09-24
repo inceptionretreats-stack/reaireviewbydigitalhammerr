@@ -6,6 +6,7 @@ import { buildQrUrl, generateQrCode } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
 import { qrDataUri } from '@/lib/qr-image';
 import {
@@ -117,12 +118,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const inactive = requireActiveTenant(auth.context);
   if (inactive) return inactive;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = parseQrSourceCreate(raw);
   if (!parsed.ok) {

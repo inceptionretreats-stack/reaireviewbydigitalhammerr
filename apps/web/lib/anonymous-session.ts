@@ -90,10 +90,22 @@ export async function resolveAnonymousSession(
     })
     .onConflictDoNothing();
 
+  // The same predicates as the first lookup. Filtering on the token hash alone meant that a
+  // row which existed but had EXPIRED was handed back and used as a live session: the first
+  // SELECT missed it on `expires_at`, the INSERT was a no-op on the unique index, and this
+  // recovery read then found it anyway. Nothing purges anonymous_sessions, so the 30-day TTL
+  // that /legal/privacy states was enforced only by the cookie's own maxAge happening to
+  // match — a coincidence, not a guarantee.
   const [row] = await db()
     .select({ id: anonymousSessions.id })
     .from(anonymousSessions)
-    .where(eq(anonymousSessions.publicTokenHash, tokenHash))
+    .where(
+      and(
+        eq(anonymousSessions.publicTokenHash, tokenHash),
+        eq(anonymousSessions.businessId, businessId),
+        gt(anonymousSessions.expiresAt, new Date()),
+      ),
+    )
     .limit(1);
 
   return row ? { sessionId: row.id, businessId } : null;

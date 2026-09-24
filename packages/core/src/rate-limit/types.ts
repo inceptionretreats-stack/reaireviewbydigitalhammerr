@@ -115,7 +115,8 @@ export interface RateLimitStore {
 
 export interface DistinctCountRequest {
   readonly key: string;
-  readonly member: string;
+  /** Null for a cookieless caller: count the set without joining it. */
+  readonly member: string | null;
   readonly windowMs: number;
   readonly now: number;
 }

@@ -4,6 +4,7 @@ import { businesses, reviewDestinations } from '@ai-review/db';
 import { describeReviewUrlRejection, validateGoogleReviewUrl } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
 import { readReviewDestinationBody } from './body';
 import { recordActivity } from '@/lib/activity';
@@ -52,12 +53,9 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   const frozen = refuseFrozenTenant(auth.context);
   if (frozen) return frozen;
 
-  let raw: unknown;
-  try {
-    raw = (await request.json()) as unknown;
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const body = readReviewDestinationBody(raw);
   if (!body.ok) {

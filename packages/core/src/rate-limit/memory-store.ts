@@ -72,7 +72,9 @@ export class MemoryRateLimitStore implements RateLimitStore {
     const members = this.distinct.get(request.key) ?? new Map<string, number>();
     this.distinct.set(request.key, members);
 
-    members.set(request.member, request.now);
+    // A cookieless caller joins nothing: it has no session identity to add, and letting it
+    // add one per request would inflate the adaptive allowance it is being measured against.
+    if (request.member !== null) members.set(request.member, request.now);
     for (const [member, seenAt] of members) {
       if (seenAt <= request.now - request.windowMs) members.delete(member);
     }

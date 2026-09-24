@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { inviteAcceptRequest } from '@ai-review/contracts';
 import { MFA_PENDING_TTL_MS, privacyHash, validatePasswordStrength } from '@ai-review/core';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { verifyCsrf } from '@/lib/csrf';
 import { env } from '@/lib/env';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
@@ -23,12 +24,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrf = verifyCsrf(request);
   if (!csrf.ok) return apiError('FORBIDDEN', 'Request rejected.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = inviteAcceptRequest.safeParse(raw);
   if (!parsed.success) {
     return apiError('VALIDATION_FAILED', 'Choose a password of at least 12 characters.', {

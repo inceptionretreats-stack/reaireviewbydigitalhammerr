@@ -1,4 +1,5 @@
 import localFont from 'next/font/local';
+import type { CommercialTerms } from '@/lib/commercial-terms';
 import {
   ActionLink,
   MarketingCallToAction,
@@ -17,14 +18,14 @@ const priceFont = localFont({
   fallback: ['Arial', 'sans-serif'],
 });
 
-const FREE_FEATURES = [
-  '10 Ai drafts per business',
+const FREE_FEATURES = (t: CommercialTerms) => [
+  `${t.freeDraftsLabel} Ai drafts per business`,
   'Branded QR and business page',
   'Private feedback and analytics',
 ];
 
-const PRO_FEATURES = [
-  '2,000 Ai drafts per year',
+const PRO_FEATURES = (t: CommercialTerms) => [
+  `${t.proDraftsLabel} Ai drafts per year`,
   'Everything included in Free',
   '12-month draft allowance',
 ];
@@ -71,7 +72,7 @@ function FeatureChecks({ items }: { items: string[] }) {
   );
 }
 
-export function PricingPlanCards() {
+export function PricingPlanCards({ terms }: { terms: CommercialTerms }) {
   return (
     <div className={styles.pricingSection} aria-label="Pricing plans">
       <article className={`${styles.planCard} ${styles.freePlan}`} data-accent="yellow">
@@ -88,7 +89,7 @@ export function PricingPlanCards() {
         </ActionLink>
         <div className={styles.planDetails}>
           <h4>What’s included</h4>
-          <FeatureChecks items={FREE_FEATURES} />
+          <FeatureChecks items={FREE_FEATURES(terms)} />
         </div>
         <PricingDetailsLink plan="Free" />
       </article>
@@ -99,13 +100,14 @@ export function PricingPlanCards() {
           <p>More capacity for your business.</p>
         </div>
         <p className={`${styles.price} ${priceFont.variable}`}>
-          <small className={styles.currency}>₹</small>999 <span>/ year</span>
+          <small className={styles.currency}>₹</small>
+          {terms.priceLabel.replace('₹', '')} <span>/ year</span>
         </p>
         <p className={styles.planBilling}>Billed annually</p>
         <ActionLink href="/signup">Create account</ActionLink>
         <div className={styles.planDetails}>
           <h4>What’s included</h4>
-          <FeatureChecks items={PRO_FEATURES} />
+          <FeatureChecks items={PRO_FEATURES(terms)} />
         </div>
         <PricingDetailsLink plan="Pro" />
       </article>
@@ -113,7 +115,7 @@ export function PricingPlanCards() {
   );
 }
 
-export function PricingMarketingPage() {
+export function PricingMarketingPage({ terms }: { terms: CommercialTerms }) {
   return (
     <MarketingShell>
       <section className={`${styles.pageHeading} ${styles.pricingHeading}`}>
@@ -124,7 +126,7 @@ export function PricingMarketingPage() {
         <ActionLink href="/signup">Create your account</ActionLink>
       </section>
 
-      <PricingPlanCards />
+      <PricingPlanCards terms={terms} />
 
       <section className={styles.includedSection}>
         <div className={styles.includedIntro}>

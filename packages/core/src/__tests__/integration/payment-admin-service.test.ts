@@ -135,10 +135,14 @@ describe('PaymentAdminService', () => {
 
   async function subscription() {
     const { rows } = await pool.query(
-      'SELECT status, entitlement_note FROM subscriptions WHERE business_id = $1',
+      'SELECT status, entitlement_source, entitlement_note FROM subscriptions WHERE business_id = $1',
       [businessId],
     );
-    return rows[0] as { status: string; entitlement_note: string | null };
+    return rows[0] as {
+      status: string;
+      entitlement_source: string;
+      entitlement_note: string | null;
+    };
   }
 
   async function auditActions(paymentId: string) {
@@ -203,6 +207,112 @@ describe('PaymentAdminService', () => {
     await expect(
       service.refund(payment.id, { actor, reason: 'again', client: fake({}) }),
     ).rejects.toMatchObject({ code: 'STATE_INVALID' });
+  });
+
+  /**
+   * Razorpay commonly answers `pending` for a refund it has queued rather than settled —
+   * netbanking refunds sit there for minutes to days. Applying the full consequences then
+   * asserts that money has moved when it has not, and it is the precondition that made a
+   * failed refund able to take a paid year away for good.
+   */
+  it('a refund Razorpay has only queued does not take Pro away or mark the payment refunded', async () => {
+    const payment = await paidYear();
+    const outcome = await new PaymentAdminService(db).refund(payment.id, {
+      actor,
+      reason: 'Customer asked to cancel within the cooling-off period',
+      client: fake({
+        refund: (body) => ({
+          id: `rfnd_${randomUUID().slice(0, 10)}`,
+          payment_id: payment.providerPaymentId,
+          amount: body['amount'] ?? 99900,
+          status: 'pending',
+        }),
+      }),
+    });
+
+    expect(outcome.refund.status).toBe('PENDING');
+    expect(outcome.revoked).toBe(false);
+    // Counted, so a second refund cannot over-refund the payment...
+    expect(outcome.payment.refundedPaise).toBe(99_900);
+    // ...but nothing that asserts the money has actually gone back.
+    expect(outcome.payment.status).toBe('CAPTURED');
+    expect(outcome.payment.refundedAt).toBeNull();
+    expect(await subscription()).toMatchObject({ status: 'PRO_ACTIVE' });
+  });
+
+  it('a refund that settles and is later reported failed gives the money and the year back', async () => {
+    const payment = await paidYear();
+    const service = new PaymentAdminService(db);
+    const outcome = await service.refund(payment.id, {
+      actor,
+      reason: 'Customer asked to cancel within the cooling-off period',
+      client: fake({}),
+    });
+    expect(outcome.revoked).toBe(true);
+    expect(await subscription()).toMatchObject({ status: 'CANCELLED', entitlement_source: 'NONE' });
+
+    const applied = await service.applyProviderRefund({
+      providerPaymentId: payment.providerPaymentId!,
+      providerRefundId: outcome.refund.providerRefundId!,
+      amountPaise: 99_900,
+      providerStatus: 'failed',
+      eventId: `evt_${randomUUID().slice(0, 8)}`,
+    });
+
+    expect(applied).toMatchObject({ applied: true });
+    const after = await service.get(payment.id);
+    expect(after?.payment).toMatchObject({ status: 'CAPTURED', refundedPaise: 0 });
+    expect(after?.payment.refundedAt).toBeNull();
+    // The year the customer paid for comes back with the money.
+    expect(await subscription()).toMatchObject({
+      status: 'PRO_ACTIVE',
+      entitlement_source: 'PAYMENT',
+      entitlement_note: `payment:${payment.id}`,
+    });
+  });
+
+  /**
+   * The documented crash window: Razorpay accepted the refund in phase 2 and the process died
+   * before phase 3 stamped the row. Nothing sweeps REQUESTED rows and the pending-refund guard
+   * refuses every admin retry, so before this the only recovery was hand-written SQL.
+   */
+  it('a webhook adopts a refund left in flight by a crash, and an admin can act again after', async () => {
+    const payment = await paidYear();
+    const service = new PaymentAdminService(db);
+    await pool.query(
+      `INSERT INTO payment_refunds (payment_id, amount_paise, status, reason)
+       VALUES ($1, $2, 'REQUESTED', $3)`,
+      [payment.id, 99_900, 'Customer asked to cancel'],
+    );
+
+    const applied = await service.applyProviderRefund({
+      providerPaymentId: payment.providerPaymentId!,
+      providerRefundId: 'rfnd_recovered_1',
+      amountPaise: 99_900,
+      providerStatus: 'processed',
+      eventId: 'evt_recovery_1',
+    });
+
+    expect(applied).toMatchObject({ applied: true });
+    const after = await service.get(payment.id);
+    expect(after?.payment).toMatchObject({ status: 'REFUNDED', refundedPaise: 99_900 });
+    expect(after?.refunds).toHaveLength(1);
+    expect(after?.refunds[0]).toMatchObject({
+      status: 'PROCESSED',
+      providerRefundId: 'rfnd_recovered_1',
+    });
+    expect(await subscription()).toMatchObject({ status: 'CANCELLED' });
+
+    // A redelivery of the same event changes nothing.
+    const again = await service.applyProviderRefund({
+      providerPaymentId: payment.providerPaymentId!,
+      providerRefundId: 'rfnd_recovered_1',
+      amountPaise: 99_900,
+      providerStatus: 'processed',
+      eventId: 'evt_recovery_1',
+    });
+    expect(again).toMatchObject({ applied: false });
+    expect((await service.get(payment.id))?.payment.refundedPaise).toBe(99_900);
   });
 
   it('a full refund of a payment that no longer funds the period leaves Pro alone', async () => {

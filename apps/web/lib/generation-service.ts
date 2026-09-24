@@ -21,8 +21,10 @@ import {
   type AiProvider,
   type DraftLanguage,
   type PromptVersionConfig,
+  type QuotaReservation,
 } from '@ai-review/core';
 import { env } from './env';
+import { safeError } from './safe-error';
 
 /**
  * Assembles a generation from stored configuration (Flow C, E4).
@@ -235,6 +237,22 @@ export function selectProvider(keys: ProviderKeys): AiProvider {
 
 export function buildGenerator(db: Database, provider: AiProvider): ReviewGenerator {
   return new ReviewGenerator(provider, new QuotaService(new PostgresQuotaStore(db)));
+}
+
+/**
+ * Hands a committed reservation back (AC-014).
+ *
+ * Used when the draft was generated but could not be persisted or returned: the generator has
+ * already committed by then, so the customer would otherwise be charged for a draft they never
+ * saw. Never throws — failing to release must not turn a recoverable error into a 500 on top
+ * of one, and the server log is the place that records it.
+ */
+export async function releaseQuota(db: Database, reservation: QuotaReservation): Promise<void> {
+  try {
+    await new QuotaService(new PostgresQuotaStore(db)).release(reservation);
+  } catch (error) {
+    console.error('[quota] could not release a reservation after a failed draft', safeError(error));
+  }
 }
 
 function asStringArray(value: unknown): string[] {

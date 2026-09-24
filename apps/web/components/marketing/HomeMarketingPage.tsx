@@ -1,4 +1,5 @@
 import type { LandingDemo } from '@/lib/landing-demo';
+import type { CommercialTerms } from '@/lib/commercial-terms';
 import { BusinessAudienceStrip } from './BusinessAudienceStrip';
 import { HeroAiAccent } from './HeroAiAccent';
 import { HowItWorksVideos } from './HowItWorksVideos';
@@ -65,7 +66,13 @@ function HeroFlowIcon({ name }: { name: (typeof HERO_FLOW_STEPS)[number]['icon']
   );
 }
 
-export function HomeMarketingPage({ demo }: { demo: LandingDemo | null }) {
+export function HomeMarketingPage({
+  demo,
+  terms,
+}: {
+  demo: LandingDemo | null;
+  terms: CommercialTerms;
+}) {
   return (
     <MarketingShell demo={demo}>
       <section className={styles.homeHero} id="home">
@@ -125,11 +132,11 @@ export function HomeMarketingPage({ demo }: { demo: LandingDemo | null }) {
           <h2 id="pricing-title">Simple pricing. Built for your business.</h2>
           <p>Start with Free. Upgrade when you need more.</p>
         </header>
-        <PricingPlanCards />
+        <PricingPlanCards terms={terms} />
       </section>
 
       <RobotClaimBand />
-      <FaqSection />
+      <FaqSection terms={terms} />
     </MarketingShell>
   );
 }

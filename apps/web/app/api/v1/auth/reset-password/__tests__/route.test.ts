@@ -25,6 +25,7 @@ vi.mock('@/lib/auth-helpers', () => ({ passwordHasher: () => ({ hash: mocks.hash
 vi.mock('@/lib/session', () => ({ clearSessionCookie: mocks.clearCookie }));
 vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
 vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
+vi.mock('@/lib/request-body', async () => import('../../../../../../lib/request-body'));
 vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
 vi.mock('@ai-review/core', () => ({
   hashToken: () => 'reset-token-digest',

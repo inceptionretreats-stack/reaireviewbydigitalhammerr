@@ -6,6 +6,7 @@ import { forgotPasswordRequest } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { verifyCsrf } from '@/lib/csrf';
 import { mailer, passwordResetEmail } from '@/lib/mailer';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
@@ -30,14 +31,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrf = verifyCsrf(request);
   if (!csrf.ok) return apiError('FORBIDDEN', 'Request rejected.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return accepted();
-  }
+  // Every rejection here answers `accepted()`, never a validation error: a malformed body
+  // must be indistinguishable from an address that simply has no account.
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return accepted();
 
-  const parsed = forgotPasswordRequest.safeParse(raw);
+  const parsed = forgotPasswordRequest.safeParse(rawResult.body);
   if (!parsed.success) return accepted();
 
   const { email } = parsed.data;

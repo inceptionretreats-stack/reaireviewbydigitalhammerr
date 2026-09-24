@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
 vi.mock('@/lib/api-error', async () => import('../../../../../../../lib/api-error'));
+vi.mock('@/lib/request-body', async () => import('../../../../../../../lib/request-body'));
 vi.mock('@/lib/env', () => ({ env: () => ({ HASH_PEPPER: 'test-pepper' }) }));
 vi.mock('@/lib/google-auth', () => ({
   readGooglePending: mocks.pending,

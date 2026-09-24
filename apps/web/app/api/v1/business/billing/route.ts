@@ -4,6 +4,7 @@ import { businesses } from '@ai-review/db';
 import { billingDetailsRequest } from '@ai-review/contracts';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
+import { readJsonObject } from '@/lib/request-body';
 import { requireTenant } from '@/lib/require-tenant';
 import { recordActivity } from '@/lib/activity';
 
@@ -36,12 +37,9 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
 
-  let raw: unknown;
-  try {
-    raw = (await request.json()) as unknown;
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = billingDetailsRequest.safeParse(raw);
   if (!parsed.success) {
     const fields = [...new Set(parsed.error.issues.map((i) => String(i.path[0] ?? 'body')))];

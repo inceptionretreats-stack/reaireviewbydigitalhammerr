@@ -29,6 +29,7 @@ vi.mock('@/lib/mailer', () => ({
 }));
 vi.mock('@/lib/activity', () => ({ recordActivity: vi.fn() }));
 vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
+vi.mock('@/lib/request-body', async () => import('../../../../../../lib/request-body'));
 vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
 vi.mock('@ai-review/core', () => ({
   issueToken: () => ({ token: 'secret-reset-token', tokenHash: 'secret-token-hash' }),

@@ -105,7 +105,21 @@ test.describe('business dashboard', () => {
       for (const path of ['/app', '/app/qr', '/app/settings', '/app/customers']) {
         await page.goto(path);
         await expect(page.locator('.app-sidebar')).toBeVisible();
-        await expect(page.locator('.app-topbar')).toBeVisible();
+        // The workspace top bar is desktop-only. Below 1024px the compact sidebar header
+        // already carries the brand and the Menu toggle, and the top bar's only control
+        // (Sign out) moves into that menu, so rendering both would duplicate the header.
+        // See the `@media (max-width: 1023px)` rule in
+        // apps/web/components/dashboard/VendorWorkspace.module.css, and
+        // e2e/vendor-mobile-responsive.spec.ts, which asserts the same rule from 320px.
+        //
+        // The unconditional assertion this replaces dates from the initial commit and was
+        // never revisited when the vendor shell was redesigned.
+        if (viewport.width >= 1024) {
+          await expect(page.locator('.app-topbar')).toBeVisible();
+        } else {
+          await expect(page.locator('.app-topbar')).toBeHidden();
+          await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
+        }
         await expect(page.locator('.app-main')).toBeVisible();
 
         const geometry = await page.evaluate(() => ({
