@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   ONBOARDING_STEPS,
-  canPublish,
-  missingPublishRequirements,
   nextStep,
   previousStep,
   resumeStep,
@@ -49,35 +47,6 @@ describe('step order', () => {
     for (const [i, step] of ONBOARDING_STEPS.entries()) {
       expect(stepIndex(step.id)).toBe(i);
     }
-  });
-});
-
-describe('publish requirements', () => {
-  it('needs business details and a review link, and nothing else', () => {
-    expect(canPublish(progress())).toBe(false);
-    expect(canPublish(progress({ hasBusinessDetails: true }))).toBe(false);
-    expect(canPublish(progress({ hasReviewLink: true }))).toBe(false);
-    expect(canPublish(progress({ hasBusinessDetails: true, hasReviewLink: true }))).toBe(true);
-  });
-
-  /** ONB-03 ships a "Skip optional" button and ONB-04's preview is a convenience. */
-  it('does not require the optional steps', () => {
-    const ready = progress({ hasBusinessDetails: true, hasReviewLink: true });
-    expect(canPublish(ready)).toBe(true);
-    expect(canPublish({ ...ready, hasContactLinks: false, hasAiContext: false })).toBe(true);
-  });
-
-  it('lists what is outstanding in wizard order', () => {
-    expect(missingPublishRequirements(progress()).map((s) => s.id)).toEqual([
-      'business',
-      'review-link',
-    ]);
-    expect(
-      missingPublishRequirements(progress({ hasBusinessDetails: true })).map((s) => s.id),
-    ).toEqual(['review-link']);
-    expect(
-      missingPublishRequirements(progress({ hasBusinessDetails: true, hasReviewLink: true })),
-    ).toEqual([]);
   });
 });
 

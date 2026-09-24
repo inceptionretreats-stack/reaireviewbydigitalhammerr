@@ -150,21 +150,6 @@ test.describe('readable concept-aligned pricing plans', () => {
         const runtimeProblems: string[] = [];
         page.on('pageerror', (error) => runtimeProblems.push(error.message));
         page.on('console', (message) => {
-          if (
-            message.type() === 'warning' &&
-            message
-              .text()
-              .startsWith(
-                'Image with src "/marketing/ai-review-robot-mascot.png" was detected as the Largest Contentful Paint (LCP).',
-              )
-          ) {
-            // The existing section below pricing can enter the initial hash-linked viewport.
-            // Preserve its dev-only loading advisory without treating it as a pricing failure.
-            test
-              .info()
-              .annotations.push({ type: 'existing-image-advisory', description: message.text() });
-            return;
-          }
           if (message.type() === 'error' || message.type() === 'warning') {
             runtimeProblems.push(`${message.type()}: ${message.text()}`);
           }

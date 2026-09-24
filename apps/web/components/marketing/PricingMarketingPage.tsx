@@ -1,12 +1,6 @@
 import localFont from 'next/font/local';
 import type { CommercialTerms } from '@/lib/commercial-terms';
-import {
-  ActionLink,
-  MarketingCallToAction,
-  MarketingIcon,
-  MarketingShell,
-  marketingStyles as styles,
-} from './MarketingSite';
+import { ActionLink, MarketingIcon, marketingStyles as styles } from './MarketingSite';
 import { PricingDetailsLink } from './PricingDetails';
 
 const priceFont = localFont({
@@ -28,33 +22,6 @@ const PRO_FEATURES = (t: CommercialTerms) => [
   `${t.proDraftsLabel} Ai drafts per year`,
   'Everything included in Free',
   '12-month draft allowance',
-];
-
-const INCLUDED = [
-  {
-    accent: 'red',
-    icon: 'edit' as const,
-    title: 'Always editable',
-    body: 'Customers keep the final word.',
-  },
-  {
-    accent: 'green',
-    icon: 'shield' as const,
-    title: 'No rating gate',
-    body: 'Everyone sees the same path.',
-  },
-  {
-    accent: 'yellow',
-    icon: 'feedback' as const,
-    title: 'Private feedback',
-    body: 'Open to every customer.',
-  },
-  {
-    accent: 'blue',
-    icon: 'qr' as const,
-    title: 'Print-ready QR',
-    body: 'Branded for your business.',
-  },
 ];
 
 function FeatureChecks({ items }: { items: string[] }) {
@@ -112,58 +79,5 @@ export function PricingPlanCards({ terms }: { terms: CommercialTerms }) {
         <PricingDetailsLink plan="Pro" />
       </article>
     </div>
-  );
-}
-
-export function PricingMarketingPage({ terms }: { terms: CommercialTerms }) {
-  return (
-    <MarketingShell>
-      <section className={`${styles.pageHeading} ${styles.pricingHeading}`}>
-        <div>
-          <h1>Start free. Grow when it makes sense.</h1>
-          <p>No card to begin, no complicated comparison and nothing hidden behind a demo.</p>
-        </div>
-        <ActionLink href="/signup">Create your account</ActionLink>
-      </section>
-
-      <PricingPlanCards terms={terms} />
-
-      <section className={styles.includedSection}>
-        <div className={styles.includedIntro}>
-          <h2>Good product boundaries are included in every plan.</h2>
-          <p>
-            Upgrading adds capacity. It never changes who controls the review or who can share
-            private feedback.
-          </p>
-        </div>
-        <div className={styles.includedList}>
-          {INCLUDED.map((item) => (
-            <article key={item.title} data-accent={item.accent}>
-              <span>
-                <MarketingIcon name={item.icon} size={23} />
-              </span>
-              <h3>{item.title}</h3>
-              <p>{item.body}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className={styles.pricingAnswer}>
-        <div>
-          <h2>Can I try the customer experience before paying?</h2>
-          <p>
-            Yes. Free includes the complete mobile-first journey and ten drafts, so you can set up
-            the experience before deciding whether you need Pro.
-          </p>
-        </div>
-        <ActionLink href="/signup">Start with Free</ActionLink>
-      </section>
-
-      <MarketingCallToAction
-        title="Start with the complete experience, for free."
-        body="Create your account today. Upgrade only when the extra capacity is useful."
-      />
-    </MarketingShell>
   );
 }

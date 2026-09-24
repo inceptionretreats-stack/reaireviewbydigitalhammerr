@@ -396,8 +396,3 @@ export function toSeries(
 
   return { event, label, points, max, total };
 }
-
-/** Label for a funnel event, for callers that hold an event name rather than a step. */
-export function funnelStepLabel(event: FunnelEvent): string {
-  return STEP_COPY[event].label;
-}

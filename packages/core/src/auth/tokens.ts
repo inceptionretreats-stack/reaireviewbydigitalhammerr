@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 /**
  * Opaque token issue-and-verify, shared by sessions, password resets, invites and manual
@@ -25,19 +25,6 @@ export function issueToken(bytes = DEFAULT_TOKEN_BYTES): IssuedToken {
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
-}
-
-/** Constant-time comparison, so verification cannot be turned into an oracle. */
-export function tokensMatch(candidateToken: string, storedHash: string): boolean {
-  const candidate = Buffer.from(hashToken(candidateToken), 'hex');
-  let stored: Buffer;
-  try {
-    stored = Buffer.from(storedHash, 'hex');
-  } catch {
-    return false;
-  }
-  if (candidate.length !== stored.length) return false;
-  return timingSafeEqual(candidate, stored);
 }
 
 /**

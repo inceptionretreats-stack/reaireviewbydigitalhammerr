@@ -16,7 +16,6 @@ import { verifyCsrf } from '@/lib/csrf';
 import { passwordHasher } from '@/lib/auth-helpers';
 import {
   adminMfaRequired,
-  clearSessionCookie,
   getSession,
   nextPathAfterLogin,
   sessionService,
@@ -180,11 +179,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           ? 'challenge'
           : 'enrol',
   });
-}
-
-export async function DELETE(): Promise<NextResponse> {
-  await clearSessionCookie();
-  return new NextResponse(null, { status: 204 });
 }
 
 /**

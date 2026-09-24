@@ -89,16 +89,6 @@ export async function resetFreeQuota(): Promise<void> {
   );
 }
 
-/** Drives the tenant to its limit, so the exhausted path can be exercised (Flow E step 3). */
-export async function exhaustFreeQuota(): Promise<void> {
-  const businessId = await demoBusinessId();
-  await db().query(
-    `UPDATE subscriptions SET free_generations_used = free_generation_limit, status = 'FREE'
-     WHERE business_id = $1`,
-    [businessId],
-  );
-}
-
 export async function quotaUsed(): Promise<number> {
   const businessId = await demoBusinessId();
   const { rows } = await db().query<{ used: number }>(

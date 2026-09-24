@@ -1,7 +1,5 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { QrStandeePreview } from '@/components/qr/QrStandeePreview';
 import type { LandingDemo } from '@/lib/landing-demo';
 import { PUBLIC_INFORMATION_LINKS } from '@/lib/public-information';
 import { HeroReviewVideo } from './HeroReviewVideo';
@@ -230,71 +228,11 @@ export function ActionLink({
   );
 }
 
-export function ReviewerVisual({ demo }: { demo?: LandingDemo | null }) {
-  return (
-    <div className={styles.reviewerVisual} data-has-demo={Boolean(demo)} data-hero-visual>
-      <div className={styles.heroImageSurface} data-hero-media="image">
-        <Image
-          className={styles.heroImage}
-          src="/marketing/hero-review-walkthrough-v3-poster.png"
-          alt="A friendly Ai robot guiding the review journey beside a complete upright phone"
-          fill
-          preload
-          sizes="(max-width: 820px) calc(100vw - 36px), (max-width: 1100px) 58vw, 800px"
-        />
-        <span className={styles.colorRail} aria-hidden="true" />
-      </div>
-      {demo ? (
-        <div
-          className={styles.heroStandeeWrap}
-          data-hero-qr
-          role="group"
-          aria-label="Live review demo"
-        >
-          <QrStandeePreview
-            businessName={demo.name}
-            qrSrc={demo.qrDataUri}
-            className={styles.heroStandee}
-          />
-          <Link className={styles.liveDemoLink} href={`/r/${demo.code}`}>
-            <span>Open live demo</span>
-            <MarketingIcon name="arrow" size={15} />
-          </Link>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function HeroVideoVisual() {
   return (
     <div className={styles.heroVideoVisual} data-hero-visual>
       <HeroReviewVideo />
     </div>
-  );
-}
-
-export function MarketingCallToAction({
-  title = 'Ready to make every visit easier to share?',
-  body = 'Create your account and keep the customer in control.',
-}: {
-  title?: string;
-  body?: string;
-}) {
-  return (
-    <section className={styles.finalSection}>
-      <div className={styles.finalCta}>
-        <span className={styles.finalShapeBlue} aria-hidden="true" />
-        <span className={styles.finalShapeRed} aria-hidden="true" />
-        <span className={styles.finalShapeYellow} aria-hidden="true" />
-        <span className={styles.finalShapeGreen} aria-hidden="true" />
-        <div>
-          <h2>{title}</h2>
-          <p>{body}</p>
-        </div>
-        <ActionLink href="/signup">Create your account</ActionLink>
-      </div>
-    </section>
   );
 }
 

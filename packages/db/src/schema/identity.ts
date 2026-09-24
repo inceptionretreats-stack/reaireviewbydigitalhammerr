@@ -169,8 +169,6 @@ export const mfaRecoveryCodes = pgTable(
   ],
 );
 
-export const isSessionLive = sql`revoked_at IS NULL AND expires_at > now()`;
-
 export type User = typeof users.$inferSelect;
 export type GoogleIdentity = typeof googleIdentities.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
