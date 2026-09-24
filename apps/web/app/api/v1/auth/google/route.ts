@@ -2,20 +2,20 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, isNull } from 'drizzle-orm';
 import { googleIdentities, users } from '@ai-review/db';
 import { z } from 'zod';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { verifyCsrf } from '@/lib/csrf';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { verifyCsrf } from '@/lib/http/csrf';
 import {
   consumeGoogleChallenge,
   setGooglePending,
   verifyGoogleCredential,
-} from '@/lib/google-auth';
-import { signInGoogleVendor } from '@/lib/google-auth-session';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { recordActivity } from '@/lib/activity';
-import { safeError } from '@/lib/safe-error';
+} from '@/lib/auth/google-auth';
+import { signInGoogleVendor } from '@/lib/auth/google-auth-session';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { recordActivity } from '@/lib/activity/recorder';
+import { safeError } from '@/lib/infra/safe-error';
 
 const credentialRequest = z.object({ credential: z.string().min(100).max(8192) });
 

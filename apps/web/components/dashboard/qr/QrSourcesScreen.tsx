@@ -12,7 +12,7 @@ import {
   useToast,
   type TableColumn,
 } from '@ai-review/ui';
-import { QrStandeePreview } from '@/components/qr/QrStandeePreview';
+import { QrStandeePreview } from '@/components/shared/qr/QrStandeePreview';
 import { SECONDARY_LINK } from '../link-styles';
 import { DisableQrDialog } from './DisableQrDialog';
 import { QrSourceDialog } from './QrSourceDialog';

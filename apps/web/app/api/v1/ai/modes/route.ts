@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant } from '@/lib/require-tenant';
-import { refuseFrozenTenant } from './guards';
-import { MODE_CREATE_LIMIT, createMode, listModes, toWireMode } from './mode-service';
-import { parseCreateMode } from './schema';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { refuseFrozenTenant } from '@/lib/ai/modes/guards';
+import { MODE_CREATE_LIMIT, createMode, listModes, toWireMode } from '@/lib/ai/modes/mode-service';
+import { parseCreateMode } from '@/lib/ai/modes/schema';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * GET/POST /api/v1/ai/modes — the `list` and `create` states of AI-02.

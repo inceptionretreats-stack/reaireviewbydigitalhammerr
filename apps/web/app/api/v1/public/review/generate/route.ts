@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { aiGenerations, analyticsEvents } from '@ai-review/db';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { resolveAnonymousSession } from '@/lib/anonymous-session';
-import { resolvePublicRef } from '@/lib/resolve-public-ref';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { resolveAnonymousSession } from '@/lib/customer/anonymous-session';
+import { resolvePublicRef } from '@/lib/customer/resolve-public-ref';
 import {
   buildGenerator,
   loadGenerationContext,
@@ -16,10 +16,10 @@ import {
   providerKeys,
   releaseQuota,
   selectProvider,
-} from '@/lib/generation-service';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { validateSelectedServices } from '@/lib/customer-services';
-import { safeError } from '@/lib/safe-error';
+} from '@/lib/ai/generation-service';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { validateSelectedServices } from '@/lib/customer/customer-services';
+import { safeError } from '@/lib/infra/safe-error';
 
 const requestSchema = z.object({
   slug: z.string().min(1).max(160).optional(),

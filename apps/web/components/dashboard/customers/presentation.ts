@@ -1,12 +1,10 @@
 import type { BadgeTone, SelectOption } from '@ai-review/ui';
-// A relative path rather than the `@/` alias: this module is covered by the unit suite, and
-// `vitest.config.mts` configures no path aliases, so an aliased import here would not resolve there.
 import {
   CUSTOMER_STATUS_ORDER,
   OWNER_SETTABLE_STATUSES,
   statusAuthority,
   type CustomerStatus,
-} from '../../../app/api/v1/customers/customer-status';
+} from '@/lib/crm/customers/customer-status';
 
 /**
  * How CRM-01 words and colours a contact.

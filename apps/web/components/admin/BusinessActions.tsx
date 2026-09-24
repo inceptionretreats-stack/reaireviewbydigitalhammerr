@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Card, Field, InlineError, Input, Modal, Textarea } from '@ai-review/ui';
-import { sendJson } from '@/components/dashboard/ai/send-json';
+import { sendJson } from '@/components/shared/forms/send-json';
 
 /**
  * ADMIN-02 actions: every one opens a dialog that asks for a reason before it does anything.

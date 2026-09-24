@@ -1,4 +1,4 @@
-import type { SubmitFailure } from '../auth/use-form-submit';
+import type { SubmitFailure } from '../shared/forms/use-form-submit';
 
 /**
  * ONB-01 — the pure logic behind BusinessStep.
@@ -188,7 +188,7 @@ export function readSaved(payload: unknown, fallbackSlug: string): SavedIdentity
 /**
  * The error envelope from 23_API_Error_Codes.md.
  *
- * components/auth/use-form-submit.ts unpacks the same shape, but that hook only issues POSTs and
+ * components/shared/forms/use-form-submit.ts unpacks the same shape, but that hook only issues POSTs and
  * this screen saves with PATCH. The SubmitFailure type is imported rather than redeclared so the
  * two cannot drift apart in shape; generalising the hook to take a method would remove the
  * duplication outright, but that module is not this one's to change.

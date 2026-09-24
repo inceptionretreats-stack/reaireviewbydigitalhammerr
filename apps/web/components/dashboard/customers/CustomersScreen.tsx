@@ -14,7 +14,7 @@ import {
   Table,
   type TableColumn,
 } from '@ai-review/ui';
-import type { CustomerDto, CustomerListPage } from '@/app/api/v1/customers/repository';
+import type { CustomerDto, CustomerListPage } from '@/lib/crm/customers/repository';
 import { SECONDARY_LINK } from '../link-styles';
 import { ABORTED_CODE, getCustomerPage } from './customer-api';
 import { CustomerFormDialog } from './CustomerFormDialog';

@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { asc, eq } from 'drizzle-orm';
 import { businessLinks, businesses } from '@ai-review/db';
 import { normalizePhone } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant } from '@/lib/require-tenant';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * GET/PUT /api/v1/business/links — ONB-03, and the section list behind PROFILE-01.

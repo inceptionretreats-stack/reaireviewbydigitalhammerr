@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { apiError } from '@/lib/api-error';
-import { env } from '@/lib/env';
+import { apiError } from '@/lib/http/api-error';
+import { env } from '@/lib/infra/env';
 import { cronAuthorised } from '@/lib/cron/auth';
 import { runSubscriptionSweep } from '@/lib/cron/subscriptions';
 

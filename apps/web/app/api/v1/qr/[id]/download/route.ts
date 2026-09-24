@@ -2,13 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { businesses, qrCodes } from '@ai-review/db';
 import { buildQrUrl } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { renderQrCardPng, renderQrCardSvg, type QrCardBranding } from '@/lib/qr-card';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { renderQrCardPng, renderQrCardSvg, type QrCardBranding } from '@/lib/qr/qr-card';
 import { contentDisposition, parseFormat, type QrFormat } from './filename';
-import { recordActivity } from '@/lib/activity';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * GET /api/v1/qr/{id}/download?format=svg|png — the Download SVG / Download PNG actions of QR-01.

@@ -4,8 +4,8 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDatabase, type Database } from '@ai-review/db';
-import { PostgresMaintenanceStore } from '../../maintenance-store';
-import { runMaintenance } from '../../maintenance';
+import { PostgresMaintenanceStore } from '@/lib/cron/maintenance-store';
+import { runMaintenance } from '@/lib/cron/maintenance';
 
 /** An isolated, disposable LOOPBACK database; never runs maintenance on the developer's DB. */
 describe('serverless maintenance on PostgreSQL', () => {

@@ -6,7 +6,12 @@
 // rather than restructuring Field.
 import Link from 'next/link';
 import { Button, Card, Field, Input } from '@ai-review/ui';
-import { addDays, formatLocalDate, parseLocalDate, type AnalyticsRange } from './range';
+import {
+  addDays,
+  formatLocalDate,
+  parseLocalDate,
+  type AnalyticsRange,
+} from '@/lib/analytics/range';
 import { formatRangeLabel } from './format';
 
 /**

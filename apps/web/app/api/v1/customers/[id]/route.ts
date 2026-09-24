@@ -1,17 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant } from '@/lib/require-tenant';
-import { readCustomerBody } from '../body';
-import { isUuid } from '../query';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { readCustomerBody } from '@/lib/crm/customers/body';
+import { isUuid } from '@/lib/crm/customers/query';
 import {
   softDeleteCustomer,
   toCustomerDto,
   updateCustomer,
   type UpdateOutcome,
-} from '../repository';
-import { recordActivity } from '@/lib/activity';
+} from '@/lib/crm/customers/repository';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * PATCH/DELETE /api/v1/customers/{id} — the `Edit` and `Delete` actions of CRM-01.

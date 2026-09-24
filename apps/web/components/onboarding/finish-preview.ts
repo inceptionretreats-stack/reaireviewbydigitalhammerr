@@ -1,18 +1,17 @@
-import { isShell } from '../../lib/tenant-shell';
-import type { OnboardingStepId } from './steps';
-import type { SubmitState } from '../auth/use-form-submit';
+import { isShell } from '@/lib/tenant/tenant-shell';
+import type { OnboardingStepId } from '@/lib/onboarding/steps';
+import type { SubmitState } from '../shared/forms/use-form-submit';
 
 /**
  * The pure projections behind ONB-05 (Flow A steps 8-12).
  *
- * Extracted from `app/(app)/onboarding/finish/page.tsx` and `FinishStep.tsx` so both halves of the
+ * Extracted from `app/(vendor)/onboarding/finish/page.tsx` and `FinishStep.tsx` so both halves of the
  * screen read the same rules and both can be unit tested. Nothing here is presentational: each
  * function answers a question the owner is entitled to a correct answer to — which requirement
  * publish will actually refuse them for, and which buttons the public page will actually render —
  * and a wrong answer is a lie on screen rather than a cosmetic slip.
  *
- * `isShell` is imported by relative path rather than through the `@/` alias because the unit
- * suite resolves no path aliases; the rule it encodes must have exactly one definition.
+ * `isShell` is imported rather than restated: the rule it encodes must have exactly one definition.
  */
 
 export interface PreviewSection {
@@ -74,7 +73,7 @@ export function derivePublishBlockers(readiness: PublishReadiness): string[] {
 /**
  * The sections the public page will actually render.
  *
- * Mirrors the rule in `app/[slug]/page.tsx` — a section without a resolvable target is absent,
+ * Mirrors the rule in `app/(customer)/[slug]/page.tsx` — a section without a resolvable target is absent,
  * not disabled (AC-020) — at the grain a preview needs: presence of a target, rather than the
  * scheme check that renderer performs before emitting an href. That renderer stays
  * authoritative. The rule is repeated here only because previewing a button the public page

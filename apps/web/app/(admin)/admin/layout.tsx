@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { AppBrand } from '@/components/brand/AppBrand';
+import { AppBrand } from '@/components/shared/AppBrand';
 import { AdminNav } from '@/components/admin/AdminNav';
-import { SignOutButton } from '@/components/dashboard/SignOutButton';
+import { SignOutButton } from '@/components/shared/SignOutButton';
 import { isAdminRole } from '@ai-review/core';
-import { adminMfaRequired, getSession, nextPathAfterLogin } from '@/lib/session';
+import { adminMfaRequired, getSession, nextPathAfterLogin } from '@/lib/auth/session';
 
 /**
  * The admin shell (19_Admin_Panel_Spec: "Separate admin route and guard").

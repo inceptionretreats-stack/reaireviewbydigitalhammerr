@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminWebhookQuery } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { paymentAdmin, webhookFilterFrom } from '@/lib/admin/payments';
 
 export const runtime = 'nodejs';

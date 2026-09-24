@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import { getSession } from '@/lib/session';
+import { getSession } from '@/lib/auth/session';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Badge } from '@ai-review/ui';
 import { PromptVersionService } from '@ai-review/core';
-import { db } from '@/lib/db';
+import { db } from '@/lib/infra/db';
 import { toWire } from '@/lib/admin/prompt-versions';
 import { PromptVersionEditor } from '@/components/admin/PromptVersionEditor';
 

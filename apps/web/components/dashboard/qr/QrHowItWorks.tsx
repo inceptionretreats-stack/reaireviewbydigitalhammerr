@@ -13,7 +13,7 @@ import { Card } from '@ai-review/ui';
  * - AC-017 and D-026, the dynamic destination. This is the whole product argument for a dynamic QR,
  *   and an owner who does not know it will reprint standees they did not need to.
  * - QR-01-02, why there is no Delete. The counter still has the standee on it, so a disabled code
- *   resolves to a controlled page (`app/r/[code]/page.tsx`) instead of a 404.
+ *   resolves to a controlled page (`app/(customer)/r/[code]/page.tsx`) instead of a 404.
  * - QR-01-03, why the label matters. It is the attribution key in analytics later, so "Reception"
  *   and "Billing Counter" are worth the ten seconds it takes to type them.
  */

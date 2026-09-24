@@ -1,12 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { loadFeedbackPage } from '@/components/dashboard/feedback/inbox';
-import {
-  parseFeedbackFilters,
-  parseFeedbackPageRequest,
-} from '@/components/dashboard/feedback/filters';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { loadFeedbackPage } from '@/lib/feedback/inbox';
+import { parseFeedbackFilters, parseFeedbackPageRequest } from '@/lib/feedback/filters';
 
 /**
  * GET /api/v1/feedback — the `list` state of FB-02, with the date and status filters and the

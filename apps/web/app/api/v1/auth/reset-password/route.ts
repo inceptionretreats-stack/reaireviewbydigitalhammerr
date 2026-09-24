@@ -3,14 +3,14 @@ import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { passwordResetTokens, users } from '@ai-review/db';
 import { hashToken, SessionService, validatePasswordStrength } from '@ai-review/core';
 import { resetPasswordRequest } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { verifyCsrf } from '@/lib/csrf';
-import { passwordHasher } from '@/lib/auth-helpers';
-import { clearSessionCookie } from '@/lib/session';
-import { recordActivity } from '@/lib/activity';
-import { safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { passwordHasher } from '@/lib/auth/helpers';
+import { clearSessionCookie } from '@/lib/auth/session';
+import { recordActivity } from '@/lib/activity/recorder';
+import { safeError } from '@/lib/infra/safe-error';
 
 /**
  * POST /api/v1/auth/reset-password — AUTH-03-02.

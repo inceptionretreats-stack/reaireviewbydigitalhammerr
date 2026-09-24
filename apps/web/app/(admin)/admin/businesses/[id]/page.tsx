@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge } from '@ai-review/ui';
-import { db } from '@/lib/db';
+import { db } from '@/lib/infra/db';
 import { getBusinessDetail } from '@/lib/admin/businesses';
-import { getSession } from '@/lib/session';
+import { getSession } from '@/lib/auth/session';
 import { PlanBadge } from '@/components/admin/PlanBadge';
 import { adminDateTime } from '@/lib/admin/format';
 import {

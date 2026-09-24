@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { aiBusinessContexts, businesses, reviewModes } from '@ai-review/db';
 import { aiContextRequest, DEFAULT_DRAFT_LANGUAGE } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant } from '@/lib/require-tenant';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * GET/PUT /api/v1/ai/context — ONB-04 and AI-01.

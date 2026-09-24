@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Payment } from '@ai-review/db';
 import { Card, EmptyState, Table, type TableColumn } from '@ai-review/ui';
-import { formatDate, formatMoney } from '@/components/dashboard/presentation';
+import { formatDate, formatMoney } from '@/lib/dashboard/presentation';
 
 /**
  * SUB-01's payment history and receipts (E10-06).

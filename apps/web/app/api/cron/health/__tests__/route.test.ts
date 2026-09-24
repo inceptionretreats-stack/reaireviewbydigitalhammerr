@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ health: vi.fn(), env: vi.fn() }));
-vi.mock('@/lib/env', () => ({ env: mocks.env }));
-vi.mock('@/lib/backend-health', () => ({ checkBackendHealth: mocks.health }));
-vi.mock('@/lib/cron/auth', async () => import('../../../../../lib/cron/auth'));
+vi.mock('@/lib/infra/env', () => ({ env: mocks.env }));
+vi.mock('@/lib/infra/backend-health', () => ({ checkBackendHealth: mocks.health }));
 
 import { GET } from '../route';
 

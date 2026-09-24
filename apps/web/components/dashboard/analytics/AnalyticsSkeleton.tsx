@@ -3,7 +3,7 @@
  *
  * Real work, not decoration: `page.tsx` renders this from a Suspense boundary while four queries
  * run, so the sidebar and the page frame are interactive immediately instead of the whole route
- * waiting on Postgres. Same pattern and same reasoning as `components/dashboard/DashboardSkeleton`.
+ * waiting on Postgres. Same pattern and same reasoning as `components/dashboard/overview/DashboardSkeleton`.
  *
  * The blocks are `aria-hidden` and a single live region announces the wait. Announcing eight
  * placeholder rectangles tells a screen reader user nothing except that something is happening

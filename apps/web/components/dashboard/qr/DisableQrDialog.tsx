@@ -11,7 +11,7 @@ import type { QrSource } from './qr-sources';
  * standing in front of it. Enabling only ever restores service, so it happens on one click.
  *
  * The copy answers the two questions an owner actually has — what a customer sees now, and whether
- * this is permanent. Both answers come from `app/r/[code]/page.tsx`, which renders a short
+ * this is permanent. Both answers come from `app/(customer)/r/[code]/page.tsx`, which renders a short
  * unavailable page for a disabled code rather than a 404 (QR-01-02), and from the fact that the
  * code is immutable and reversible (QR-01-01), so nothing printed is wasted.
  */

@@ -12,20 +12,17 @@ const mocks = vi.hoisted(() => ({
   recordActivity: vi.fn(),
 }));
 
-vi.mock('@/lib/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
-vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
-vi.mock('@/lib/request-body', async () => import('../../../../../../lib/request-body'));
-vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
-vi.mock('@/lib/env', () => ({
+vi.mock('@/lib/http/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
+vi.mock('@/lib/infra/env', () => ({
   env: () => ({ GOOGLE_CLIENT_ID: '123-test.apps.googleusercontent.com', HASH_PEPPER: 'pepper' }),
 }));
-vi.mock('@/lib/google-auth', () => ({
+vi.mock('@/lib/auth/google-auth', () => ({
   consumeGoogleChallenge: mocks.nonce,
   verifyGoogleCredential: mocks.verifyCredential,
   setGooglePending: mocks.setPending,
 }));
-vi.mock('@/lib/google-auth-session', () => ({ signInGoogleVendor: mocks.signIn }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/auth/google-auth-session', () => ({ signInGoogleVendor: mocks.signIn }));
+vi.mock('@/lib/http/rate-limit', () => ({
   clientIp: () => '203.0.113.10',
   rateLimiter: () => ({
     loginAttempt: mocks.loginAttempt,
@@ -33,8 +30,8 @@ vi.mock('@/lib/rate-limit', () => ({
   }),
   isDenied: (decision: { allowed: boolean }) => !decision.allowed,
 }));
-vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
-vi.mock('@/lib/db', () => ({
+vi.mock('@/lib/activity/recorder', () => ({ recordActivity: mocks.recordActivity }));
+vi.mock('@/lib/infra/db', () => ({
   db: () => ({
     select: () => ({
       from: () => ({

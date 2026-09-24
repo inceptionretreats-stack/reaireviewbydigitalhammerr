@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminActivityQuery } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { activityFilterFrom, loadActivity } from '@/lib/admin/activity';
 
 export const runtime = 'nodejs';

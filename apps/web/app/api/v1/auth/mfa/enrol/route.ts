@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { users } from '@ai-review/db';
 import { eq } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { mfaQrDataUri, mfaService } from '@/lib/mfa';
-import { requirePendingAdmin } from '@/lib/mfa-routes';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { mfaQrDataUri, mfaService } from '@/lib/auth/mfa';
+import { requirePendingAdmin } from '@/lib/auth/mfa-routes';
 
 export const runtime = 'nodejs';
 

@@ -23,7 +23,7 @@ info:
       actually emit at that status. It is an extension rather than a narrowed schema because the
       envelope is a fixed shape and repeating a four-level-deep `enum` override on some sixty
       responses would bury the useful part. The codes and their statuses come from
-      `docs/spec/23_API_Error_Codes.md`, mirrored in `apps/web/lib/api-error.ts`.
+      `docs/spec/23_API_Error_Codes.md`, mirrored in `apps/web/lib/http/api-error.ts`.
     - **The delta from the skeleton** is in `x-skeleton-delta` at the bottom of this file: paths
       the skeleton lists that do not exist yet, paths that exist but the skeleton omits, and paths
       where the two disagree on shape. That delta is the point of this document.
@@ -1517,7 +1517,7 @@ components:
       in: header
       required: true
       description: |
-        CSRF defence for cookie-authenticated mutations (`apps/web/lib/csrf.ts`). Every browser
+        CSRF defence for cookie-authenticated mutations (`apps/web/lib/http/csrf.ts`). Every browser
         sends `Origin` on a cross-origin mutation, so its **absence** on a state-changing request
         is itself rejected, and a value that is not `APP_BASE_URL` (plus localhost outside
         production) is rejected too. Custom tenant domains are deliberately not accepted: they
@@ -1541,7 +1541,7 @@ components:
 
         Optional at every endpoint. Absent, the request still succeeds — with no rate limiting, no
         regeneration history and no session attribution (AC-035). **Nothing in the current tree
-        mints this cookie**: `apps/web/lib/anonymous-session.ts` only reads it and names
+        mints this cookie**: `apps/web/lib/customer/anonymous-session.ts` only reads it and names
         `middleware.ts` as responsible, and no `middleware.ts` exists yet. See
         `docs/openapi/README.md`.
       schema: { type: string }
@@ -1550,7 +1550,7 @@ components:
     RetryAfter:
       description: |
         Seconds to wait, always at least 1. Set from the limiter's own interval by
-        `apps/web/lib/api-error.ts`.
+        `apps/web/lib/http/api-error.ts`.
       required: true
       schema: { type: integer, minimum: 1 }
     RetryAfterOptional:
@@ -1615,7 +1615,7 @@ components:
       type: object
       description: |
         The single error envelope from `docs/spec/23_API_Error_Codes.md`, produced by
-        `apps/web/lib/api-error.ts`. `request_id` is a fresh UUID on every error so a
+        `apps/web/lib/http/api-error.ts`. `request_id` is a fresh UUID on every error so a
         customer-facing message can be traced to a log line without the message itself carrying
         anything. Provider errors, stack traces and internal identifiers never appear in it
         (AC-030).
@@ -2009,7 +2009,7 @@ components:
     QrSource:
       type: object
       description: |
-        One QR source, produced by `toQrSourceWire` in `apps/web/app/api/v1/qr/qr-source.ts`. The
+        One QR source, produced by `toQrSourceWire` in `apps/web/lib/qr/qr-source.ts`. The
         list and both write endpoints answer with this same object, which is what lets QR-01 fold a
         created or renamed row straight into its list without learning a second shape.
       required:
@@ -2053,7 +2053,7 @@ components:
         preview_src:
           type: string
           description: |
-            The rendered symbol as an `image/svg+xml` data URI, encoded by `apps/web/lib/qr-image.ts`
+            The rendered symbol as an `image/svg+xml` data URI, encoded by `apps/web/lib/qr/qr-image.ts`
             — the same module the download endpoint uses, so a thumbnail and a printed file are
             always the same symbol.
 
@@ -2339,7 +2339,7 @@ components:
     AccountDetailsRequest:
       type: object
       description: |
-        `parseAccountDetails` in `apps/web/app/api/v1/account/schema.ts`, which is the single
+        `parseAccountDetails` in `apps/web/lib/account/schema.ts`, which is the single
         definition of this shape — the handler and the settings screen both read it. Hand-written
         rather than Zod because `packages/contracts` carries no account DTO; an
         `accountDetailsRequest` belongs beside `signupRequest` there.
@@ -2387,7 +2387,7 @@ components:
 
     PasswordChangeRequest:
       type: object
-      description: '`parsePasswordChange` in `apps/web/app/api/v1/account/schema.ts`.'
+      description: '`parsePasswordChange` in `apps/web/lib/account/schema.ts`.'
       required: [current_password, new_password]
       properties:
         current_password:

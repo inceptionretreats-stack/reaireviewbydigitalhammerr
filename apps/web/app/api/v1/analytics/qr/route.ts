@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { requireTenant } from '@/lib/require-tenant';
-import { loadQrSourceAnalytics } from '@/components/dashboard/analytics/queries';
+import { db } from '@/lib/infra/db';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { loadQrSourceAnalytics } from '@/lib/analytics/queries';
 import { analyticsRangeFor, serializeRange } from '../range-request';
 
 /**

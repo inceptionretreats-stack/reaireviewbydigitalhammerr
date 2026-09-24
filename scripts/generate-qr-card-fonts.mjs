@@ -34,5 +34,5 @@ for (const [name, file, weight] of faces) {
   lines.push(`  '${bytes.toString('base64')}';`);
   lines.push('');
 }
-writeFileSync(`${root}apps/web/lib/qr-card-fonts.generated.ts`, lines.join('\n'));
-console.log('wrote apps/web/lib/qr-card-fonts.generated.ts');
+writeFileSync(`${root}apps/web/lib/qr/qr-card-fonts.generated.ts`, lines.join('\n'));
+console.log('wrote apps/web/lib/qr/qr-card-fonts.generated.ts');

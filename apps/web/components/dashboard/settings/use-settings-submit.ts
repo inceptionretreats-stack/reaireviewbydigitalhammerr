@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import type { SubmitFailure, SubmitState } from '../../auth/use-form-submit';
+import type { SubmitFailure, SubmitState } from '@/components/shared/forms/use-form-submit';
 
 /**
  * Submit plumbing for the three SET-01 forms.
  *
- * `components/auth/use-form-submit.ts` is the same idea and would be the right home for this, but
+ * `components/shared/forms/use-form-submit.ts` is the same idea and would be the right home for this, but
  * it posts unconditionally and `PATCH /api/v1/account` is a PATCH. Its `SubmitFailure` and
  * `SubmitState` types are imported rather than restated so the two cannot disagree about the shape
  * of a failure, and `fieldError` from that module works on this state unchanged. What is duplicated

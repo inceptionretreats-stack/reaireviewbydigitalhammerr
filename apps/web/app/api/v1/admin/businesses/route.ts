@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { adminBusinessListQuery } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireAdmin } from '@/lib/require-admin';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { listBusinesses } from '@/lib/admin/businesses';
 
 export const runtime = 'nodejs';

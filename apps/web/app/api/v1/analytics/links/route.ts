@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { requireTenant } from '@/lib/require-tenant';
-import { loadLinkClickAnalytics } from '@/components/dashboard/analytics/queries';
+import { db } from '@/lib/infra/db';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { loadLinkClickAnalytics } from '@/lib/analytics/queries';
 import { analyticsRangeFor, serializeRange } from '../range-request';
 
 /**
@@ -16,7 +16,7 @@ import { analyticsRangeFor, serializeRange } from '../range-request';
  *
  * ─── THE ONE UNTRUSTED DIMENSION ON THIS SCREEN ───────────────────────────────────────────────
  *
- * `profile_link_click` carries `link_id` in its properties, and `components/PublicProfile.tsx`
+ * `profile_link_click` carries `link_id` in its properties, and `components/customer/profile/PublicProfile.tsx`
  * sends it from the browser. The public ingestion endpoint injects `business_id` server-side, so a
  * forged payload cannot write into another tenant's analytics — but the `link_id` inside it is
  * still whatever the client said.

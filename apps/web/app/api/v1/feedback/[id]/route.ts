@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { privateFeedback } from '@ai-review/db';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant } from '@/lib/require-tenant';
-import type { AssignableFeedbackStatus } from '@/components/dashboard/feedback/filters';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import type { AssignableFeedbackStatus } from '@/lib/feedback/filters';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * PATCH /api/v1/feedback/{id} — the Mark read and Archive actions of FB-02.

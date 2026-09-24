@@ -12,7 +12,7 @@ import {
   feedbackScreenHref,
   isDefaultFilters,
   type FeedbackFilters,
-} from './filters';
+} from '@/lib/feedback/filters';
 import { SECONDARY_LINK } from '../link-styles';
 
 /**

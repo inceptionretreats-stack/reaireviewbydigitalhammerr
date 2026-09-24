@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 import { TenantGuard } from '@ai-review/core';
 import { Card, InlineError } from '@ai-review/ui';
-import { db } from '@/lib/db';
-import { getSession } from '@/lib/session';
+import { db } from '@/lib/infra/db';
+import { getSession } from '@/lib/auth/session';
 import { FunnelCard } from './FunnelCard';
 import { KpiRow } from './KpiRow';
 import { LinkClickTable } from './LinkClickTable';
@@ -15,15 +15,15 @@ import {
   loadBusinessTimeZone,
   loadLinkClickAnalytics,
   loadQrSourceAnalytics,
-} from './queries';
-import { describeRangeRejection, resolveAnalyticsRange } from './range';
+} from '@/lib/analytics/queries';
+import { describeRangeRejection, resolveAnalyticsRange } from '@/lib/analytics/range';
 
 /**
  * AN-01's `data` and `empty` states.
  *
  * Split out of `page.tsx` so the page itself awaits no database work and the Suspense fallback is
  * a real `loading` state rather than a component that never renders — the same division
- * `components/dashboard/DashboardOverview.tsx` draws for DASH-01.
+ * `components/dashboard/overview/DashboardOverview.tsx` draws for DASH-01.
  *
  * The tenant is resolved here, not in the layout: the layout has no use for one and resolving it
  * twice would be two round trips for a single answer. Nothing in this tree takes a business id

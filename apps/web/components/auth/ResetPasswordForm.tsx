@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Field, InlineError, Input } from '@ai-review/ui';
-import { fieldError, useFormSubmit } from './use-form-submit';
+import { fieldError, useFormSubmit } from '../shared/forms/use-form-submit';
 
 /**
  * The reset screen, which 03_Screen_Field_Button_Spec.md never defines.

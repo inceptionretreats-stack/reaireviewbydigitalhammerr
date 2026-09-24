@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant } from '@/lib/require-tenant';
-import { isModeId, modeNotFound, refuseFrozenTenant } from '../guards';
-import { toWireMode, updateMode } from '../mode-service';
-import { parseUpdateMode } from '../schema';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { isModeId, modeNotFound, refuseFrozenTenant } from '@/lib/ai/modes/guards';
+import { toWireMode, updateMode } from '@/lib/ai/modes/mode-service';
+import { parseUpdateMode } from '@/lib/ai/modes/schema';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * PATCH /api/v1/ai/modes/{id} — the `edit` and `archived` states of AI-02.

@@ -1,15 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { requireTenant } from '@/lib/tenant/require-tenant';
 import {
   advanceCustomerStatus,
   isUuid,
   loadOwnedRequest,
   markSent,
   recordMarkedSentEvent,
-} from '../../service';
-import { recordActivity } from '@/lib/activity';
+} from '@/lib/crm/review-requests/service';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * POST /api/v1/review-requests/{id}/mark-sent — Flow F step 8.

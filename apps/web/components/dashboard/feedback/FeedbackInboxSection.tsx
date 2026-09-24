@@ -1,12 +1,17 @@
 import { redirect } from 'next/navigation';
 import { SlugService, TenantGuard } from '@ai-review/core';
 import { Card, InlineError } from '@ai-review/ui';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { getSession } from '@/lib/session';
-import { loadFeedbackPage } from './inbox';
-import { DEFAULT_PAGE_SIZE, parseFeedbackFilters, todayInZone, type QueryInput } from './filters';
-import { publicFormState, toFeedbackRow } from './row';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { getSession } from '@/lib/auth/session';
+import { loadFeedbackPage } from '@/lib/feedback/inbox';
+import {
+  DEFAULT_PAGE_SIZE,
+  parseFeedbackFilters,
+  todayInZone,
+  type QueryInput,
+} from '@/lib/feedback/filters';
+import { publicFormState, toFeedbackRow } from '@/lib/feedback/row';
 import { FeedbackFilterForm } from './FeedbackFilterForm';
 import { FeedbackInbox } from './FeedbackInbox';
 
@@ -14,11 +19,11 @@ import { FeedbackInbox } from './FeedbackInbox';
  * FB-02's `data` state — everything on `/app/feedback` that needs the tenant.
  *
  * Split out of `page.tsx` so the page itself awaits nothing and the Suspense fallback is a real
- * loading state rather than a component that never renders. The same division `app/(app)/app/page.tsx`
+ * loading state rather than a component that never renders. The same division `app/(vendor)/app/page.tsx`
  * already draws for DASH-01.
  *
  * The tenant is resolved here rather than in the layout, which has no use for it (see the note in
- * `app/(app)/app/layout.tsx`). Nothing in this tree takes a business id from the request:
+ * `app/(vendor)/app/layout.tsx`). Nothing in this tree takes a business id from the request:
  * `TenantGuard.resolveActive` derives it from the session, which is what AC-003, FB-02-01 and RBAC
  * rule 2 require.
  *
@@ -128,7 +133,7 @@ function listFields(rejected: readonly string[]): string {
 /**
  * A live session with no business behind it — a broken invariant rather than a normal state, since
  * signup creates the business in the same transaction as the user. Rendered rather than redirected
- * for the reason `components/dashboard/DashboardOverview.tsx` gives: `/login` sends a
+ * for the reason `components/dashboard/overview/DashboardOverview.tsx` gives: `/login` sends a
  * BUSINESS_OWNER straight back into `/app`, so a redirect would bounce forever.
  */
 function NoBusinessFound() {

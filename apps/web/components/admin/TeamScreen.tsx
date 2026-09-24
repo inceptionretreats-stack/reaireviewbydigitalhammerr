@@ -17,7 +17,7 @@ import {
   Textarea,
   type TableColumn,
 } from '@ai-review/ui';
-import { sendJson } from '@/components/dashboard/ai/send-json';
+import { sendJson } from '@/components/shared/forms/send-json';
 import { useStepUp } from './MfaStepUpDialog';
 
 /**

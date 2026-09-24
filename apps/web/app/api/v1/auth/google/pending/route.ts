@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { apiError } from '@/lib/api-error';
-import { readGooglePending } from '@/lib/google-auth';
+import { apiError } from '@/lib/http/api-error';
+import { readGooglePending } from '@/lib/auth/google-auth';
 
 export const dynamic = 'force-dynamic';
 

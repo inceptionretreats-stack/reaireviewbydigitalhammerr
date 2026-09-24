@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { adminTeamAction } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { teamErrorResponse, teamService } from '@/lib/admin/team';
 
 export const runtime = 'nodejs';

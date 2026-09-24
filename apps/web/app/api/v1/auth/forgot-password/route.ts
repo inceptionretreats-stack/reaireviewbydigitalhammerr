@@ -3,15 +3,15 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { passwordResetTokens, users } from '@ai-review/db';
 import { issueToken, privacyHash } from '@ai-review/core';
 import { forgotPasswordRequest } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { verifyCsrf } from '@/lib/csrf';
-import { mailer, passwordResetEmail } from '@/lib/mailer';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { recordActivity } from '@/lib/activity';
-import { safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { mailer, passwordResetEmail } from '@/lib/email/mailer';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { recordActivity } from '@/lib/activity/recorder';
+import { safeError } from '@/lib/infra/safe-error';
 
 /** Short enough to limit the window a leaked link stays useful; long enough to reach an inbox. */
 const TOKEN_TTL_MS = 60 * 60 * 1000;

@@ -4,11 +4,11 @@ import { notFound, redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
 import { businesses, payments } from '@ai-review/db';
 import { isAdminRole } from '@ai-review/core';
-import { InvoiceDocument } from '@/components/billing/InvoiceDocument';
-import { PrintButton } from '@/components/dashboard/subscription/PrintButton';
-import { db } from '@/lib/db';
+import { InvoiceDocument } from '@/components/shared/billing/InvoiceDocument';
+import { PrintButton } from '@/components/shared/billing/PrintButton';
+import { db } from '@/lib/infra/db';
 import { invoiceViewFrom } from '@/lib/billing/invoice-view';
-import { getSession } from '@/lib/session';
+import { getSession } from '@/lib/auth/session';
 
 export const metadata: Metadata = { title: 'Invoice | Ai Review admin' };
 export const dynamic = 'force-dynamic';

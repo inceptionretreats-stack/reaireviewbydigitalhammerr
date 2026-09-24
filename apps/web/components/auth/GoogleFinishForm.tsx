@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Checkbox, Field, InlineError, Input } from '@ai-review/ui';
-import { fieldError, useFormSubmit } from './use-form-submit';
+import { fieldError, useFormSubmit } from '../shared/forms/use-form-submit';
 
 interface PendingGoogleAccount {
   flowId: string;

@@ -14,19 +14,16 @@ const mocks = vi.hoisted(() => ({
   tx: { update: vi.fn() },
 }));
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/lib/infra/db', () => ({
   db: () => ({
     select: () => ({ from: () => ({ where: () => ({ limit: mocks.lookup }) }) }),
     transaction: mocks.transaction,
   }),
 }));
-vi.mock('@/lib/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
-vi.mock('@/lib/auth-helpers', () => ({ passwordHasher: () => ({ hash: mocks.hash }) }));
-vi.mock('@/lib/session', () => ({ clearSessionCookie: mocks.clearCookie }));
-vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
-vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
-vi.mock('@/lib/request-body', async () => import('../../../../../../lib/request-body'));
-vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
+vi.mock('@/lib/http/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
+vi.mock('@/lib/auth/helpers', () => ({ passwordHasher: () => ({ hash: mocks.hash }) }));
+vi.mock('@/lib/auth/session', () => ({ clearSessionCookie: mocks.clearCookie }));
+vi.mock('@/lib/activity/recorder', () => ({ recordActivity: mocks.recordActivity }));
 vi.mock('@ai-review/core', () => ({
   hashToken: () => 'reset-token-digest',
   validatePasswordStrength: () => ({ ok: true }),

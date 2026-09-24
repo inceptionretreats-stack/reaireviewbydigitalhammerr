@@ -15,10 +15,10 @@ import {
   TOUCH_TARGET,
   cx,
 } from '@ai-review/ui';
-import { useFormSubmit } from '@/components/auth/use-form-submit';
-import { QrStandeePreview } from '@/components/qr/QrStandeePreview';
+import { useFormSubmit } from '@/components/shared/forms/use-form-submit';
+import { QrStandeePreview } from '@/components/shared/qr/QrStandeePreview';
 import { WizardShell } from './WizardShell';
-import { stepById, type BusinessLifecycle } from './steps';
+import { stepById, type BusinessLifecycle } from '@/lib/onboarding/steps';
 import {
   describeBlocker,
   previewDraft,
@@ -56,7 +56,7 @@ export interface FinishQrCode {
   label: string;
   scanUrl: string;
   /**
-   * The symbol itself, as a data URI, rendered by the server from lib/qr-image — the same encoder
+   * The symbol itself, as a data URI, rendered by the server from lib/qr/qr-image — the same encoder
    * the download endpoint uses. An owner who has just published should be able to see the thing
    * they came here for without opening a file first.
    */

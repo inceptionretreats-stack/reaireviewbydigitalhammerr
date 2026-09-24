@@ -7,16 +7,16 @@ import {
   validatePasswordStrength,
 } from '@ai-review/core';
 import { signupRequest } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { verifyCsrf } from '@/lib/csrf';
-import { passwordHasher, SHELL_CATEGORY, shellBusinessName } from '@/lib/auth-helpers';
-import { landingPathFor, sessionService, setSessionCookie } from '@/lib/session';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { recordActivity } from '@/lib/activity';
-import { isUniqueViolation, safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { passwordHasher, SHELL_CATEGORY, shellBusinessName } from '@/lib/auth/helpers';
+import { landingPathFor, sessionService, setSessionCookie } from '@/lib/auth/session';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { recordActivity } from '@/lib/activity/recorder';
+import { isUniqueViolation, safeError } from '@/lib/infra/safe-error';
 
 /**
  * POST /api/v1/auth/signup — AUTH-01.

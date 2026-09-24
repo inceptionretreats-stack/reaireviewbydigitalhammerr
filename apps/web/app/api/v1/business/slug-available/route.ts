@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SlugService, normalizeSlug, suggestSlugs, validateSlug } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { requireTenant } from '@/lib/require-tenant';
+import { db } from '@/lib/infra/db';
+import { requireTenant } from '@/lib/tenant/require-tenant';
 
 /**
  * GET /api/v1/business/slug-available?slug=... — drives the `slug available` / `slug unavailable`

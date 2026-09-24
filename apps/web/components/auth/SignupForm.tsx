@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Checkbox, Field, InlineError, Input } from '@ai-review/ui';
 import { GoogleSignIn } from './GoogleSignIn';
-import { fieldError, useFormSubmit } from './use-form-submit';
+import { fieldError, useFormSubmit } from '../shared/forms/use-form-submit';
 
 /**
  * AUTH-01. Five required inputs and the terms checkbox, with the states the screen spec lists:

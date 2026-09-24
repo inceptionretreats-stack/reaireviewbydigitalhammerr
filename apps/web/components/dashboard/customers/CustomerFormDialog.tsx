@@ -7,8 +7,8 @@ import {
   isObservedStatus,
   isOwnerSettableStatusValue,
   type CustomerStatus,
-} from '@/app/api/v1/customers/customer-status';
-import type { CustomerDto } from '@/app/api/v1/customers/repository';
+} from '@/lib/crm/customers/customer-status';
+import type { CustomerDto } from '@/lib/crm/customers/repository';
 import { patchCustomer, postCustomer, type CustomerInput } from './customer-api';
 import {
   OWNER_STATUS_OPTIONS,

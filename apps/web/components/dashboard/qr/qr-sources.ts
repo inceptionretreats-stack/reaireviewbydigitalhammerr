@@ -1,6 +1,6 @@
 import type { QrCode } from '@ai-review/db';
 import type { LifecycleStatus } from '@ai-review/ui';
-import { formatDate } from '../presentation';
+import { formatDate } from '@/lib/dashboard/presentation';
 
 /**
  * The data and rules QR-01 renders, separated from the components that render them.
@@ -91,7 +91,7 @@ export function describeQrStatus(status: QrStatus): QrStatusPresentation {
  * What a customer standing in front of this standee actually gets — the row's status *and* the
  * tenant's, because the row alone does not decide it.
  *
- * `loadPublicConfig` (apps/web/lib/public-business.ts) returns nothing unless `businesses.status`
+ * `loadPublicConfig` (apps/web/lib/customer/public-business.ts) returns nothing unless `businesses.status`
  * is ACTIVE, so for a SUSPENDED or CLOSED tenant `resolveByQrCode` answers BUSINESS_NOT_ACTIVE and
  * `/r/{code}` renders "This review page is not available at the moment." Telling those owners that
  * an enabled code "opens your review page" would be false, and would contradict the banner directly
@@ -218,7 +218,7 @@ export interface QrFailure {
 /**
  * Unpacks the error envelope from `23_API_Error_Codes.md`.
  *
- * This repeats what `components/auth/use-form-submit.ts` does internally because that hook posts
+ * This repeats what `components/shared/forms/use-form-submit.ts` does internally because that hook posts
  * and only posts — QR-01 renames with PATCH — and its unpacking is not exported. The duplication is
  * deliberate and small; folding both onto one helper belongs with a change to that module, which
  * another workstream owns.

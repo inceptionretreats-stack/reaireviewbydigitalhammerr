@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { PaymentAdminError, PaymentAdminService, type PaymentListRow } from '@ai-review/core';
 import type { AdminPaymentListQuery, AdminWebhookQuery } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { db } from '@/lib/db';
+import { apiError } from '@/lib/http/api-error';
+import { db } from '@/lib/infra/db';
 
 /** AMENDMENT-029 — the payment control service composed for the web app, and its error map. */
 export function paymentAdmin(): PaymentAdminService {

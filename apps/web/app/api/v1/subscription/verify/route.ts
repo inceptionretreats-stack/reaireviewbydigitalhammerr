@@ -3,12 +3,16 @@ import { checkoutVerifyRequest } from '@ai-review/contracts';
 import { analyticsEvents } from '@ai-review/db';
 import { CheckoutError, CheckoutService } from '@ai-review/core';
 import type { EventPayload } from '@ai-review/analytics';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant } from '@/lib/require-tenant';
-import { loadSubscriptionView, razorpayConfig, subscriptionToWire } from '@/lib/subscription';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import {
+  loadSubscriptionView,
+  razorpayConfig,
+  subscriptionToWire,
+} from '@/lib/billing/subscription';
+import { recordActivity } from '@/lib/activity/recorder';
 import { sendReceipt } from '@/lib/billing/receipt-mail';
 
 export const runtime = 'nodejs';

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { adminBusinessListQuery } from '@ai-review/contracts';
 import { Badge, Button, Card, Input, Select, Table, EmptyState } from '@ai-review/ui';
-import { db } from '@/lib/db';
+import { db } from '@/lib/infra/db';
 import { listBusinesses, type AdminBusinessRow } from '@/lib/admin/businesses';
 import { PlanBadge } from '@/components/admin/PlanBadge';
 import { adminDate } from '@/lib/admin/format';

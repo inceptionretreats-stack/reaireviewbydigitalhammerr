@@ -10,7 +10,7 @@ import { AppearanceCard } from './AppearanceCard';
 import { ProfilePreview, type PreviewSection } from './ProfilePreview';
 import { ReviewLocationCard } from './ReviewLocationCard';
 import { SectionRow } from './SectionRow';
-import { applyOrder, moveItem, resolveDragEnd, sameOrder } from './order';
+import { applyOrder, moveItem, resolveDragEnd, sameOrder } from '@/lib/profile/order';
 import {
   applyEdit,
   currentOf,
@@ -26,7 +26,7 @@ import {
   rendersPublicly,
   sectionTarget,
   type SectionType,
-} from './sections';
+} from '@/lib/profile/sections';
 
 /**
  * PROFILE-01 — `/app/profile`. The three states the screen spec requires are `editing`, `saved` and
@@ -483,7 +483,7 @@ export function ProfileEditor(props: ProfileEditorProps) {
           </div>
 
           {/*
-            Open page appears only once the business is live: `lib/public-business.ts` resolves only
+            Open page appears only once the business is live: `lib/customer/public-business.ts` resolves only
             an ACTIVE tenant, so before that the link would answer "unavailable" — the same rule the
             dashboard's PublicPageCard follows.
           */}

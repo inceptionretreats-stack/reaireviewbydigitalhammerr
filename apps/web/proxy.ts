@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { migrationMaintenanceResponse } from './lib/migration-maintenance';
+import { migrationMaintenanceResponse } from './lib/infra/migration-maintenance';
 
 /**
  * Mints the anonymous visitor token.
@@ -10,7 +10,7 @@ import { migrationMaintenanceResponse } from './lib/migration-maintenance';
  *
  * Uses Web Crypto. Next.js 16 Proxy runs in the Node.js runtime. Nothing here touches the
  * database; the session row is created lazily by
- * whichever request first needs it (see lib/anonymous-session.ts).
+ * whichever request first needs it (see lib/customer/anonymous-session.ts).
  *
  * Named proxy.ts per the Next.js 16 convention that replaces middleware.ts.
  */

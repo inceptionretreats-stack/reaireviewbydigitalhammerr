@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { EVENT_SPECS, isEventName, validateEvent } from '@ai-review/analytics';
 import { analyticsEvents } from '@ai-review/db';
-import { db } from '@/lib/db';
-import { resolveAnonymousSession } from '@/lib/anonymous-session';
-import { resolvePublicRef } from '@/lib/resolve-public-ref';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
+import { db } from '@/lib/infra/db';
+import { resolveAnonymousSession } from '@/lib/customer/anonymous-session';
+import { resolvePublicRef } from '@/lib/customer/resolve-public-ref';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
 
 /**
  * Public analytics ingestion.

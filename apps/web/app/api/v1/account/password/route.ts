@@ -2,18 +2,18 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '@ai-review/db';
 import { privacyHash, validatePasswordStrength } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant } from '@/lib/require-tenant';
-import { passwordHasher } from '@/lib/auth-helpers';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { sessionService, setSessionCookie } from '@/lib/session';
-import { parsePasswordChange } from '../schema';
-import { countOtherLiveSessions, reportableRevoked } from '../session-count';
-import { recordActivity } from '@/lib/activity';
-import { safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { passwordHasher } from '@/lib/auth/helpers';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { sessionService, setSessionCookie } from '@/lib/auth/session';
+import { parsePasswordChange } from '@/lib/account/schema';
+import { countOtherLiveSessions, reportableRevoked } from '@/lib/account/session-count';
+import { recordActivity } from '@/lib/activity/recorder';
+import { safeError } from '@/lib/infra/safe-error';
 
 /**
  * POST /api/v1/account/password — "Change password" on SET-01.

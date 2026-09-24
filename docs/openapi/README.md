@@ -69,7 +69,7 @@ Documented in the YAML where they affect a caller, and listed here because each 
 correctness question rather than a contract question. None was fixed — this module owns only these
 two files.
 
-- **`dh_anon` is never minted.** `apps/web/lib/anonymous-session.ts` only reads the cookie and names
+- **`dh_anon` is never minted.** `apps/web/lib/customer/anonymous-session.ts` only reads the cookie and names
   `middleware.ts` as the writer, because an RSC cannot set cookies. No `middleware.ts` exists in the
   tree. Until one does, every public request arrives without a session, which silently disables
   public rate limiting on generate and feedback (AC-032), regeneration history for the similarity
@@ -99,7 +99,7 @@ two files.
 - **`POST /business/publish` can return a non-envelope 500.** If `reserveQrCode` exhausts its five
   collision retries it throws, and the framework's error page is the body — not the `Error` shape
   every other failure returns.
-- **`PAYMENT_ALREADY_PROCESSED` is missing from `ERROR_STATUS`** in `apps/web/lib/api-error.ts`
+- **`PAYMENT_ALREADY_PROCESSED` is missing from `ERROR_STATUS`** in `apps/web/lib/http/api-error.ts`
   although `docs/spec/23_API_Error_Codes.md` lists it (at `200`, which is itself unusual for that
   table). An unmapped code falls through to `500`, so whoever builds the Razorpay webhook needs to
   handle that case explicitly rather than passing the code to `apiError`.

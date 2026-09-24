@@ -3,11 +3,11 @@ import { eq } from 'drizzle-orm';
 import { businesses } from '@ai-review/db';
 import { SlugService } from '@ai-review/core';
 import { businessIdentityRequest } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant, type AuthenticatedContext } from '@/lib/tenant/require-tenant';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * GET/PATCH /api/v1/business — ONB-01 and the identity half of PROFILE-01.

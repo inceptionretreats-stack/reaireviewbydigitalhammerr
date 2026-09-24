@@ -3,11 +3,11 @@ import {
   SubscriptionLifecycleService,
   type PendingReminder,
 } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { mailConfigured, mailer } from '@/lib/mailer';
-import { renewalReminderEmail, subscriptionExpiredEmail } from '@/lib/email-templates';
-import { formatMoney } from '@/components/dashboard/presentation';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { mailConfigured, mailer } from '@/lib/email/mailer';
+import { renewalReminderEmail, subscriptionExpiredEmail } from '@/lib/email/email-templates';
+import { formatMoney } from '@/lib/dashboard/presentation';
 import { PlatformSettingsService } from '@ai-review/core';
 
 /**

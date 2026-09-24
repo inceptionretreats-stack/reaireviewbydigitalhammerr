@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { sessionService } from '@/lib/session';
-import { countOtherLiveSessions, reportableRevoked } from '../../session-count';
-import { recordActivity } from '@/lib/activity';
-import { safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { sessionService } from '@/lib/auth/session';
+import { countOtherLiveSessions, reportableRevoked } from '@/lib/account/session-count';
+import { recordActivity } from '@/lib/activity/recorder';
+import { safeError } from '@/lib/infra/safe-error';
 
 /**
  * POST /api/v1/account/sessions/revoke-others — "Log out other sessions" on SET-01.

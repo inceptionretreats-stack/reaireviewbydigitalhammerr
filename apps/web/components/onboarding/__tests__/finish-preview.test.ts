@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHELL_CATEGORY, isShell } from '../../../lib/tenant-shell';
+import { SHELL_CATEGORY, isShell } from '@/lib/tenant/tenant-shell';
 import {
   asStringArray,
   buildPreviewSections,

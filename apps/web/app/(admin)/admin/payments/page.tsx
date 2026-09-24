@@ -8,9 +8,9 @@ import { PaymentsScreen, type PaymentRowView } from '@/components/admin/Payments
 import { PaymentFilters } from '@/components/admin/PaymentFilters';
 import { adminDateTime } from '@/lib/admin/format';
 import { paymentAdmin, paymentFilterFrom, webhookFilterFrom } from '@/lib/admin/payments';
-import { getSession } from '@/lib/session';
-import { razorpayConfig } from '@/lib/subscription';
-import { formatMoney } from '@/components/dashboard/presentation';
+import { getSession } from '@/lib/auth/session';
+import { razorpayConfig } from '@/lib/billing/subscription';
+import { formatMoney } from '@/lib/dashboard/presentation';
 
 export const metadata: Metadata = { title: 'Payments | Ai Review admin' };
 export const dynamic = 'force-dynamic';

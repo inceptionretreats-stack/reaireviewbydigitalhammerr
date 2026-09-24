@@ -109,7 +109,7 @@ test.describe('business dashboard', () => {
         // already carries the brand and the Menu toggle, and the top bar's only control
         // (Sign out) moves into that menu, so rendering both would duplicate the header.
         // See the `@media (max-width: 1023px)` rule in
-        // apps/web/components/dashboard/VendorWorkspace.module.css, and
+        // apps/web/components/dashboard/shell/VendorWorkspace.module.css, and
         // e2e/vendor-mobile-responsive.spec.ts, which asserts the same rule from 320px.
         //
         // The unconditional assertion this replaces dates from the initial commit and was

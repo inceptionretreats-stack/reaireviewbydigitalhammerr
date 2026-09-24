@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { adminPaymentAction } from '@ai-review/contracts';
 import { AuditReasonRequiredError } from '@ai-review/core';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { paymentAdmin, paymentErrorResponse } from '@/lib/admin/payments';
 import { sendReceipt } from '@/lib/billing/receipt-mail';
-import { razorpayClient, razorpayConfig } from '@/lib/subscription';
+import { razorpayClient, razorpayConfig } from '@/lib/billing/subscription';
 
 export const runtime = 'nodejs';
 

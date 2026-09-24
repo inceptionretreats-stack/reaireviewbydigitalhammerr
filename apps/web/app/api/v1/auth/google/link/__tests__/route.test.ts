@@ -6,20 +6,22 @@ const mocks = vi.hoisted(() => ({
   database: vi.fn(),
 }));
 
-vi.mock('@/lib/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
-vi.mock('@/lib/api-error', async () => import('../../../../../../../lib/api-error'));
-vi.mock('@/lib/request-body', async () => import('../../../../../../../lib/request-body'));
-vi.mock('@/lib/env', () => ({ env: () => ({ HASH_PEPPER: 'test-pepper' }) }));
-vi.mock('@/lib/google-auth', () => ({
+vi.mock('@/lib/http/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
+vi.mock('@/lib/infra/env', () => ({ env: () => ({ HASH_PEPPER: 'test-pepper' }) }));
+vi.mock('@/lib/auth/google-auth', () => ({
   readGooglePending: mocks.pending,
   clearGooglePending: vi.fn(),
 }));
-vi.mock('@/lib/db', () => ({ db: mocks.database }));
-vi.mock('@/lib/auth-helpers', () => ({ passwordHasher: vi.fn() }));
-vi.mock('@/lib/google-auth-session', () => ({ signInGoogleVendor: vi.fn() }));
-vi.mock('@/lib/rate-limit', () => ({ clientIp: vi.fn(), rateLimiter: vi.fn(), isDenied: vi.fn() }));
-vi.mock('@/lib/activity', () => ({ recordActivity: vi.fn() }));
-vi.mock('@/lib/safe-error', () => ({ isUniqueViolation: vi.fn(), safeError: vi.fn() }));
+vi.mock('@/lib/infra/db', () => ({ db: mocks.database }));
+vi.mock('@/lib/auth/helpers', () => ({ passwordHasher: vi.fn() }));
+vi.mock('@/lib/auth/google-auth-session', () => ({ signInGoogleVendor: vi.fn() }));
+vi.mock('@/lib/http/rate-limit', () => ({
+  clientIp: vi.fn(),
+  rateLimiter: vi.fn(),
+  isDenied: vi.fn(),
+}));
+vi.mock('@/lib/activity/recorder', () => ({ recordActivity: vi.fn() }));
+vi.mock('@/lib/infra/safe-error', () => ({ isUniqueViolation: vi.fn(), safeError: vi.fn() }));
 
 import { POST } from '../route';
 

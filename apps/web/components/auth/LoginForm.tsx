@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { Button, Checkbox, Field, InlineError, Input } from '@ai-review/ui';
 import { GoogleSignIn } from './GoogleSignIn';
-import { useFormSubmit } from './use-form-submit';
+import { useFormSubmit } from '../shared/forms/use-form-submit';
 
 /**
  * AUTH-02. States from the screen spec: default, loading, invalid credentials, locked/rate

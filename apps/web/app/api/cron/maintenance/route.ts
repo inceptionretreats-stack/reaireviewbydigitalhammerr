@@ -1,5 +1,5 @@
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
 import { runMaintenance } from '@/lib/cron/maintenance';
 import { PostgresMaintenanceStore } from '@/lib/cron/maintenance-store';
 import { handleMaintenanceRequest } from '@/lib/cron/maintenance-handler';

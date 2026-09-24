@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Field, InlineError, Input } from '@ai-review/ui';
-import { useFormSubmit } from './use-form-submit';
+import { useFormSubmit } from '../shared/forms/use-form-submit';
 
 /**
  * AMENDMENT-027 — the second factor after the password.

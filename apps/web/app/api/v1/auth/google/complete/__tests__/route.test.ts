@@ -10,28 +10,25 @@ const mocks = vi.hoisted(() => ({
   inserts: [] as unknown[],
 }));
 
-vi.mock('@/lib/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
-vi.mock('@/lib/api-error', async () => import('../../../../../../../lib/api-error'));
-vi.mock('@/lib/request-body', async () => import('../../../../../../../lib/request-body'));
-vi.mock('@/lib/safe-error', async () => import('../../../../../../../lib/safe-error'));
-vi.mock('@/lib/google-auth', () => ({
+vi.mock('@/lib/http/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
+vi.mock('@/lib/auth/google-auth', () => ({
   readGooglePending: mocks.pending,
   clearGooglePending: mocks.clear,
 }));
-vi.mock('@/lib/google-auth-session', () => ({ signInGoogleVendor: mocks.signIn }));
-vi.mock('@/lib/auth-helpers', () => ({
+vi.mock('@/lib/auth/google-auth-session', () => ({ signInGoogleVendor: mocks.signIn }));
+vi.mock('@/lib/auth/helpers', () => ({
   SHELL_CATEGORY: 'OTHER',
   shellBusinessName: (name: string) => `${name}'s business`,
 }));
-vi.mock('@/lib/env', () => ({ env: () => ({ DEFAULT_TIMEZONE: 'Asia/Kolkata' }) }));
-vi.mock('@/lib/activity', () => ({ recordActivity: vi.fn() }));
+vi.mock('@/lib/infra/env', () => ({ env: () => ({ DEFAULT_TIMEZONE: 'Asia/Kolkata' }) }));
+vi.mock('@/lib/activity/recorder', () => ({ recordActivity: vi.fn() }));
 vi.mock('@ai-review/core', () => ({
   normalizePhone: () => ({ ok: true, e164: '+919000000000' }),
   PlatformSettingsService: class {
     values = mocks.settings;
   },
 }));
-vi.mock('@/lib/db', () => ({ db: () => ({ transaction: mocks.transaction }) }));
+vi.mock('@/lib/infra/db', () => ({ db: () => ({ transaction: mocks.transaction }) }));
 
 import { POST } from '../route';
 

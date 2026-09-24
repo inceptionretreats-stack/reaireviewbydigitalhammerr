@@ -3,7 +3,7 @@ import {
   CUSTOMER_STATUS_ORDER,
   OWNER_SETTABLE_STATUSES,
   isObservedStatus,
-} from '../../../../app/api/v1/customers/customer-status';
+} from '@/lib/crm/customers/customer-status';
 import {
   OWNER_STATUS_OPTIONS,
   STATUS_LEGEND,

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { adminMfaReset } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { mfaService } from '@/lib/mfa';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { mfaService } from '@/lib/auth/mfa';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { teamService } from '@/lib/admin/team';
 
 export const runtime = 'nodejs';

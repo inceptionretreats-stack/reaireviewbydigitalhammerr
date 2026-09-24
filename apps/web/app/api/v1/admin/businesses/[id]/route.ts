@@ -9,10 +9,10 @@ import {
   SubscriptionService,
 } from '@ai-review/core';
 import { analyticsEvents } from '@ai-review/db';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireAdmin } from '@/lib/require-admin';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { getBusinessDetail } from '@/lib/admin/businesses';
 import { sendOwnerPasswordReset, warnOwner } from '@/lib/admin/owner-actions';
 

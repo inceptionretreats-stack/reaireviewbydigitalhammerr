@@ -3,13 +3,13 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 import { submitFeedbackRequest } from '@ai-review/contracts';
 import { analyticsEvents, privateFeedback } from '@ai-review/db';
 import { normalizePhone } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { resolveAnonymousSession } from '@/lib/anonymous-session';
-import { resolvePublicRef } from '@/lib/resolve-public-ref';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { env } from '@/lib/env';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { resolveAnonymousSession } from '@/lib/customer/anonymous-session';
+import { resolvePublicRef } from '@/lib/customer/resolve-public-ref';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { env } from '@/lib/infra/env';
 
 /**
  * POST /api/v1/public/feedback — FB-01, private feedback.

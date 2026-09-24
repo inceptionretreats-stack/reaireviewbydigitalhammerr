@@ -1,7 +1,11 @@
 import Link from 'next/link';
 import { EmptyState } from '@ai-review/ui';
-import { DEFAULT_FEEDBACK_FILTERS, feedbackScreenHref, type FeedbackFilters } from './filters';
-import type { PublicFormState } from './row';
+import {
+  DEFAULT_FEEDBACK_FILTERS,
+  feedbackScreenHref,
+  type FeedbackFilters,
+} from '@/lib/feedback/filters';
+import type { PublicFormState } from '@/lib/feedback/row';
 import { PRIMARY_LINK, SECONDARY_LINK } from '../link-styles';
 
 /**

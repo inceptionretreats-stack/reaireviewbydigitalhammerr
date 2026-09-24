@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Field, InlineError, Input, Modal, Textarea } from '@ai-review/ui';
-import { sendJson } from '@/components/dashboard/ai/send-json';
+import { sendJson } from '@/components/shared/forms/send-json';
 
 /**
  * AMENDMENT-030 — the admin's answers to an abuse signal: warn (an email), suspend Ai,

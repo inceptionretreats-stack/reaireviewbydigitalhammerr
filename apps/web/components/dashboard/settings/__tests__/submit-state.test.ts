@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SubmitState } from '../../../auth/use-form-submit';
+import type { SubmitState } from '@/components/shared/forms/use-form-submit';
 import { readBoolean, readCount, unattachedFailure } from '../use-settings-submit';
 
 /**

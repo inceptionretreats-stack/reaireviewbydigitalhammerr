@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { readComposeBody } from '../compose-request';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { readComposeBody } from '@/lib/crm/review-requests/compose-request';
 import {
   DEFAULT_TEMPLATE_TEXT,
   RENDERED_MESSAGE_MAX,
@@ -11,13 +11,13 @@ import {
   buildTrackedRequestUrl,
   renderTemplate,
   unknownVariables,
-} from '../template';
+} from '@/lib/crm/review-requests/template';
 import {
   canonicalReviewUrlFor,
   loadCustomer,
   loadTenantMessagingContext,
   readDefaultTemplate,
-} from '../service';
+} from '@/lib/crm/review-requests/service';
 
 /**
  * POST /api/v1/review-requests/preview — Flow F steps 3 and 4, without persisting anything.

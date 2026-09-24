@@ -2,14 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { qrCodes } from '@ai-review/db';
 import { buildQrUrl } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
-import { parseQrSourcePatch, isQrSourceId, toQrSourceWire } from '../qr-source';
-import { qrDataUri } from '@/lib/qr-image';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireActiveTenant, requireTenant } from '@/lib/tenant/require-tenant';
+import { parseQrSourcePatch, isQrSourceId, toQrSourceWire } from '@/lib/qr/qr-source';
+import { qrDataUri } from '@/lib/qr/qr-image';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * PATCH /api/v1/qr/{id} — the Rename, Disable and Enable actions of QR-01.
@@ -19,7 +19,7 @@ import { recordActivity } from '@/lib/activity';
  * There is no DELETE. QR-01-02 wants a retired standee to resolve to a controlled, business-safe
  * state, because the standee is still on a counter somewhere and a customer is standing in front
  * of it right now; a deleted row would answer 404. Disabling is the retirement path, and
- * `resolveByQrCode` in `lib/public-business.ts` is what turns it into that controlled page.
+ * `resolveByQrCode` in `lib/customer/public-business.ts` is what turns it into that controlled page.
  *
  * It also cannot change `code`. QR-01-01 makes the opaque code immutable for the life of the row —
  * that single indirection (ADR-002, D-026) is what lets the label, the Google URL, the web address

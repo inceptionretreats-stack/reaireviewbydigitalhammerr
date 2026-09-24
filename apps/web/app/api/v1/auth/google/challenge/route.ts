@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { apiError } from '@/lib/api-error';
-import { env } from '@/lib/env';
-import { issueGoogleChallenge } from '@/lib/google-auth';
+import { apiError } from '@/lib/http/api-error';
+import { env } from '@/lib/infra/env';
+import { issueGoogleChallenge } from '@/lib/auth/google-auth';
 
 export const dynamic = 'force-dynamic';
 

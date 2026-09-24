@@ -1,12 +1,12 @@
 import type { NextResponse } from 'next/server';
 import type { Database } from '@ai-review/db';
-import { apiError } from '@/lib/api-error';
-import { loadBusinessTimeZone } from '@/components/dashboard/analytics/queries';
+import { apiError } from '@/lib/http/api-error';
+import { loadBusinessTimeZone } from '@/lib/analytics/queries';
 import {
   describeRangeRejection,
   resolveAnalyticsRange,
   type AnalyticsRange,
-} from '@/components/dashboard/analytics/range';
+} from '@/lib/analytics/range';
 
 /**
  * The `?from=&to=` half of all three analytics endpoints, in one place.

@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant } from '@/lib/require-tenant';
-import { readCustomerBody } from './body';
-import { parseListQuery } from './query';
-import { createCustomer, loadCustomerPage, toCustomerDto } from './repository';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { readCustomerBody } from '@/lib/crm/customers/body';
+import { parseListQuery } from '@/lib/crm/customers/query';
+import { createCustomer, loadCustomerPage, toCustomerDto } from '@/lib/crm/customers/repository';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * GET/POST /api/v1/customers — the `list`, `empty` and `form` states of CRM-01.

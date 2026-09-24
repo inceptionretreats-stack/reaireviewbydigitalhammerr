@@ -1,4 +1,4 @@
-import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import type { SubmitFailure } from '@/components/shared/forms/use-form-submit';
 
 /**
  * One JSON mutation, with the error envelope of 23_API_Error_Codes.md unpacked.

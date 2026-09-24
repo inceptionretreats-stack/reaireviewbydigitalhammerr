@@ -11,30 +11,27 @@ const mocks = vi.hoisted(() => ({
   signupGate: vi.fn(),
 }));
 
-vi.mock('@/lib/db', () => ({ db: () => ({ transaction: mocks.transaction }) }));
-vi.mock('@/lib/env', () => ({
+vi.mock('@/lib/infra/db', () => ({ db: () => ({ transaction: mocks.transaction }) }));
+vi.mock('@/lib/infra/env', () => ({
   env: () => ({ HASH_PEPPER: 'test-pepper', DEFAULT_TIMEZONE: 'Asia/Kolkata' }),
 }));
-vi.mock('@/lib/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
-vi.mock('@/lib/auth-helpers', () => ({
+vi.mock('@/lib/http/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
+vi.mock('@/lib/auth/helpers', () => ({
   passwordHasher: () => ({ hash: mocks.hash }),
   SHELL_CATEGORY: 'OTHER',
   shellBusinessName: () => 'Test business',
 }));
-vi.mock('@/lib/session', () => ({
+vi.mock('@/lib/auth/session', () => ({
   sessionService: () => ({ create: mocks.createSession }),
   setSessionCookie: mocks.setCookie,
   landingPathFor: () => '/onboarding/business',
 }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/http/rate-limit', () => ({
   clientIp: () => '',
   isDenied: (decision: { allowed: boolean }) => !decision.allowed,
   rateLimiter: () => ({ signup: mocks.signupGate }),
 }));
-vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
-vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
-vi.mock('@/lib/request-body', async () => import('../../../../../../lib/request-body'));
-vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
+vi.mock('@/lib/activity/recorder', () => ({ recordActivity: mocks.recordActivity }));
 vi.mock('@ai-review/core', () => ({
   normalizePhone: () => ({ ok: true, e164: '+919000000000' }),
   validatePasswordStrength: () => ({ ok: true }),

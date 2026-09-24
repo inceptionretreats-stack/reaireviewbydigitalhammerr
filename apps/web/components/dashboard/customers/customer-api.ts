@@ -1,11 +1,11 @@
-import { isCustomerStatus, type OwnerSettableStatus } from '@/app/api/v1/customers/customer-status';
-import type { CustomerDto, CustomerListPage } from '@/app/api/v1/customers/repository';
-import type { SubmitFailure } from '../../auth/use-form-submit';
+import { isCustomerStatus, type OwnerSettableStatus } from '@/lib/crm/customers/customer-status';
+import type { CustomerDto, CustomerListPage } from '@/lib/crm/customers/repository';
+import type { SubmitFailure } from '@/components/shared/forms/use-form-submit';
 
 /**
  * The browser half of the `/api/v1/customers` contract.
  *
- * `components/auth/use-form-submit.ts` is not reused for the calls themselves: it only issues POSTs,
+ * `components/shared/forms/use-form-submit.ts` is not reused for the calls themselves: it only issues POSTs,
  * and this screen also has to PATCH, DELETE and GET. Its `SubmitFailure` type *is* imported rather
  * than redeclared, so the one error envelope in `23_API_Error_Codes.md` still has one shape in the
  * browser.

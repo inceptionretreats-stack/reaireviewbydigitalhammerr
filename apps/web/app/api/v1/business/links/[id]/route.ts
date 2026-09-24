@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { businessLinks, businesses } from '@ai-review/db';
 import { normalizePhone } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant, type AuthenticatedContext } from '@/lib/tenant/require-tenant';
 import {
   SECTION_LABEL_MAX,
   hasStoredTarget,
@@ -13,8 +13,8 @@ import {
   isSectionType,
   sectionTarget,
   type SectionType,
-} from '@/components/dashboard/profile/sections';
-import { recordActivity } from '@/lib/activity';
+} from '@/lib/profile/sections';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * PATCH/DELETE /api/v1/business/links/{id} — the per-section half of PROFILE-01.

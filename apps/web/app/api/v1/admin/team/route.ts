@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { adminTeamInvite } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { env } from '@/lib/env';
-import { adminInviteEmail } from '@/lib/email-templates';
-import { mailer } from '@/lib/mailer';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { env } from '@/lib/infra/env';
+import { adminInviteEmail } from '@/lib/email/email-templates';
+import { mailer } from '@/lib/email/mailer';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { inviteUrl, teamErrorResponse, teamService } from '@/lib/admin/team';
 
 export const runtime = 'nodejs';

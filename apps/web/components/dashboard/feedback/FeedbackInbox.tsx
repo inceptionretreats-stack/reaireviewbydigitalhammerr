@@ -11,7 +11,7 @@ import {
   type AssignableFeedbackStatus,
   type FeedbackFilters,
   type FeedbackStatus,
-} from './filters';
+} from '@/lib/feedback/filters';
 import {
   COUNT_KEY,
   inboxBody,
@@ -22,7 +22,7 @@ import {
   type FeedbackCounts,
   type FeedbackRow,
   type PublicFormState,
-} from './row';
+} from '@/lib/feedback/row';
 import { FeedbackDetail } from './FeedbackDetail';
 import { NoFeedbackYet, NoMatchingFeedback } from './FeedbackEmptyStates';
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button, Field, InlineError, Modal, Textarea } from '@ai-review/ui';
-import { sendJson } from '@/components/dashboard/ai/send-json';
+import { sendJson } from '@/components/shared/forms/send-json';
 
 /** Owner & account tab: the forgot-password email, sent by an admin, with a reason on record. */
 export function SendPasswordResetButton({

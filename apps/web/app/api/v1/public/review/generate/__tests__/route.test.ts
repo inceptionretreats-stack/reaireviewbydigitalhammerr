@@ -18,18 +18,13 @@ const mocks = vi.hoisted(() => ({
   returning: vi.fn(),
 }));
 
-vi.mock('@/lib/db', () => ({ db: () => ({ insert: mocks.insert }) }));
-vi.mock('@/lib/env', () => ({ env: () => ({ HASH_PEPPER: 'test', AI_REQUEST_TIMEOUT_MS: 8000 }) }));
-vi.mock('@/lib/resolve-public-ref', () => ({ resolvePublicRef: mocks.resolve }));
-vi.mock('@/lib/anonymous-session', () => ({ resolveAnonymousSession: mocks.session }));
-vi.mock('@/lib/api-error', async () => import('../../../../../../../lib/api-error'));
-vi.mock('@/lib/request-body', async () => import('../../../../../../../lib/request-body'));
-vi.mock('@/lib/safe-error', async () => import('../../../../../../../lib/safe-error'));
-vi.mock(
-  '@/lib/customer-services',
-  async () => import('../../../../../../../lib/customer-services'),
-);
-vi.mock('@/lib/generation-service', () => ({
+vi.mock('@/lib/infra/db', () => ({ db: () => ({ insert: mocks.insert }) }));
+vi.mock('@/lib/infra/env', () => ({
+  env: () => ({ HASH_PEPPER: 'test', AI_REQUEST_TIMEOUT_MS: 8000 }),
+}));
+vi.mock('@/lib/customer/resolve-public-ref', () => ({ resolvePublicRef: mocks.resolve }));
+vi.mock('@/lib/customer/anonymous-session', () => ({ resolveAnonymousSession: mocks.session }));
+vi.mock('@/lib/ai/generation-service', () => ({
   loadAiControls: mocks.controls,
   loadGenerationContext: mocks.context,
   loadPlan: mocks.plan,
@@ -38,7 +33,7 @@ vi.mock('@/lib/generation-service', () => ({
   selectProvider: mocks.provider,
   buildGenerator: mocks.build,
 }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/http/rate-limit', () => ({
   clientIp: () => 'test-ip',
   isDenied: (decision: { allowed: boolean }) => !decision.allowed,
   rateLimiter: () => ({ publicGeneration: mocks.limit, businessThrottle: mocks.throttle }),

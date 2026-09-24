@@ -2,14 +2,14 @@
 
 import { useCallback, useState } from 'react';
 import { Button, Card, Field, InlineError, Select, TagInput, Textarea } from '@ai-review/ui';
-import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import type { SubmitFailure } from '@/components/shared/forms/use-form-submit';
 import {
   DRAFT_LANGUAGE_HINT,
   DRAFT_LANGUAGE_LABEL,
   DRAFT_LANGUAGE_OPTIONS,
   isDraftLanguage,
   type DraftLanguage,
-} from '@/lib/draft-language';
+} from '@/lib/ai/draft-language';
 import {
   SUMMARY_MAX,
   contextSignature,

@@ -3,20 +3,20 @@ import { asc, count, eq } from 'drizzle-orm';
 import { analyticsEvents, qrCodes } from '@ai-review/db';
 import type { EventPayload } from '@ai-review/analytics';
 import { buildQrUrl, generateQrCode } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { readJsonObject } from '@/lib/request-body';
-import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
-import { qrDataUri } from '@/lib/qr-image';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireActiveTenant, requireTenant } from '@/lib/tenant/require-tenant';
+import { qrDataUri } from '@/lib/qr/qr-image';
 import {
   MAX_SOURCES_PER_BUSINESS,
   parseQrSourceCreate,
   toQrSourceWire,
   type QrSourceCreate,
   type QrSourceRow,
-} from './qr-source';
-import { recordActivity } from '@/lib/activity';
+} from '@/lib/qr/qr-source';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * GET /api/v1/qr — the `list` state of QR-01.

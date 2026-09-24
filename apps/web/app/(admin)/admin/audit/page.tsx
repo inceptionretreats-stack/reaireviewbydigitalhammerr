@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { desc, eq, lt } from 'drizzle-orm';
 import { adminAuditLogs, businesses, users } from '@ai-review/db';
 import { Table } from '@ai-review/ui';
-import { db } from '@/lib/db';
+import { db } from '@/lib/infra/db';
 import { adminDateTime } from '@/lib/admin/format';
 
 export const metadata: Metadata = { title: 'Audit log | Ai Review admin' };

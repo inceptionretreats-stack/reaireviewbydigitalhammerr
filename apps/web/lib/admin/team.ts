@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { TeamError, TeamService } from '@ai-review/core';
-import { apiError } from '@/lib/api-error';
-import { passwordHasher } from '@/lib/auth-helpers';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
+import { apiError } from '@/lib/http/api-error';
+import { passwordHasher } from '@/lib/auth/helpers';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
 
 /** AMENDMENT-027 — the team service composed for the web app, and its error mapping. */
 export function teamService(): TeamService {

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Script from 'next/script';
 import { InlineError } from '@ai-review/ui';
 import { claimGoogleCredential, type GoogleSubmissionPhase } from './google-submission-guard';
-import { useFormSubmit } from './use-form-submit';
+import { useFormSubmit } from '../shared/forms/use-form-submit';
 
 interface GoogleIdentityApi {
   accounts: {

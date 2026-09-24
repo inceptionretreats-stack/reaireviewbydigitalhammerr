@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Field, InlineError, Input } from '@ai-review/ui';
-import { useFormSubmit } from './use-form-submit';
+import { useFormSubmit } from '../shared/forms/use-form-submit';
 
 /**
  * AUTH-03. States from the screen spec: default, sent, rate limited.

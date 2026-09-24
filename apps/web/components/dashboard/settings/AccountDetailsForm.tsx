@@ -3,14 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { Button, Card, Field, InlineError, Input } from '@ai-review/ui';
-import {
-  EMAIL_MAX,
-  MOBILE_MAX,
-  NAME_MAX,
-  NAME_MIN,
-  emailChanged,
-} from '@/app/api/v1/account/schema';
-import { fieldError } from '../../auth/use-form-submit';
+import { EMAIL_MAX, MOBILE_MAX, NAME_MAX, NAME_MIN, emailChanged } from '@/lib/account/schema';
+import { fieldError } from '@/components/shared/forms/use-form-submit';
 import { readBoolean, unattachedFailure, useSettingsSubmit } from './use-settings-submit';
 
 /**
@@ -26,7 +20,7 @@ import { readBoolean, unattachedFailure, useSettingsSubmit } from './use-setting
  * capitals does not demand a password. Asking only when it is needed matters: a screen that asks
  * for a password on every save teaches an owner to type it whenever something asks.
  *
- * The maxima come from the wire contract in `app/api/v1/account/schema.ts` rather than being
+ * The maxima come from the wire contract in `lib/account/schema.ts` rather than being
  * restated, so a field cannot let someone type past what the endpoint will accept.
  */
 

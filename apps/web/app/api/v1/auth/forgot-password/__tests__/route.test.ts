@@ -8,29 +8,26 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
 }));
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/lib/infra/db', () => ({
   db: () => ({
     select: () => ({ from: () => ({ where: () => ({ limit: mocks.lookup }) }) }),
     insert: () => ({ values: mocks.insert }),
   }),
 }));
-vi.mock('@/lib/env', () => ({
+vi.mock('@/lib/infra/env', () => ({
   env: () => ({ HASH_PEPPER: 'test-pepper', APP_BASE_URL: 'https://app.example' }),
 }));
-vi.mock('@/lib/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/http/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
+vi.mock('@/lib/http/rate-limit', () => ({
   clientIp: () => '',
   rateLimiter: () => ({ loginFailure: mocks.gate }),
   isDenied: (gate: { allowed: boolean }) => !gate.allowed,
 }));
-vi.mock('@/lib/mailer', () => ({
+vi.mock('@/lib/email/mailer', () => ({
   mailer: () => ({ send: mocks.send }),
   passwordResetEmail: () => ({ text: 'secret-reset-token' }),
 }));
-vi.mock('@/lib/activity', () => ({ recordActivity: vi.fn() }));
-vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
-vi.mock('@/lib/request-body', async () => import('../../../../../../lib/request-body'));
-vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
+vi.mock('@/lib/activity/recorder', () => ({ recordActivity: vi.fn() }));
 vi.mock('@ai-review/core', () => ({
   issueToken: () => ({ token: 'secret-reset-token', tokenHash: 'secret-token-hash' }),
   privacyHash: () => 'hashed-ip',

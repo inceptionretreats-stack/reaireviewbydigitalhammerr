@@ -1,6 +1,6 @@
 import { Card, StatusBadge } from '@ai-review/ui';
-import { describeBusinessStatus, formatDate } from '../presentation';
-import type { AccountSettings } from './account';
+import { describeBusinessStatus, formatDate } from '@/lib/dashboard/presentation';
+import type { AccountSettings } from '@/lib/account/settings';
 
 /**
  * SET-01's "Business status" field — informational, which is why this is not a client component.

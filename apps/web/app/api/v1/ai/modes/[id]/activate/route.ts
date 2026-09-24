@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { apiError } from '@/lib/api-error';
-import { db } from '@/lib/db';
-import { requireTenant } from '@/lib/require-tenant';
-import { isModeId, modeNotFound, refuseFrozenTenant } from '../../guards';
-import { activateMode, toWireMode } from '../../mode-service';
-import { recordActivity } from '@/lib/activity';
+import { apiError } from '@/lib/http/api-error';
+import { db } from '@/lib/infra/db';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { isModeId, modeNotFound, refuseFrozenTenant } from '@/lib/ai/modes/guards';
+import { activateMode, toWireMode } from '@/lib/ai/modes/mode-service';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * POST /api/v1/ai/modes/{id}/activate — the Activate action of AI-02.

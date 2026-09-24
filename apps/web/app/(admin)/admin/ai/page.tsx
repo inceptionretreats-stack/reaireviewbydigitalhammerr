@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
-import { getSession } from '@/lib/session';
+import { getSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { desc } from 'drizzle-orm';
 import { aiPromptVersions } from '@ai-review/db';
 import { Badge, Table } from '@ai-review/ui';
-import { db } from '@/lib/db';
+import { db } from '@/lib/infra/db';
 import { adminDateTime } from '@/lib/admin/format';
 
 export const metadata: Metadata = { title: 'Ai prompts | Ai Review admin' };

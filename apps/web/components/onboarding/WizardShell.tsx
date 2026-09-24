@@ -10,7 +10,7 @@ import {
   previousStep,
   stepIndex,
   type OnboardingStepId,
-} from './steps';
+} from '@/lib/onboarding/steps';
 
 /**
  * Chrome shared by all five onboarding screens.
