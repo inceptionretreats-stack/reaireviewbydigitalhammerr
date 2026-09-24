@@ -20,7 +20,7 @@ Component paths above are relative to `apps/web`.
 - The local seeded demo business was used for the QR and customer-editor views.
   Dashboard captures show no account credentials or personal customer information.
 - Review generation and public event requests were intercepted with local
-  fixtures, following `e2e/customer-review-visual.spec.ts`. The generated draft
+  fixtures, following `e2e/customer/customer-review-visual.spec.ts`. The generated draft
   was edited through the normal textarea, and its experience checkbox was checked
   through the normal control. The handoff image shows the application's actual
   successful-copy state, using a local clipboard stub and a local destination

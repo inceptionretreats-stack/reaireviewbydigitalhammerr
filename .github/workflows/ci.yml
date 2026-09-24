@@ -40,7 +40,7 @@ jobs:
 
       # analytics_events is partitioned by hand-written DDL that drizzle-kit cannot model, so
       # its snapshot describes an unpartitioned table. Guards against a generated migration
-      # silently dropping it. See scripts/check-migrations.mjs.
+      # silently dropping it. See scripts/db/check-migrations.mjs.
       - name: Migration guard
         run: pnpm check:migrations
 

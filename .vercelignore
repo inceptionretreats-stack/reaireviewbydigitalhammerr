@@ -9,6 +9,8 @@
 .vercel/
 .agents/
 skills-lock.json
+# Source artwork for scripts/media renders; nothing the deployed site serves.
+scripts/media/assets/
 .pgdata
 .dev
 .cache/

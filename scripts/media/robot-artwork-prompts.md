@@ -4,9 +4,9 @@ Both assets were produced with built-in image generation in **edit** mode. Origi
 
 ## Hero scene
 
-Edit target: `apps/web/public/marketing/hero-review-scene-v1.png`.
+Edit target: `scripts/media/assets/hero-review-scene-v1.png`.
 Style reference: `apps/web/public/marketing/ai-review-robot-mascot.png`.
-Saved asset: `apps/web/public/marketing/hero-review-scene-v2.png`.
+Saved asset: `scripts/media/assets/hero-review-scene-v2.png`.
 
 Final prompt:
 
@@ -14,8 +14,8 @@ Use case: precise-object-edit. Image 1 is the edit target: an existing square 12
 
 ## Account artwork
 
-Edit target: `apps/web/public/marketing/customer-reviewing-auth.png`.
-Style reference: the new `apps/web/public/marketing/hero-review-scene-v2.png`.
+Edit target: `scripts/media/assets/customer-reviewing-auth.png`.
+Style reference: the new `scripts/media/assets/hero-review-scene-v2.png`.
 Saved asset: `apps/web/public/marketing/robot-reviewing-auth-v1.png`.
 
 Final prompt:

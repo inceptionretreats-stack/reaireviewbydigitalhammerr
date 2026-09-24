@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test';
  * These tests need the dev server AND a migrated, seeded database:
  *   pnpm db:dev                                   (terminal 1)
  *   set -a && . ./.env && set +a
- *   pnpm db:migrate && pnpm exec tsx scripts/seed.ts --force
+ *   pnpm db:migrate && pnpm exec tsx scripts/db/seed.ts --force
  *   pnpm --filter @ai-review/web dev              (terminal 2)
  *   pnpm e2e
  */

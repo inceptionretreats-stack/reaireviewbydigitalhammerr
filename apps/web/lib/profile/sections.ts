@@ -169,7 +169,7 @@ export function hasStoredTarget(section: SectionRecord): boolean {
  * It answers "is there a target", not "does the target resolve": every value this screen and ONB-03
  * store is already normalised (https for a url, E.164 for a phone), so presence is the only
  * remaining question for anything they wrote. The one gap is a row written by the seed or a future
- * import — `scripts/seed.ts` validates neither scheme nor dialability — where a WhatsApp number
+ * import — `scripts/db/seed.ts` validates neither scheme nor dialability — where a WhatsApp number
  * that cannot be resolved to a country code is dropped publicly but still shown here.
  */
 export function rendersPublicly(
