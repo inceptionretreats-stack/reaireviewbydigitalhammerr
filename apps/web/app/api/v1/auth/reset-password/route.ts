@@ -16,7 +16,7 @@ import { safeError } from '@/lib/infra/safe-error';
  * POST /api/v1/auth/reset-password — AUTH-03-02.
  *
  * This endpoint is absent from 08_OpenAPI_v1.yaml, which defines /auth/forgot-password with no
- * counterpart to consume the token it issues. Recorded as OPEN-03 in docs/SPEC_AMENDMENTS.md;
+ * counterpart to consume the token it issues. Recorded as OPEN-03 in docs/decisions/spec-amendments.md;
  * AUTH-03-02 requires the token be single-use and expiring, which is unimplementable without it.
  *
  * "Single-use" is enforced by an atomic conditional UPDATE, not by a read followed by a write.

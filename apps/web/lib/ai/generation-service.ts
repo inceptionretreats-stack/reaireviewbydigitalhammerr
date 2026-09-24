@@ -141,16 +141,12 @@ export async function loadGenerationContext(
 }
 
 /**
- * The last few drafts from this session, newest first, for the variation gate.
- * The spec compares against at most three (regeneration algorithm step 1).
- */
-/**
  * The most recent draft this anonymous session already has, if any.
  *
- * The review page generates on arrival now, so a visitor sees words rather than a button. That
- * makes a page refresh a billable event unless something remembers what was already written —
- * and on the free plan a business has ten generations for its lifetime, so ten curious refreshes
- * would spend the whole allowance before anyone posted anything.
+ * The review page always opens on the service picker; a customer creates a draft explicitly, and a
+ * draft they already have is offered through "Return to draft". Remembering it is what keeps a
+ * refresh or a rescan from spending another generation — on the free plan a business has ten for
+ * its lifetime.
  *
  * Reusing the session's last draft is also what a customer expects: coming back to the page
  * should show the review they were part-way through editing, not silently replace it.

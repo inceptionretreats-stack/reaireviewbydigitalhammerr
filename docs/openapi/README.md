@@ -1,5 +1,10 @@
 # docs/openapi — the maintained V1 contract
 
+> **Status: partial.** `v1.yaml` covers a subset of the ~74 route handlers under `apps/web/app`, and
+> some statements below about features not yet built are dated. See
+> [routes](../architecture/routes.md) for the full route map, and the route handlers themselves for
+> current behaviour.
+
 `v1.yaml` in this folder describes the HTTP API that **exists**. `docs/spec/08_OpenAPI_v1.yaml` is a
 frozen delivered artefact and must not be edited.
 
@@ -9,7 +14,7 @@ The delivered YAML is a scope document wearing an API document's clothes. It nam
 endpoint, which is genuinely useful — but almost none of them carry a schema. Most operations
 declare a bare `200: {description: OK}`, `/auth/login` has no request body at all, and of the schemas
 it does define there are exactly three: `SignupRequest`, `ReviewGeneration` and `Error`. OPEN-04 in
-`docs/SPEC_AMENDMENTS.md` records the consequence: the pack's own required "Contract: OpenAPI
+`docs/decisions/spec-amendments.md` records the consequence: the pack's own required "Contract: OpenAPI
 response validation" test suite cannot be written against it. There is nothing to validate.
 
 Editing it was not an option — it is part of the frozen contract, and its list of paths is the

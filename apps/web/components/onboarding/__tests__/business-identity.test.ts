@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-// Type-only, so nothing from @ai-review/core (pg, ioredis, argon2) is loaded at runtime. It is here
+// Type-only, so nothing from @ai-review/core (pg, argon2) is loaded at runtime. It is here
 // to make the rejection-copy table below exhaustive: adding a code to core fails this file's
 // typecheck until ONB-01 has a sentence for it.
 import type { SlugRejection } from '@ai-review/core';

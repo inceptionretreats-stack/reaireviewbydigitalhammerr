@@ -7,7 +7,7 @@ import { containsPattern, resolvePage, totalPages, type ListQuery } from './quer
 /**
  * Every read and write of the `customers` table, in one place.
  *
- * It lives beside the endpoint rather than in `apps/web/lib` because two callers need exactly the
+ * One module rather than per-caller queries, because two callers need exactly the
  * same query — `GET /api/v1/customers` and the CRM-01 page, which renders the first page on the
  * server so the owner does not watch an empty table fill in after hydration. Copying a
  * tenant-scoped, soft-delete-excluding query into both is how one of them eventually loses the

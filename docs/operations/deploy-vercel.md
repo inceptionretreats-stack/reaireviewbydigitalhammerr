@@ -1,5 +1,10 @@
 # Deploying Ai Review to Vercel
 
+> **Status: partly historical.** This runbook dates from the Neon/Upstash setup of September 2026.
+> The database now runs on Supabase — see [database on Supabase](database-supabase.md). Its advice
+> to leave `NODE_ENV` unset so the seed and `create-admin` run against production is rejected; use
+> the [deployment checklist](deployment-checklist.md) for current rules.
+
 The web app (`apps/web`) runs on Vercel; Postgres and Redis come from the Vercel Marketplace
 (Neon and Upstash). Deploys are made from a developer machine with the Vercel CLI — nothing is
 pushed to a git host. This is the runbook that produced the first deployment
@@ -50,7 +55,7 @@ pushed to a git host. This is the runbook that produced the first deployment
    - `DATABASE_URL=<unpooled> HASH_PEPPER=<prod pepper> AI_DEFAULT_MODEL=gemini-3.5-flash-lite SEED_OWNER_PASSWORD=<random> pnpm seed`
      (leave `NODE_ENV` unset — the seed and `create-admin` refuse when their own process says
      production; the target being a production database is fine and intended)
-   - `DATABASE_URL=<unpooled> HASH_PEPPER=<prod pepper> node node_modules/tsx/dist/cli.mjs scripts/create-admin.mjs --email … --password … --name … --reason …`
+   - `DATABASE_URL=<unpooled> HASH_PEPPER=<prod pepper> node node_modules/tsx/dist/cli.mjs scripts/ops/create-admin.mjs --email … --password … --name … --reason …`
      The admin is made to enrol an authenticator app at first sign-in (AMENDMENT-027); add
      `APP_ENCRYPTION_KEY=<prod key> --totp-secret <base32>` only for break-glass. Further admins
      and support viewers are invited from `/admin/team`.

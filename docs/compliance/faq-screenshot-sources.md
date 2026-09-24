@@ -5,15 +5,16 @@ Captured on 2026-09-18 from this repository's rendered application at
 screenshots of the existing product interface, not third-party reference images,
 generated artwork, or reconstructed product mockups.
 
-| Asset                  | Dimensions  | Rendered source                                                                                                                                                        |
-| ---------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `qr-setup.webp`        | 1620 × 2199 | `/app/qr`, page heading and complete branded standee/download panel from `components/dashboard/qr/QrSourcesScreen.tsx` and `components/shared/qr/QrStandeePreview.tsx` |
-| `edit-review.webp`     | 1080 × 1714 | `/demo-south-cafe/review`, complete named customer editor from `components/customer/review/ReviewFlow.tsx`                                                             |
-| `google-handoff.webp`  | 1080 × 1782 | `/demo-south-cafe/review`, complete named customer editor in confirmed/copied state from `components/customer/review/ReviewFlow.tsx`                                   |
-| `change-location.webp` | 1500 × 1704 | Complete `components/dashboard/profile/ReviewLocationCard.tsx`, rendered with example props in a temporary local preview route                                         |
-| `plans.webp`           | 2640 × 1338 | `/#pricing`, complete final white-card `PricingPlanCards` from `components/marketing/pricing/PricingPlanCards.tsx`                                                     |
+| Asset                                                | Dimensions  | Rendered source                                                                                                                                                        | Status                                                                                                                                                                   |
+| ---------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/web/public/marketing/faq/qr-setup.webp`        | 1620 × 2199 | `/app/qr`, page heading and complete branded standee/download panel from `components/dashboard/qr/QrSourcesScreen.tsx` and `components/shared/qr/QrStandeePreview.tsx` | Removed 24 Sep 2026 (unused; in git history). The FAQ now uses the generated `faq/qr-counter-scene-v1.webp`; see [marketing concept assets](marketing-concept-assets.md) |
+| `apps/web/public/marketing/faq/edit-review.webp`     | 1080 × 1714 | `/demo-south-cafe/review`, complete named customer editor from `components/customer/review/ReviewFlow.tsx`                                                             | Live                                                                                                                                                                     |
+| `apps/web/public/marketing/faq/google-handoff.webp`  | 1080 × 1782 | `/demo-south-cafe/review`, complete named customer editor in confirmed/copied state from `components/customer/review/ReviewFlow.tsx`                                   | Live                                                                                                                                                                     |
+| `apps/web/public/marketing/faq/change-location.webp` | 1500 × 1704 | Complete `components/dashboard/profile/ReviewLocationCard.tsx`, rendered with example props in a temporary local preview route                                         | Live                                                                                                                                                                     |
+| `apps/web/public/marketing/faq/plans.webp`           | 2640 × 1338 | `/#pricing`, complete final white-card `PricingPlanCards` from `components/marketing/pricing/PricingPlanCards.tsx`                                                     | Live                                                                                                                                                                     |
 
-Component paths above are relative to `apps/web`.
+Component paths in the "Rendered source" column are relative to `apps/web` and give the component's
+current location; at capture time (18 September 2026) some of them sat in other folders.
 
 ## Capture conditions
 

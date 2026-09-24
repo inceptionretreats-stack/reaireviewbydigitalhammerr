@@ -10,7 +10,7 @@
  * This module is deliberately dependency-free: no database, no `@/lib/infra/env`, no `@ai-review/core`.
  * The route handlers render with it on the server, and the composer imports the variable names and
  * the limits to build its insert buttons and counters. Importing `@ai-review/core` into a client
- * component instead would pull pg, ioredis and @node-rs/argon2 into the browser bundle — the same
+ * component instead would pull pg and @node-rs/argon2 into the browser bundle — the same
  * reason `components/onboarding/BusinessStep.tsx` takes its slug rules as props.
  */
 

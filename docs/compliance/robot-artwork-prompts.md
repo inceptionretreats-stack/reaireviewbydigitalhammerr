@@ -1,11 +1,13 @@
 # Robot artwork generation inputs
 
-Both assets were produced with built-in image generation in **edit** mode. Original artwork is retained; the new assets are versioned siblings. The phone UI and six-step video animation remain code-rendered in `hero-review-walkthrough.html`.
+Both assets were produced with built-in image generation in **edit** mode. Original artwork is retained; the new assets are versioned siblings. The phone UI and six-step video animation remain code-rendered in `scripts/media/hero-review-walkthrough.html`.
+
+Source art for the renders (`hero-review-scene-*.png`, `customer-reviewing-auth.png`) lives in `scripts/media/assets/`, which is not deployed. Only the finished account artwork is served from `apps/web/public/marketing/`.
 
 ## Hero scene
 
 Edit target: `scripts/media/assets/hero-review-scene-v1.png`.
-Style reference: `apps/web/public/marketing/ai-review-robot-mascot.png`.
+Style reference: `apps/web/public/marketing/ai-review-robot-mascot.png` — removed 24 Sep 2026 (unused; in git history).
 Saved asset: `scripts/media/assets/hero-review-scene-v2.png`.
 
 Final prompt:

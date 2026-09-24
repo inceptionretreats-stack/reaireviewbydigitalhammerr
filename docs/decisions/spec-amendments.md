@@ -65,7 +65,7 @@ this business_, alongside the summary and context terms, and lives with them.
 carry one register example marked as tone-only, because an unmarked example becomes every first
 draft's opening. The stored 1.0.0 system prompt says "English draft" and is seeded verbatim from a
 frozen file, so a user-message line alone would be arguing with the system prompt. Prompt version
-**1.1.0** therefore lives in `scripts/prompt-versions/1.1.0.json` — 1.0.0 with exactly one sentence
+**1.1.0** therefore lives in `scripts/db/prompt-versions/1.1.0.json` — 1.0.0 with exactly one sentence
 changed, pinned byte-for-byte otherwise by the seed test — and the seed activates it and archives
 1.0.0 rather than editing it. `max_output_tokens` is **320** on 1.1.0, not 220: Roman-script Hindi
 tokenises worse than English, and a draft cut off at the cap is a non-retryable failure, not a
@@ -400,7 +400,7 @@ given equal weight — the four things it will not do: post on a customer's beha
 rating, claim a review was submitted, or oblige a customer to keep the merchant's terms. Those are
 D-028, D-009, AC-025 and D-025 restated as a promise to the reader rather than as internal rules.
 
-The page is public HTML, so `e2e/landing.spec.ts` extends the AC-006 sweep to it. A marketing page
+The page is public HTML, so `e2e/marketing/landing.spec.ts` extends the AC-006 sweep to it. A marketing page
 is the likeliest place for a decorative row of stars to appear the first time someone is asked to
 make the product look friendlier, and that would be a rating control on the public surface however
 it was intended.
@@ -421,7 +421,7 @@ in the owner's interface: the finish screen offered SVG and PNG buttons, and QR-
 a table of labels, codes and URLs. An owner could not see what they were about to print, and an
 owner with several standees could not tell which row was which without downloading each one.
 
-Both screens now render the symbol. `apps/web/lib/qr-image.ts` holds the one encoder configuration
+Both screens now render the symbol. `apps/web/lib/qr/qr-image.ts` holds the one encoder configuration
 and the download endpoint uses it too, so a preview and a printed file cannot drift into being
 different codes — a failure that would otherwise surface after a print run rather than on screen.
 The row carries the image as a data URI (`preview_src`, added to `QrSource` in the OpenAPI) rather
@@ -469,7 +469,7 @@ tenant being served stub drafts, not that a particular vendor is configured.
 
 `docs/spec/10_AI_Prompt_Templates.json` is frozen, so the model cannot be corrected there. The
 seed takes `AI_DEFAULT_MODEL` in preference to the template's `default_model`, and
-`scripts/set-ai-model.mjs` changes the ACTIVE version's model on a running system. That script is
+`scripts/ops/set-ai-model.mjs` changes the ACTIVE version's model on a running system. That script is
 also the first delivery of the rollback ADR-006 promises: until now the only writer of that table
 was a seed script reading a frozen file, so "roll back without a deploy" was not available to
 anyone.
@@ -491,10 +491,10 @@ with that set to `http://localhost:3000`, because the suite drives localhost fro
 machine — the one context in which the fault is invisible. Scanned from a phone, `localhost` is
 the phone, and the scan resolves to nothing.
 
-Two changes follow. `scripts/tunnel.mjs` puts the dev server behind a public HTTPS URL and writes
+Two changes follow. `scripts/dev/tunnel.mjs` puts the dev server behind a public HTTPS URL and writes
 it to `APP_BASE_URL`, which fixes every QR producer and the CSRF origin allowlist in one move;
 `allowedDevOrigins` is derived from the same value so Next's dev endpoints are not blocked at the
-new host. And `e2e/business-onboarding.spec.ts` now asserts the minted `resolve_url` equals
+new host. And `e2e/vendor/business-onboarding.spec.ts` now asserts the minted `resolve_url` equals
 `${APP_BASE_URL}/r/{code}` — compared against the configured value, never a literal, because a
 literal would have passed while the product was broken.
 
@@ -666,7 +666,7 @@ independent DNS-over-HTTPS resolvers are alternated until one returns the record
 the hostname resolved the way a phone would. A hostname that still fails is discarded for a fresh
 one rather than handed out.
 
-Two smaller corrections landed with it: the Redis-fallback warning in `apps/web/lib/rate-limit.ts`
+Two smaller corrections landed with it: the Redis-fallback warning in `apps/web/lib/http/rate-limit.ts`
 prints once per check per process instead of a full stack per request (it had buried the one
 line that mattered when generation failed), and `OPENAI_DEFAULT_MODEL` — read by nothing, since
 the live model is `ai_prompt_versions.model` — is no longer required at boot. The production
@@ -681,7 +681,7 @@ production mode also disables the landing-page demo QR and the console mail tran
 locale, which on Windows made the database `WIN1252`: no room for an emoji, a Devanagari letter,
 or a business name in any non-Latin script. The first draft carrying one failed to save —
 `22P05 untranslatable character` — and the customer saw a 500. Nothing had put such a character
-in a draft before. `scripts/dev-db.mjs` now initialises new clusters with `--encoding=UTF8` and
+in a draft before. `scripts/dev/dev-db.mjs` now initialises new clusters with `--encoding=UTF8` and
 the builtin `C.UTF-8` locale; `pnpm db:reencode` converts an existing one — a new UTF-8 database in
 the same cluster, migrations run against it, every row copied in foreign-key order with jsonb and
 identity columns handled and counts verified, then a rename swap with the old database kept as
@@ -901,7 +901,7 @@ Not spec changes; recorded so the choices are traceable.
   that no event name implies submission and no event property carries a star rating — the latter
   because D-009 means the customer is never asked for one.
 - **Production runs on Vercel (12 September 2026), not the persistent containers
-  14_DevOps_Deployment_Runbook.md describes.** `docs/DEPLOY_VERCEL.md` is the runbook. What that
+  14_DevOps_Deployment_Runbook.md describes.** `docs/operations/deploy-vercel.md` is the runbook. What that
   changes: the web app is serverless functions in `sin1`, so `DATABASE_POOL_MIN=0` /
   `DATABASE_POOL_MAX=5` per instance against Neon's pooled (pgbouncer, transaction-mode) URL —
   safe because nothing uses session-level advisory locks, LISTEN/NOTIFY or named prepared
@@ -912,7 +912,7 @@ Not spec changes; recorded so the choices are traceable.
   answers 202 and sends nothing. The Gemini routes declare `maxDuration = 60`. pnpm 11 fails an
   install over a build script that is neither allowed nor refused, which is how
   `@embedded-postgres/linux-x64` (the local dev database's Linux binary) came to be refused
-  explicitly in `pnpm-workspace.yaml`. The printable QR card wrote its text as SVG text in Arial, which the Linux host does not have, so the first production PNG had no business name; the card now outlines every glyph into paths from an embedded Inter face (`apps/web/lib/qr-card-text.ts`, `scripts/generate-qr-card-fonts.mjs`), the credit line is the Ai Review brand lockup on print and preview alike, and the unit test checks the painted pixels. The admin screens formatted dates in the server's clock —
+  explicitly in `pnpm-workspace.yaml`. The printable QR card wrote its text as SVG text in Arial, which the Linux host does not have, so the first production PNG had no business name; the card now outlines every glyph into paths from an embedded Inter face (`apps/web/lib/qr/qr-card-text.ts`, `scripts/codegen/generate-qr-card-fonts.mjs`), the credit line is the Ai Review brand lockup on print and preview alike, and the unit test checks the painted pixels. The admin screens formatted dates in the server's clock —
   IST on the laptop, UTC on Vercel — and now format in `DEFAULT_TIMEZONE`. Vercel's Hobby plan is
   licensed for non-commercial use; charging businesses on it needs Pro or another host.
 - **Analytics types are generated from the CSV.** `11_Analytics_Event_Taxonomy.csv` stays the

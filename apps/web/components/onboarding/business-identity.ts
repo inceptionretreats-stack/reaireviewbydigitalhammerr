@@ -10,7 +10,7 @@ import type { SubmitFailure } from '../shared/forms/use-form-submit';
  * component. Nothing here touches React.
  *
  * Nothing here may import from '@ai-review/core' either: that package has a single root entry point
- * that re-exports the whole domain, so a value import would pull pg, ioredis and @node-rs/argon2
+ * that re-exports the whole domain, so a value import would pull pg and @node-rs/argon2
  * into the browser bundle. Slug rules therefore arrive as numbers (BusinessStepRules), and
  * normalization stays on the server.
  */

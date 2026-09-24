@@ -62,7 +62,7 @@ jobs:
       postgres:
         # PostgreSQL 17 is the floor, not a preference: analytics_events declares GENERATED
         # ALWAYS AS IDENTITY on a PARTITION BY RANGE table, which earlier majors reject.
-        # Recorded as ADR-AMEND-C in docs/SPEC_AMENDMENTS.md.
+        # Recorded as ADR-AMEND-C in docs/decisions/spec-amendments.md.
         image: postgres:17
         env:
           POSTGRES_USER: postgres

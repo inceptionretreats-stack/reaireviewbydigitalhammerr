@@ -13,7 +13,7 @@ import { env } from '../infra/env';
  * has: it ties a scan to a generation to a copy to a Google open, which is what makes the
  * funnel in AN-01 possible at all.
  *
- * This module only ever READS the cookie. The token is minted by middleware.ts, because an
+ * This module only ever READS the cookie. The token is minted by `proxy.ts`, because an
  * RSC cannot write cookies — see the note there.
  *
  * 13_Security_Privacy_Compliance.md governs what is retained: never a raw IP, only a peppered
@@ -46,7 +46,7 @@ function sessionHash(token: string, businessId: string): string {
  * Resolves — creating on first use — the session for this browser and business.
  *
  * Returns null when no token cookie is present (a client that rejects cookies, or a request
- * that bypassed middleware). Callers must treat that as "no analytics", never as an error:
+ * that bypassed the proxy). Callers must treat that as "no analytics", never as an error:
  * AC-035 requires the customer journey to continue regardless.
  */
 export async function resolveAnonymousSession(

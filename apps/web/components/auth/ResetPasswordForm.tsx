@@ -9,7 +9,7 @@ import { fieldError, useFormSubmit } from '../shared/forms/use-form-submit';
  * The reset screen, which 03_Screen_Field_Button_Spec.md never defines.
  *
  * AUTH-03 issues a single-use expiring token but the pack specifies no screen to spend it on,
- * and no endpoint either — both recorded as OPEN-03 in docs/SPEC_AMENDMENTS.md. The states below
+ * and no endpoint either — both recorded as OPEN-03 in docs/decisions/spec-amendments.md. The states below
  * are therefore designed rather than transcribed: no token, invalid or expired token, validation
  * error, and success.
  *

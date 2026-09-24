@@ -5,7 +5,7 @@ import type { QrCode } from '@ai-review/db';
  * Request parsing and the wire shape shared by the QR-01 write endpoints — POST /api/v1/qr and
  * PATCH /api/v1/qr/{id}.
  *
- * It lives beside the handlers rather than in `apps/web/lib/` for two reasons. The first is that
+ * One shared module, for two reasons. The first is that
  * both handlers must answer with *the same* object the list endpoint returns, so QR-01 can drop
  * the response straight into its list without a second fetch; one definition is what keeps the
  * three in step. The second is testability: nothing here imports `next/server`, `@ai-review/db`'s
@@ -13,7 +13,7 @@ import type { QrCode } from '@ai-review/db';
  * rules can be exercised as plain functions instead of through a route.
  *
  * `resolve_url` is passed in rather than built here for the same reason — `buildQrUrl` comes from
- * `@ai-review/core`, whose root entry point pulls in pg, ioredis and argon2.
+ * `@ai-review/core`, whose root entry point pulls in pg and argon2.
  */
 
 /** `qr_status` (packages/db/src/schema/enums.ts), derived so it cannot drift from the column. */

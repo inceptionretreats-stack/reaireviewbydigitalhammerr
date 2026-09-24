@@ -22,12 +22,12 @@ The post-promotion smoke was unauthenticated: `/`, `/login`, and `/signup` retur
 
 Primary implementation surfaces:
 
-- `apps/web/components/dashboard/VendorWorkspace.module.css`
-- `apps/web/components/dashboard/DashboardNav.tsx`
+- `apps/web/components/dashboard/shell/VendorWorkspace.module.css`
+- `apps/web/components/dashboard/shell/DashboardNav.tsx`
 - Dashboard overview, metric, public-page, subscription, reporting, Ai-help, and QR-help components
 - `apps/web/components/onboarding/VendorOnboarding.module.css`
 - `apps/web/components/onboarding/WizardShell.tsx`
-- `apps/web/app/(app)/onboarding/layout.tsx`
+- `apps/web/app/(vendor)/onboarding/layout.tsx`
 
 ## Design tokens and responsive rules
 
@@ -92,15 +92,15 @@ The synthetic QA stack was stopped successfully after verification; its browser 
 
 ## Verification results
 
-| Check                                                 | Result                                                                                                                                                                            |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Full unit suite, `pnpm test`                          | **94 files, 1,534 tests passed**                                                                                                                                                  |
-| Vendor browser suite, `e2e/dashboard.spec.ts`, Chrome | **11 tests passed** after the Ai/QR disclosures and destructive-colour changes                                                                                                    |
-| Web TypeScript check                                  | Passed                                                                                                                                                                            |
-| Scoped ESLint, `apps/web packages e2e`                | Passed                                                                                                                                                                            |
-| `git diff --check`                                    | Passed                                                                                                                                                                            |
-| Final native-size geometry probe                      | Passed at 1487 × 1058 and 390 × 844; no overflow or page errors                                                                                                                   |
-| Full repository `pnpm lint`                           | Not clean: scans unrelated ignored `tmp` operational scripts and installed `.agents` skill examples, producing Node-global/rule errors. This is not reported as a full-lint pass. |
+| Check                                                        | Result                                                                                                                                                                            |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Full unit suite, `pnpm test`                                 | **94 files, 1,534 tests passed**                                                                                                                                                  |
+| Vendor browser suite, `e2e/vendor/dashboard.spec.ts`, Chrome | **11 tests passed** after the Ai/QR disclosures and destructive-colour changes                                                                                                    |
+| Web TypeScript check                                         | Passed                                                                                                                                                                            |
+| Scoped ESLint, `apps/web packages e2e`                       | Passed                                                                                                                                                                            |
+| `git diff --check`                                           | Passed                                                                                                                                                                            |
+| Final native-size geometry probe                             | Passed at 1487 × 1058 and 390 × 844; no overflow or page errors                                                                                                                   |
+| Full repository `pnpm lint`                                  | Not clean: scans unrelated ignored `tmp` operational scripts and installed `.agents` skill examples, producing Node-global/rule errors. This is not reported as a full-lint pass. |
 
 Post-promotion production smoke passed for the public pages and anonymous access boundaries recorded above. No live authenticated merchant flow was exercised.
 
@@ -125,7 +125,7 @@ Only synthetic sessions and test-fixture activity were created. **No live mercha
 
 Maintained regression files:
 
-- `e2e/dashboard.spec.ts`
-- `apps/web/components/dashboard/__tests__/nav-items.test.ts`
+- `e2e/vendor/dashboard.spec.ts`
+- `apps/web/components/dashboard/shell/__tests__/nav-items.test.ts`
 
 Local operational helpers under `tmp/vendor-ui-*` remain ignored convenience scripts because automatic cleanup was blocked. They are not deployed application code or deployment prerequisites. Do not run the unguarded seed/migration/e2e commands against a production-configured `.env` to reproduce this visual QA. Use an independently verified disposable local database and process-only overrides. No credentials are included in this document.

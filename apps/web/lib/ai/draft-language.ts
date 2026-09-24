@@ -7,7 +7,7 @@ import { DEFAULT_DRAFT_LANGUAGE, DRAFT_LANGUAGES, type DraftLanguage } from '@ai
  * on purpose: the Server Component pages that read the stored value need `isDraftLanguage`, the
  * client forms need the options, and a Server Component may not import a value from a client
  * module (the same constraint `toStringArray` documents in components/onboarding/ai-context.ts).
- * Nothing here may import `@ai-review/core` — that package drags pg, ioredis and argon2 into a
+ * Nothing here may import `@ai-review/core` — that package drags pg and argon2 into a
  * browser bundle.
  *
  * On the copy: it says what the setting changes — the language of the draft — and nothing else.

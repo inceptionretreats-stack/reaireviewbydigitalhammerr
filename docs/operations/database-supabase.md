@@ -1,5 +1,10 @@
 # Supabase database deployment
 
+> **Status: current runbook plus historical evidence.** This file mixes the live database runbook
+> with the record of the 23 September 2026 cutover from Neon. Table, row and migration counts are
+> snapshots from that cutover (and the 24 September addition), not current values; check
+> `packages/db/drizzle/meta/_journal.json` and the database itself before relying on them.
+
 ## Current additive migration — 24 September 2026
 
 The Digital Hammerr Ai Review Free project `vouqzekpujgzsplhqqor` remains the production

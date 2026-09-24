@@ -594,7 +594,7 @@ export function buildSeedPlan(input: SeedPlanInput): SeedPlanResult {
    * reads (ADR-006), so the model is a per-environment choice. The template default,
    * `gpt-5.6-luna`, is a real OpenAI model — verified against the live catalogue on
    * 11 September 2026 at $0.20/$1.20 per million tokens, the price the unit economics in
-   * SPEC_AMENDMENTS.md were built on. (An earlier revision of this comment called it fiction;
+   * docs/decisions/spec-amendments.md were built on. (An earlier revision of this comment called it fiction;
    * it was wrong.)
    *
    * Reasoning effort is blank when the model takes no such field. The Anthropic adapter ignores
