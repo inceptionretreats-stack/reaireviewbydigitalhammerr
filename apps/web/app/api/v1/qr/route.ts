@@ -15,7 +15,7 @@ import {
   toQrSourceWire,
   type QrSourceCreate,
   type QrSourceRow,
-} from '@/lib/qr/qr-source';
+} from '@/lib/qr/qr-source-api';
 import { recordActivity } from '@/lib/activity/recorder';
 
 /**

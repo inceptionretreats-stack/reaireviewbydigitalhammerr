@@ -172,7 +172,7 @@ Variable names and purposes: [environment variables](../operations/environment.m
 | What                       | Path                                                                                                      |
 | -------------------------- | --------------------------------------------------------------------------------------------------------- |
 | Session cookie and lookup  | `apps/web/lib/auth/session.ts`, `packages/core/src/auth/session.ts`                                       |
-| Password hashing and rules | `packages/core/src/auth/password.ts`, `apps/web/lib/auth/helpers.ts`                                      |
+| Password hashing and rules | `packages/core/src/auth/password.ts`, `apps/web/lib/auth/password-hasher.ts`                              |
 | Token and privacy hashing  | `packages/core/src/auth/tokens.ts`                                                                        |
 | Google sign-in             | `apps/web/lib/auth/google-auth.ts`, `apps/web/app/api/v1/auth/google/`                                    |
 | Tenant guard               | `apps/web/lib/tenant/require-tenant.ts`, `packages/core/src/tenant/guard.ts`                              |

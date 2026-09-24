@@ -23,8 +23,8 @@ import {
   type PromptVersionConfig,
   type QuotaReservation,
 } from '@ai-review/core';
-import { env } from '../infra/env';
-import { safeError } from '../infra/safe-error';
+import { env } from '@/lib/infra/env';
+import { safeError } from '@/lib/infra/safe-error';
 
 /**
  * Assembles a generation from stored configuration (Flow C, E4).

@@ -84,7 +84,7 @@ const DESCRIPTION_HINT =
  * because businesses.category is free text (varchar 100) that the prompt builder hands to the model
  * as-is (packages/core/src/ai/prompt-builder.ts), so the stored string has to read as natural
  * language rather than as a key. When platform_settings owns this list it should carry stable keys
- * plus display labels; see concerns.
+ * plus display labels.
  */
 const CATEGORY_LABELS: readonly string[] = [
   'Restaurant',

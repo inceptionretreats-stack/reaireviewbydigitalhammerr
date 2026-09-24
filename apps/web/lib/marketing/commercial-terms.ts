@@ -1,6 +1,6 @@
 import { PLATFORM_SETTING_DEFAULTS, PlatformSettingsService } from '@ai-review/core';
-import { db } from '../infra/db';
-import { safeError } from '../infra/safe-error';
+import { db } from '@/lib/infra/db';
+import { safeError } from '@/lib/infra/safe-error';
 
 /**
  * The commercial numbers the public pages advertise, read from platform_settings.

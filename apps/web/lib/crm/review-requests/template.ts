@@ -95,8 +95,8 @@ export const DEFAULT_TEMPLATE_TEXT =
 /**
  * The tracked link a prepared request carries (Flow F step 9, OPEN-02).
  *
- * Mirrors `buildQrUrl` in `@ai-review/core` and belongs beside it; it is here because
- * `packages/core` is outside this module's write scope. See the returned concerns.
+ * Mirrors `buildQrUrl` in `@ai-review/core` and would sit well beside it; moving it there is a
+ * small follow-up.
  *
  * The token is base64url from `issueToken`, so it contains no character that could add a path
  * segment — but it is still validated on the way back in (`isTrackingTokenFormat`) rather than

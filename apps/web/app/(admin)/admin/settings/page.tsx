@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
 import { PlatformSettingsService } from '@ai-review/core';
 import { db } from '@/lib/infra/db';
-import { PlatformSettingsForm } from '@/components/admin/PlatformSettingsForm';
+import { PlatformSettingsForm } from '@/components/admin/settings/PlatformSettingsForm';
 
 export const metadata: Metadata = { title: 'Platform settings | Ai Review admin' };
 export const dynamic = 'force-dynamic';

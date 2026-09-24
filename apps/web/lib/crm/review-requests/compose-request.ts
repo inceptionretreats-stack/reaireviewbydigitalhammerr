@@ -1,7 +1,7 @@
 import type { NextResponse } from 'next/server';
 import { apiError } from '@/lib/http/api-error';
 import { TEMPLATE_TEXT_MAX } from './template';
-import { isUuid } from './service';
+import { isUuid } from './repository';
 
 /**
  * The body `POST /review-requests/preview` and `POST /review-requests` share.
@@ -10,10 +10,10 @@ import { isUuid } from './service';
  * approves and a create that renders something else would make the preview worthless. Flow F steps
  * 3 and 4 are one loop — render, edit, render — and this is its entry point.
  *
- * Hand-rolled rather than a Zod DTO because `packages/contracts` has no CRM module yet and is
- * outside this module's write scope; the constraints below are taken from the columns the values
+ * Hand-rolled rather than a Zod DTO because `packages/contracts` has no CRM module yet; the
+ * constraints below are taken from the columns the values
  * land in (`review_request_templates.template_text` is varchar(1200)). A
- * `reviewRequestComposeRequest` schema belongs in contracts — see concerns.
+ * `reviewRequestComposeRequest` schema belongs in contracts.
  */
 
 export interface ComposeInput {

@@ -2,7 +2,7 @@ import { and, count, desc, eq, ilike, isNull, like, ne, or, type SQL } from 'dri
 import { customers, type Database } from '@ai-review/db';
 import type { ResolvedTenant } from '@ai-review/core';
 import { isCustomerStatus, isObservedStatus, type CustomerStatus } from './customer-status';
-import { containsPattern, resolvePage, totalPages, type ListQuery } from './query';
+import { containsPattern, resolvePage, totalPages, type ListQuery } from './list-params';
 
 /**
  * Every read and write of the `customers` table, in one place.

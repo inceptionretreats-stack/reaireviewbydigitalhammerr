@@ -10,7 +10,7 @@ import {
   findRequestByTrackingToken,
   recordLinkClick,
   recordLinkClickEvent,
-} from '@/lib/crm/review-requests/service';
+} from '@/lib/crm/review-requests/repository';
 
 /**
  * GET /r/req/{token} — the tracked-link resolver. This route is what OPEN-02 records as missing:
@@ -80,7 +80,7 @@ export async function GET(
    *
    * There is nothing to expire against today: `review_requests` has no expiry column, so a token
    * stays valid until the row is deleted (the customer or the business being removed cascades it
-   * away). Recorded as a product question rather than invented here — see concerns.
+   * away). Whether links should expire is an open product question (docs/known-issues.md).
    */
   if (!resolved) return redirectTo(baseUrl, '/');
 

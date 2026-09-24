@@ -2,9 +2,9 @@ import type { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { users } from '@ai-review/db';
 import { privacyHash } from '@ai-review/core';
-import { db } from '../infra/db';
-import { env } from '../infra/env';
-import { clientIp } from '../http/rate-limit';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { clientIp } from '@/lib/http/rate-limit';
 import { getSession, sessionService, setSessionCookie } from './session';
 
 /** Replace any browser session before signing in a Google-authenticated vendor. */

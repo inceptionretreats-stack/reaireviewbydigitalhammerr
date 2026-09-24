@@ -11,7 +11,7 @@ import {
   normalizeSlug,
 } from '@ai-review/core';
 import { BusinessStep } from '@/components/onboarding/BusinessStep';
-import { SHELL_CATEGORY, isShell } from '@/lib/auth/helpers';
+import { SHELL_CATEGORY, isShell } from '@/lib/tenant/tenant-shell';
 import { db } from '@/lib/infra/db';
 import { env } from '@/lib/infra/env';
 import { getSession } from '@/lib/auth/session';
@@ -64,7 +64,7 @@ export default async function Page() {
 
   /*
    * Signup writes placeholders into name and category, because both columns are NOT NULL and
-   * AUTH-01 collects neither (lib/auth/helpers.ts). The placeholder name is the *person's* full
+   * AUTH-01 collects neither (lib/tenant/tenant-shell.ts). The placeholder name is the *person's* full
    * name, which looks enough like a business name that offering it back as one invites an owner to
    * accept it — and their public page ends up titled after them. Both placeholders are therefore
    * presented as empty rather than as data.

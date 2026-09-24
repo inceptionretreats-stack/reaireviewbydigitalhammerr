@@ -7,7 +7,7 @@ import {
   reviewDestinations,
   type Database,
 } from '@ai-review/db';
-import { SHELL_CATEGORY } from '../auth/helpers';
+import { SHELL_CATEGORY } from '@/lib/tenant/tenant-shell';
 import type { OnboardingProgress } from '@/lib/onboarding/steps';
 
 /**

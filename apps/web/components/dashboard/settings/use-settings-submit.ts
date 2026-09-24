@@ -10,8 +10,7 @@ import type { SubmitFailure, SubmitState } from '@/components/shared/forms/use-f
  * it posts unconditionally and `PATCH /api/v1/account` is a PATCH. Its `SubmitFailure` and
  * `SubmitState` types are imported rather than restated so the two cannot disagree about the shape
  * of a failure, and `fieldError` from that module works on this state unchanged. What is duplicated
- * is the envelope unpacking, which should be folded back into one hook that takes a method — see
- * concerns; that file is outside this module's paths.
+ * is the envelope unpacking, which should be folded back into one hook that takes a method.
  *
  * The API returns a safe, user-facing `message` for every failure (23_API_Error_Codes.md), so the
  * string is displayed verbatim rather than remapped here, and `details.fields` marks which inputs

@@ -1,7 +1,7 @@
 import { customerRequest } from '@ai-review/contracts';
 import { normalizePhone } from '@ai-review/core';
 import { isOwnerSettableStatusValue, type OwnerSettableStatus } from './customer-status';
-import { describePhoneRejection } from './query';
+import { describePhoneRejection } from './list-params';
 import type { CustomerWriteValues } from './repository';
 
 /**
@@ -20,7 +20,7 @@ import type { CustomerWriteValues } from './repository';
  * `customerRequest.email` is `z.email()` with no maximum and `customers.email` is unbounded citext,
  * so nothing else stops a megabyte of "email" being stored. 254 is the longest address SMTP can
  * carry (RFC 5321), which makes anything longer undeliverable by definition. Enforced here and
- * raised as a contract gap rather than left as the endpoint's private opinion — see concerns.
+ * a gap the shared contract should also close.
  */
 export const EMAIL_MAX_LENGTH = 254;
 

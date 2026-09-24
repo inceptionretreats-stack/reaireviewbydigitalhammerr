@@ -11,7 +11,7 @@ import {
   readQrFailure,
   upsertSource,
   type QrSource,
-} from '../qr-sources';
+} from '../qr-screen-model';
 
 /**
  * The logic behind QR-01 that is worth pinning: list ordering under a rename, the defensive read of

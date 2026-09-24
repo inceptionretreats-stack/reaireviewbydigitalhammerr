@@ -23,7 +23,13 @@ import {
 } from '@/lib/ai/draft-language';
 import { CONTEXT_HELPER, DRAFT_FRAMING_NOTE, PREVIEW_FREE_NOTE } from './copy';
 import { sendJson } from '@/components/shared/forms/send-json';
-import { DRAFT_QUOTE } from './styles';
+
+/**
+ * The example draft on AI-01, quoted rather than shown in an editable box: here it is a sample of
+ * what a customer would be offered, and the box they actually type in belongs to the public flow.
+ */
+const DRAFT_QUOTE =
+  'rounded-card border border-line bg-surface p-3 text-sm whitespace-pre-line text-ink';
 
 /**
  * AI-01 — `/app/ai-review`, the form half. All four required states: `saved`, `dirty`,

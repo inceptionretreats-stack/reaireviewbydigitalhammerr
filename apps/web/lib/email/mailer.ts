@@ -1,4 +1,4 @@
-import { env } from '../infra/env';
+import { env } from '@/lib/infra/env';
 
 /**
  * Transactional email.

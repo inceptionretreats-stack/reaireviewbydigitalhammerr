@@ -10,7 +10,7 @@ import {
   loadRecentRequests,
   loadTenantMessagingContext,
   whatsAppLinkFor,
-} from '@/lib/crm/review-requests/service';
+} from '@/lib/crm/review-requests/repository';
 import { describeBusinessStatus } from '@/lib/dashboard/presentation';
 import { RequestComposer } from './RequestComposer';
 import { formatDateTime, formatOptionalDateTime } from './presentation';

@@ -62,6 +62,43 @@ export default tseslint.config(
     },
   },
   {
+    // Folder boundaries in apps/web (see apps/web/lib/README.md): lib/ holds logic shared by pages,
+    // routes and components, so it must not depend on either. Tests may reach across on purpose.
+    files: ['apps/web/lib/**/*.{ts,tsx}'],
+    ignores: ['apps/web/lib/**/__tests__/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^(@/(components|app)/|(\\.\\./)+(components|app)/)',
+              message: 'lib/ must not import components/ or app/ (see apps/web/lib/README.md).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Components render routes; they never import from app/. Shared code belongs in lib/.
+    files: ['apps/web/components/**/*.{ts,tsx}'],
+    ignores: ['apps/web/components/**/__tests__/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^(@/app/|(\\.\\./)+app/)',
+              message: 'components/ must not import app/; move shared code to lib/.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Build and CI scripts are Node programs: they legitimately use console and process, and
     // reporting to stdout is their entire purpose.
     files: ['scripts/**/*.mjs', 'scripts/**/*.js'],

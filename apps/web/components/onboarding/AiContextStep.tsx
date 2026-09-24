@@ -280,7 +280,7 @@ export function AiContextStep({
           it: the handler creates a Balanced mode itself on first save, and `aiContextRequest`
           would strip a name sent alongside. An editable input whose value is silently discarded is
           worse than no input, so the mode is reported rather than edited, and the owner is told
-          where renaming lives. AI-02 owns renaming; see the concern raised with this module.
+          where renaming lives. AI-02 owns renaming.
 
           What it reports comes from `defaultModeCopy`, which distinguishes "no modes at all" —
           the only case where saving creates Balanced — from "modes exist, none switched on". The

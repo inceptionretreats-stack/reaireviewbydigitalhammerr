@@ -13,7 +13,7 @@ import { env } from '@/lib/infra/env';
 import { apiError } from '@/lib/http/api-error';
 import { readJsonObject } from '@/lib/http/request-body';
 import { verifyCsrf } from '@/lib/http/csrf';
-import { passwordHasher } from '@/lib/auth/helpers';
+import { passwordHasher } from '@/lib/auth/password-hasher';
 import {
   adminMfaRequired,
   getSession,

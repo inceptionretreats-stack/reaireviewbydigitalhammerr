@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { SessionService, isAdminRole, type SessionContext } from '@ai-review/core';
-import { db } from '../infra/db';
-import { env } from '../infra/env';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
 
 /**
  * Session cookie plumbing (AUTH-02, SET-01, AC-002).

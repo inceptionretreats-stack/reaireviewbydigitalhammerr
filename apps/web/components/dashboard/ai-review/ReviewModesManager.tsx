@@ -20,7 +20,7 @@ import { MODE_EMPHASIS_NOTE, QR_UNAFFECTED_NOTE } from './copy';
 import { ModeEditor, type ModeEditorValues } from './ModeEditor';
 import { applyActivation, asWireMode, duplicateNameFor, mergeMode, sortModes } from './modes';
 import { sendJson, type JsonResult } from '@/components/shared/forms/send-json';
-import { TEXT_LINK } from './styles';
+import { TEXT_LINK } from '../link-styles';
 
 /**
  * AI-02 — `/app/review-modes`. All four required states: `list`, `create`, `edit` and `archived`.

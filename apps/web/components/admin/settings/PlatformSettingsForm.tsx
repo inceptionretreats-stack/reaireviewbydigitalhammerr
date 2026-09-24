@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Card, Field, InlineError, Input, Textarea } from '@ai-review/ui';
 import { sendJson } from '@/components/shared/forms/send-json';
-import { useStepUp } from './MfaStepUpDialog';
+import { useStepUp } from '../MfaStepUpDialog';
 
 export interface SettingRow {
   key: string;

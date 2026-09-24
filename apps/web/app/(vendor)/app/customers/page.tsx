@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { TenantGuard } from '@ai-review/core';
-import { parseListQuery } from '@/lib/crm/customers/query';
+import { parseListQuery } from '@/lib/crm/customers/list-params';
 import { loadCustomerPage } from '@/lib/crm/customers/repository';
 import { CustomersScreen } from '@/components/dashboard/customers/CustomersScreen';
 import { db } from '@/lib/infra/db';

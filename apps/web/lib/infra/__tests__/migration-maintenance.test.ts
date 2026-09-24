@@ -1,3 +1,6 @@
+// The test suite for apps/web/proxy.ts: the migration-maintenance gate, the legacy-host auth
+// redirect and the dh_anon visitor cookie. It sits beside lib/infra/migration-maintenance.ts, whose
+// gate the proxy runs.
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { NextRequest, type NextResponse } from 'next/server';

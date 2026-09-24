@@ -2009,7 +2009,7 @@ components:
     QrSource:
       type: object
       description: |
-        One QR source, produced by `toQrSourceWire` in `apps/web/lib/qr/qr-source.ts`. The
+        One QR source, produced by `toQrSourceWire` in `apps/web/lib/qr/qr-source-api.ts`. The
         list and both write endpoints answer with this same object, which is what lets QR-01 fold a
         created or renamed row straight into its list without learning a second shape.
       required:

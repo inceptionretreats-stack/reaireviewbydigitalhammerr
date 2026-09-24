@@ -220,8 +220,7 @@ export interface QrFailure {
  *
  * This repeats what `components/shared/forms/use-form-submit.ts` does internally because that hook posts
  * and only posts — QR-01 renames with PATCH — and its unpacking is not exported. The duplication is
- * deliberate and small; folding both onto one helper belongs with a change to that module, which
- * another workstream owns.
+ * deliberate and small; folding both onto one helper belongs with a change to that module.
  */
 export function readQrFailure(payload: unknown): QrFailure {
   const fallback: QrFailure = {

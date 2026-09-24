@@ -244,5 +244,5 @@ Details: [data model](data-model.md#scheduled-maintenance) and
 | Reserved slugs            | `packages/core/src/business/slug.ts`                                                      |
 | Cron schedule and auth    | `apps/web/vercel.json`, `apps/web/lib/cron/auth.ts`                                       |
 | Vendor navigation         | `apps/web/components/dashboard/shell/nav-items.ts`                                        |
-| Admin navigation          | `apps/web/components/admin/AdminNav.tsx`                                                  |
+| Admin navigation          | `apps/web/components/admin/shell/AdminNav.tsx`                                            |
 | API contract              | `docs/openapi/v1.yaml`                                                                    |

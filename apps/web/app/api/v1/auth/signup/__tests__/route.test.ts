@@ -16,8 +16,8 @@ vi.mock('@/lib/infra/env', () => ({
   env: () => ({ HASH_PEPPER: 'test-pepper', DEFAULT_TIMEZONE: 'Asia/Kolkata' }),
 }));
 vi.mock('@/lib/http/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
-vi.mock('@/lib/auth/helpers', () => ({
-  passwordHasher: () => ({ hash: mocks.hash }),
+vi.mock('@/lib/auth/password-hasher', () => ({ passwordHasher: () => ({ hash: mocks.hash }) }));
+vi.mock('@/lib/tenant/tenant-shell', () => ({
   SHELL_CATEGORY: 'OTHER',
   shellBusinessName: () => 'Test business',
 }));

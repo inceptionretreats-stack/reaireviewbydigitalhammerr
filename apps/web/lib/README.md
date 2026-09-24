@@ -77,7 +77,7 @@ type-only imports.
 ## Import rules
 
 - `lib/` never imports from `components/` or `app/`. (One test,
-  `qr/__tests__/qr-source.test.ts`, imports `components/dashboard/qr/qr-sources.ts` on purpose, to
+  `qr/__tests__/qr-source.test.ts`, imports `components/dashboard/qr/qr-screen-model.ts` on purpose, to
   prove the dialog and the endpoint enforce the same limits.)
 - Between concern folders, use `@/lib/<folder>/<module>`. Some older modules use relative paths
   such as `../infra/env`; both resolve to the same file.

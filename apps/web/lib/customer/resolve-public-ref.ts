@@ -1,5 +1,5 @@
 import { resolveByQrCode, resolveBySlug, type PublicBusinessConfig } from './public-business';
-import { db } from '../infra/db';
+import { db } from '@/lib/infra/db';
 
 /**
  * Resolves a public request to a tenant, server-side, from a slug or QR code.

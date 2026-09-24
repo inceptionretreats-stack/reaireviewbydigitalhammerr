@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { TeamScreen } from '@/components/admin/TeamScreen';
+import { TeamScreen } from '@/components/admin/team/TeamScreen';
 import { adminDateTime } from '@/lib/admin/format';
 import { teamService } from '@/lib/admin/team';
 import { getSession } from '@/lib/auth/session';

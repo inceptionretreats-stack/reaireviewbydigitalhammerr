@@ -7,7 +7,7 @@ import { env } from '@/lib/infra/env';
 import { apiError } from '@/lib/http/api-error';
 import { readJsonObject } from '@/lib/http/request-body';
 import { requireTenant } from '@/lib/tenant/require-tenant';
-import { passwordHasher } from '@/lib/auth/helpers';
+import { passwordHasher } from '@/lib/auth/password-hasher';
 import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
 import { emailChanged, parseAccountDetails } from '@/lib/account/schema';
 import { recordActivity } from '@/lib/activity/recorder';
@@ -105,7 +105,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
    * recovery check) would then trust it. Nothing in V1 reads the column and no flow re-verifies an
    * address, so for the accounts that have it set — seeded and admin-created users — this is a
    * one-way downgrade. That is the honest state rather than the comfortable one, and it is not
-   * silent: the response says so and the screen turns it into a sentence. See concerns.
+   * silent: the response says so and the screen turns it into a sentence.
    */
   try {
     await database

@@ -7,7 +7,7 @@ import { readJsonObject } from '@/lib/http/request-body';
 import { db } from '@/lib/infra/db';
 import { env } from '@/lib/infra/env';
 import { verifyCsrf } from '@/lib/http/csrf';
-import { passwordHasher } from '@/lib/auth/helpers';
+import { passwordHasher } from '@/lib/auth/password-hasher';
 import { clearGooglePending, readGooglePending } from '@/lib/auth/google-auth';
 import { signInGoogleVendor } from '@/lib/auth/google-auth-session';
 import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';

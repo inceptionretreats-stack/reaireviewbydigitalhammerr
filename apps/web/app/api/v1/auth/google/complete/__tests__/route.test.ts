@@ -16,7 +16,7 @@ vi.mock('@/lib/auth/google-auth', () => ({
   clearGooglePending: mocks.clear,
 }));
 vi.mock('@/lib/auth/google-auth-session', () => ({ signInGoogleVendor: mocks.signIn }));
-vi.mock('@/lib/auth/helpers', () => ({
+vi.mock('@/lib/tenant/tenant-shell', () => ({
   SHELL_CATEGORY: 'OTHER',
   shellBusinessName: (name: string) => `${name}'s business`,
 }));

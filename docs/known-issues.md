@@ -94,7 +94,7 @@ Checked: callers of `advanceCustomerStatus` in `apps/web/app/api/v1/review-reque
 **10. Tracked request links never expire and ignore contact deletion.** `review_requests` has no
 expiry column, and the token resolver checks the business but not whether the contact was
 (soft-)deleted. Deleting a contact does not revoke links already sent.
-Checked: `apps/web/lib/crm/review-requests/service.ts` (`findRequestByTrackingToken`),
+Checked: `apps/web/lib/crm/review-requests/repository.ts` (`findRequestByTrackingToken`),
 `packages/db/src/schema/crm.ts`.
 
 ## Database and code structure

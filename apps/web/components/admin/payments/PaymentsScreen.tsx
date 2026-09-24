@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Badge, Button, Card, Drawer, Field, Input, Modal, Table, Textarea } from '@ai-review/ui';
 import { sendJson } from '@/components/shared/forms/send-json';
-import { useStepUp } from './MfaStepUpDialog';
+import { useStepUp } from '../MfaStepUpDialog';
 
 /**
  * AMENDMENT-029 — the cross-tenant payments screen: a list, a drawer with everything about one

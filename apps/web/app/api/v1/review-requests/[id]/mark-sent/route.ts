@@ -8,7 +8,7 @@ import {
   loadOwnedRequest,
   markSent,
   recordMarkedSentEvent,
-} from '@/lib/crm/review-requests/service';
+} from '@/lib/crm/review-requests/repository';
 import { recordActivity } from '@/lib/activity/recorder';
 
 /**

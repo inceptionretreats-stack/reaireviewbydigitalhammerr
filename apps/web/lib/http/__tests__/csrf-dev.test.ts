@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../infra/env', () => ({
+vi.mock('@/lib/infra/env', () => ({
   env: () => ({
     NODE_ENV: 'development',
     APP_BASE_URL: 'http://localhost:3000',

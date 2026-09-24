@@ -7,7 +7,7 @@ import { env } from '@/lib/infra/env';
 import { apiError } from '@/lib/http/api-error';
 import { readJsonObject } from '@/lib/http/request-body';
 import { requireTenant } from '@/lib/tenant/require-tenant';
-import { passwordHasher } from '@/lib/auth/helpers';
+import { passwordHasher } from '@/lib/auth/password-hasher';
 import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
 import { sessionService, setSessionCookie } from '@/lib/auth/session';
 import { parsePasswordChange } from '@/lib/account/schema';

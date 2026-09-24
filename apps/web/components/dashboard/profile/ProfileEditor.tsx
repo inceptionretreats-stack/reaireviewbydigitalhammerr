@@ -75,7 +75,7 @@ export interface StoredSection {
  * tripped unchanged — including the slug, whose re-claim is a documented no-op when it is already
  * this business's primary (`SlugService.claim`). It also means a change made in setup on another tab
  * is overwritten by what this page loaded; the honest fix is a PATCH that accepts a partial identity,
- * which is a change to a contract this module must not edit. See concerns.
+ * which would change the API contract and is left as a follow-up.
  */
 export interface IdentityPassthrough {
   category: string;

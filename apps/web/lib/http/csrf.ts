@@ -1,4 +1,4 @@
-import { env } from '../infra/env';
+import { env } from '@/lib/infra/env';
 
 /**
  * CSRF defence for cookie-authenticated mutations (13_Security_Privacy_Compliance.md).

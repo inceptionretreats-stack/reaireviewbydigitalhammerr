@@ -7,7 +7,7 @@ import { readJsonObject } from '@/lib/http/request-body';
 import { db } from '@/lib/infra/db';
 import { env } from '@/lib/infra/env';
 import { verifyCsrf } from '@/lib/http/csrf';
-import { SHELL_CATEGORY, shellBusinessName } from '@/lib/auth/helpers';
+import { SHELL_CATEGORY, shellBusinessName } from '@/lib/tenant/tenant-shell';
 import { clearGooglePending, readGooglePending } from '@/lib/auth/google-auth';
 import { signInGoogleVendor } from '@/lib/auth/google-auth-session';
 import { recordActivity } from '@/lib/activity/recorder';

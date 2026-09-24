@@ -6,9 +6,9 @@ import {
   type ActivityOutcome,
   type SessionContext,
 } from '@ai-review/core';
-import { db } from '../infra/db';
-import { env } from '../infra/env';
-import { clientIp } from '../http/rate-limit';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { clientIp } from '@/lib/http/rate-limit';
 
 /**
  * Recording what a signed-in person did (AMENDMENT-028).

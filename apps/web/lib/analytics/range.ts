@@ -17,8 +17,8 @@
  * an event at 19:00 UTC belongs to, the rollup files it under one date while this screen asks for
  * another, and the difference surfaces as a quiet few percent nobody can account for. It is
  * copied rather than imported because `apps/worker` is an application, not a package `apps/web`
- * may depend on. It belongs in `packages/analytics` beside the event taxonomy; that move is
- * outside this module's paths and is recorded as a follow-up.
+ * may depend on. It belongs in `packages/analytics` beside the event taxonomy; that move is an
+ * open follow-up (docs/known-issues.md).
  *
  * Everything here is pure. Intl supplies the timezone database.
  */

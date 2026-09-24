@@ -18,7 +18,7 @@ import {
   type TableColumn,
 } from '@ai-review/ui';
 import { sendJson } from '@/components/shared/forms/send-json';
-import { useStepUp } from './MfaStepUpDialog';
+import { useStepUp } from '../MfaStepUpDialog';
 
 /**
  * The admin team (AMENDMENT-027). Members with their MFA state, live invitations, and the

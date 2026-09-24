@@ -10,7 +10,7 @@ import {
   parseListQuery,
   resolvePage,
   totalPages,
-} from '../query';
+} from '../list-params';
 
 const query = (search: string) => `?${search}`;
 

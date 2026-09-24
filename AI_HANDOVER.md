@@ -90,7 +90,7 @@ they disagree with the code, the code wins.
 - The original detailed billing block must **not** appear beneath the homepage cards, and the cards
   must **not** expand inline.
 - Each pricing card's `Show more` link goes to `/legal/pricing`
-  (`apps/web/components/marketing/pricing/PricingDetails.tsx`): one page explaining Free and Pro
+  (`apps/web/components/marketing/pricing/PricingDetailsLink.tsx`): one page explaining Free and Pro
   together, a comparison table beneath the plan details, and a `Back to pricing` link to
   `/#pricing`. Cards stay the same size. `/legal/pricing/free` and `/legal/pricing/pro` redirect to it.
 - Footer links expose Privacy, Terms, Cancellation / Refunds and Contact without login

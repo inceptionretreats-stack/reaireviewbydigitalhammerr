@@ -5,10 +5,10 @@ import {
   type ResolvedTenant,
   type SessionContext,
 } from '@ai-review/core';
-import { db } from '../infra/db';
-import { apiError } from '../http/api-error';
-import { verifyCsrf } from '../http/csrf';
-import { adminMfaRequired, getSession } from '../auth/session';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { adminMfaRequired, getSession } from '@/lib/auth/session';
 
 /**
  * The single entry point for an authenticated tenant-scoped route handler.

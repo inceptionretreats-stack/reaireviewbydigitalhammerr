@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Card, StatusBadge } from '@ai-review/ui';
 import { MODE_EMPHASIS_NOTE, QR_UNAFFECTED_NOTE } from './copy';
-import { TEXT_LINK } from './styles';
+import { TEXT_LINK } from '../link-styles';
 
 /**
  * The "Active mode" content of AI-01.

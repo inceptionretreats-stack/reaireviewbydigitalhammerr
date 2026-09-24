@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import styles from './PricingDetails.module.css';
+import styles from './PricingDetailsLink.module.css';
 
 export function PricingDetailsLink({ plan }: { plan: 'Free' | 'Pro' }) {
   return (

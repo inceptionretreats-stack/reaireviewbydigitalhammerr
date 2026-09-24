@@ -17,7 +17,7 @@ import {
   loadCustomer,
   loadTenantMessagingContext,
   readDefaultTemplate,
-} from '@/lib/crm/review-requests/service';
+} from '@/lib/crm/review-requests/repository';
 
 /**
  * POST /api/v1/review-requests/preview — Flow F steps 3 and 4, without persisting anything.

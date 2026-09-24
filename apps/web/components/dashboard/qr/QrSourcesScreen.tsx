@@ -29,7 +29,7 @@ import {
   type QrMutationOutcome,
   type QrSource,
   type QrStatus,
-} from './qr-sources';
+} from './qr-screen-model';
 
 /**
  * QR-01 — the `list`, `create` and `disabled` states of `/app/qr`.
@@ -96,10 +96,9 @@ const STATUS_TOAST: Record<QrStatus, (label: string) => { title: string; descrip
 
 export function QrSourcesScreen(props: QrSourcesScreenProps) {
   /*
-   * The provider is mounted here rather than in the dashboard layout because that layout is shared
-   * chrome owned by another workstream. It renders its own viewport, so nesting it inside one
-   * screen is safe — but it does mean confirmations are scoped to this route. When the layout gains
-   * a provider, this wrapper should go (see concerns).
+   * The provider is mounted here rather than in the shared dashboard layout. It renders its own
+   * viewport, so nesting it inside one screen is safe — but it does mean confirmations are scoped
+   * to this route. When the layout gains a provider, this wrapper should go.
    */
   return (
     <ToastProvider>

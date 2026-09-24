@@ -162,7 +162,7 @@ export function parseQrSourcePatch(raw: unknown): ParseResult<QrSourcePatch> {
 
   /*
    * Validated by hand rather than in the contract, because `qrSourceRequest` carries no status
-   * field and `packages/contracts` is not this module's to change (see concerns). The vocabulary
+   * field. The vocabulary
    * is still derived from the database enum through `isQrStatus`, so it cannot drift.
    */
   if ('status' in body) {
@@ -242,7 +242,7 @@ export function toQrSourceWire(
  * Checked before the query rather than trusted into it: a non-uuid makes Postgres raise 22P02,
  * which would surface as a 500 for what is plainly a request for something that does not exist.
  * `[id]/download/route.ts` carries its own copy of this pattern, written before this module
- * existed; that file belongs to another workstream and is not merged here.
+ * existed; the two could share one helper.
  */
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -255,7 +255,7 @@ export function isQrSourceId(value: string): boolean {
  * that is not a JSON object at all.
  *
  * Both sides of a write have to measure the same string. QR-01's dialog checks the label with
- * `labelError` (components/dashboard/qr/qr-sources.ts), which trims first, so a 120-character
+ * `labelError` (components/dashboard/qr/qr-screen-model.ts), which trims first, so a 120-character
  * label pasted with a trailing space passed the client check and then failed `z.string().max(120)`
  * here at 121 or more — a generic 422 for a label that is, once stored, exactly the width the
  * column allows. Trimming before the contract measures makes the validated value and the stored

@@ -12,7 +12,7 @@ import { db } from '@/lib/infra/db';
 import { env } from '@/lib/infra/env';
 import { apiError } from '@/lib/http/api-error';
 import { requireTenant } from '@/lib/tenant/require-tenant';
-import { isShell } from '@/lib/auth/helpers';
+import { isShell } from '@/lib/tenant/tenant-shell';
 import { recordActivity } from '@/lib/activity/recorder';
 
 /** Flow A step 10 names it. It appears in analytics as the source label, so it must read well. */

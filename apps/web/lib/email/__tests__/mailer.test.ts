@@ -3,7 +3,7 @@ import { MailError, ResendTransport, mailer, setMailTransport } from '../mailer'
 import { receiptEmail, renewalReminderEmail } from '../email-templates';
 
 const mocks = vi.hoisted(() => ({ env: vi.fn(() => ({ NODE_ENV: 'production' })) }));
-vi.mock('../../infra/env', () => ({ env: mocks.env }));
+vi.mock('@/lib/infra/env', () => ({ env: mocks.env }));
 
 afterEach(() => {
   vi.restoreAllMocks();

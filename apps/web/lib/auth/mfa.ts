@@ -1,7 +1,7 @@
 import { MfaService, SecretBox } from '@ai-review/core';
-import { db } from '../infra/db';
-import { env } from '../infra/env';
-import { qrDataUri } from '../qr/qr-image';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { qrDataUri } from '@/lib/qr/qr-image';
 
 /**
  * Admin MFA composition (AMENDMENT-027). The seal key is `APP_ENCRYPTION_KEY`, which the

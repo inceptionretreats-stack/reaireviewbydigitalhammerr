@@ -4,7 +4,7 @@ import { apiError } from '@/lib/http/api-error';
 import { readJsonObject } from '@/lib/http/request-body';
 import { requireTenant } from '@/lib/tenant/require-tenant';
 import { readCustomerBody } from '@/lib/crm/customers/body';
-import { parseListQuery } from '@/lib/crm/customers/query';
+import { parseListQuery } from '@/lib/crm/customers/list-params';
 import { createCustomer, loadCustomerPage, toCustomerDto } from '@/lib/crm/customers/repository';
 import { recordActivity } from '@/lib/activity/recorder';
 

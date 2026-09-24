@@ -50,7 +50,7 @@ export function isUuid(value: string): boolean {
  * A tenant has a contact list, not a mailing list (D-018, CRM-01-01 "no bulk marketing
  * automation"), and REQ-01 prepares one message for one customer. The cap is here so an unbounded
  * SELECT cannot turn the selector into a multi-megabyte payload; a tenant that reaches it needs a
- * searchable customer picker rather than a larger number on this line. See concerns.
+ * searchable customer picker rather than a larger number on this line.
  */
 const MAX_CUSTOMER_OPTIONS = 500;
 

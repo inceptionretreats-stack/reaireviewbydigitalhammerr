@@ -22,7 +22,7 @@ import {
   QrTab,
   UsageTab,
   type BusinessTab,
-} from '@/components/admin/business-tabs';
+} from '@/components/admin/businesses/BusinessTabs';
 
 export const metadata: Metadata = { title: 'Business | Ai Review admin' };
 export const dynamic = 'force-dynamic';

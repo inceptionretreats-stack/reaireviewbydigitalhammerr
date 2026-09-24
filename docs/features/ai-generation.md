@@ -150,7 +150,7 @@ customer gets `AI_OUTPUT_REJECTED`.
 | Owner context and preview           | `apps/web/app/api/v1/ai/context/route.ts`, `apps/web/app/api/v1/ai/test-preview/`                                 |
 | Owner Ai screens                    | `apps/web/components/dashboard/ai-review/`, `apps/web/components/onboarding/AiContextStep.tsx`                    |
 | Generator, prompt builder, guidance | `packages/core/src/ai/generator.ts`, `packages/core/src/ai/prompt-builder.ts`, `packages/core/src/ai/guidance.ts` |
-| Prompt version lifecycle            | `packages/core/src/ai/prompt-version-service.ts`, `apps/web/components/admin/PromptVersionEditor.tsx`             |
+| Prompt version lifecycle            | `packages/core/src/ai/prompt-version-service.ts`, `apps/web/components/admin/ai/PromptVersionEditor.tsx`          |
 | Quota                               | `packages/core/src/quota/`                                                                                        |
 | Seeded prompt versions              | `scripts/db/prompt-versions/`, `scripts/db/seed.ts`                                                               |
 | Model switch tool                   | `scripts/ops/set-ai-model.mjs`                                                                                    |

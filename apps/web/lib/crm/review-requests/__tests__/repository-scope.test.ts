@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { ResolvedTenant } from '@ai-review/core';
-import { messageableCustomerScope, recentRequestsScope } from '../service';
+import { messageableCustomerScope, recentRequestsScope } from '../repository';
 
 /**
  * The two WHERE clauses REQ-01's reads are built from, rendered to SQL.

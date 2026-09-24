@@ -7,12 +7,12 @@ import { Card } from '@ai-review/ui';
 import { db } from '@/lib/infra/db';
 import { env } from '@/lib/infra/env';
 import { getSession } from '@/lib/auth/session';
-import { MAX_SOURCES_PER_BUSINESS } from '@/lib/qr/qr-source';
+import { MAX_SOURCES_PER_BUSINESS } from '@/lib/qr/qr-source-api';
 import { describeBusinessStatus } from '@/lib/dashboard/presentation';
 import { qrDataUri } from '@/lib/qr/qr-image';
 import { QrHowItWorks } from '@/components/dashboard/qr/QrHowItWorks';
 import { QrSourcesScreen } from '@/components/dashboard/qr/QrSourcesScreen';
-import type { QrSource } from '@/components/dashboard/qr/qr-sources';
+import type { QrSource } from '@/components/dashboard/qr/qr-screen-model';
 
 /**
  * QR-01 — `/app/qr`.

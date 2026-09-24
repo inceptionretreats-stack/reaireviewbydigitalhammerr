@@ -10,7 +10,7 @@ vi.mock('google-auth-library', () => ({
     verifyIdToken = mocks.verifyIdToken;
   },
 }));
-vi.mock('../../infra/env', () => ({ env: () => ({ GOOGLE_CLIENT_ID: mocks.clientId }) }));
+vi.mock('@/lib/infra/env', () => ({ env: () => ({ GOOGLE_CLIENT_ID: mocks.clientId }) }));
 
 import { verifyGoogleCredential } from '../google-auth';
 

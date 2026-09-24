@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { cookies } from 'next/headers';
-import { env } from '../infra/env';
+import { env } from '@/lib/infra/env';
 
 const CHALLENGE_COOKIE = 'dh_google_challenge';
 const PENDING_COOKIE = 'dh_google_pending';

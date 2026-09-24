@@ -6,7 +6,7 @@ import { Badge } from '@ai-review/ui';
 import { PromptVersionService } from '@ai-review/core';
 import { db } from '@/lib/infra/db';
 import { toWire } from '@/lib/admin/prompt-versions';
-import { PromptVersionEditor } from '@/components/admin/PromptVersionEditor';
+import { PromptVersionEditor } from '@/components/admin/ai/PromptVersionEditor';
 
 export const metadata: Metadata = { title: 'Prompt version | Ai Review admin' };
 export const dynamic = 'force-dynamic';

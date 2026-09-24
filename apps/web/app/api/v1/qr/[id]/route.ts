@@ -7,7 +7,7 @@ import { env } from '@/lib/infra/env';
 import { apiError } from '@/lib/http/api-error';
 import { readJsonObject } from '@/lib/http/request-body';
 import { requireActiveTenant, requireTenant } from '@/lib/tenant/require-tenant';
-import { parseQrSourcePatch, isQrSourceId, toQrSourceWire } from '@/lib/qr/qr-source';
+import { parseQrSourcePatch, isQrSourceId, toQrSourceWire } from '@/lib/qr/qr-source-api';
 import { qrDataUri } from '@/lib/qr/qr-image';
 import { recordActivity } from '@/lib/activity/recorder';
 

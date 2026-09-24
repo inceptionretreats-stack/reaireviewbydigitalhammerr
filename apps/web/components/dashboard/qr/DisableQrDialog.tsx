@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, InlineError, Modal } from '@ai-review/ui';
-import type { QrSource } from './qr-sources';
+import type { QrSource } from './qr-screen-model';
 
 /**
  * QR-01's `disabled` state, confirmed before it is entered.

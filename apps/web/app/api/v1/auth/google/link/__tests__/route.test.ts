@@ -13,7 +13,7 @@ vi.mock('@/lib/auth/google-auth', () => ({
   clearGooglePending: vi.fn(),
 }));
 vi.mock('@/lib/infra/db', () => ({ db: mocks.database }));
-vi.mock('@/lib/auth/helpers', () => ({ passwordHasher: vi.fn() }));
+vi.mock('@/lib/auth/password-hasher', () => ({ passwordHasher: vi.fn() }));
 vi.mock('@/lib/auth/google-auth-session', () => ({ signInGoogleVendor: vi.fn() }));
 vi.mock('@/lib/http/rate-limit', () => ({
   clientIp: vi.fn(),

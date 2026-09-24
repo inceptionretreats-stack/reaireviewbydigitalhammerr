@@ -6,7 +6,7 @@ import {
   PlatformSettingsService,
   RazorpayClient,
 } from '@ai-review/core';
-import { env } from '../infra/env';
+import { env } from '@/lib/infra/env';
 
 /**
  * SUB-01's data, read once for the page and once for `GET /api/v1/subscription`, so the two

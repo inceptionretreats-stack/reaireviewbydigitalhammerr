@@ -19,7 +19,7 @@
  *   affirms, and nobody is asked for a rating anywhere in the flow (D-009, AC-006).
  *
  * `components/onboarding/AiContextStep.tsx` holds its own copy of the first two because it predates
- * this module and was outside this change; see the concern raised with it.
+ * this module; merging the two copies is a known follow-up.
  */
 
 export const CONTEXT_HELPER =

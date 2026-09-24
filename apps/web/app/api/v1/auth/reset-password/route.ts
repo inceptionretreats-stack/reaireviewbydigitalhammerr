@@ -7,7 +7,7 @@ import { db } from '@/lib/infra/db';
 import { apiError } from '@/lib/http/api-error';
 import { readJsonObject } from '@/lib/http/request-body';
 import { verifyCsrf } from '@/lib/http/csrf';
-import { passwordHasher } from '@/lib/auth/helpers';
+import { passwordHasher } from '@/lib/auth/password-hasher';
 import { clearSessionCookie } from '@/lib/auth/session';
 import { recordActivity } from '@/lib/activity/recorder';
 import { safeError } from '@/lib/infra/safe-error';

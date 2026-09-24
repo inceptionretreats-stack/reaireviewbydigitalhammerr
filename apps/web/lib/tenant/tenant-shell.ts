@@ -2,7 +2,7 @@
  * The signup placeholder tenant, and how to recognise one.
  *
  * Deliberately free of server-only imports. These three are pure string predicates, but they
- * previously lived in lib/auth/helpers.ts alongside the Argon2 hasher — so a client component
+ * previously lived beside the Argon2 hasher (lib/auth/password-hasher.ts) — so a client component
  * reaching for isShell pulled a value import of PasswordHasher (and through it a native module)
  * toward the browser bundle. Keeping them here means the client can share the rule with the
  * server without sharing its dependencies.

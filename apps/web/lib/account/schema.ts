@@ -148,7 +148,7 @@ export function emailChanged(submitted: string, stored: string): boolean {
  *
  * `z.email()` in `packages/contracts` is authoritative for signup and this mirrors its intent
  * rather than its regex. Anything stricter rejects real addresses, and the only test that settles
- * whether an address exists is sending mail to it — which V1 has no flow for (see concerns).
+ * whether an address exists is sending mail to it — which V1 has no flow for.
  */
 function looksLikeEmail(value: string): boolean {
   if (value.length === 0 || value.length > EMAIL_MAX) return false;

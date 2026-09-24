@@ -6,10 +6,10 @@ import {
   type MfaSubject,
   type SessionContext,
 } from '@ai-review/core';
-import { apiError } from '../http/api-error';
-import { verifyCsrf } from '../http/csrf';
-import { env } from '../infra/env';
-import { clientIp, isDenied, rateLimiter } from '../http/rate-limit';
+import { apiError } from '@/lib/http/api-error';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { env } from '@/lib/infra/env';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
 import { getSession, nextPathAfterLogin, sessionService, setSessionCookie } from './session';
 
 /**

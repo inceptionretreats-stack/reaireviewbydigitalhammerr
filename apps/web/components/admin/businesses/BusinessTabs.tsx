@@ -10,14 +10,14 @@ import {
   loadPublicProfile,
   loadQrSources,
   loadUsage,
-} from '@/lib/admin/business-detail/loaders';
+} from '@/lib/admin/business-tab-loaders';
 import { loadActivity } from '@/lib/admin/activity';
 import { adminDateTime } from '@/lib/admin/format';
-import { ActivityTable } from '@/components/admin/ActivityTable';
-import { BusinessActions } from '@/components/admin/BusinessActions';
+import { ActivityTable } from '@/components/admin/activity/ActivityTable';
+import { BusinessActions } from '@/components/admin/businesses/BusinessActions';
 import { PlanBadge } from '@/components/admin/PlanBadge';
-import { AbuseActions } from '@/components/admin/AbuseActions';
-import { SendPasswordResetButton } from '@/components/admin/SendPasswordResetButton';
+import { AbuseActions } from '@/components/admin/businesses/AbuseActions';
+import { SendPasswordResetButton } from '@/components/admin/businesses/SendPasswordResetButton';
 
 /**
  * The tabs of the admin business page (19_Admin_Panel_Spec L56-66), each a server component

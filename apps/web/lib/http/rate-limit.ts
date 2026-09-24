@@ -8,8 +8,8 @@ import {
   RateLimiter,
   RedisRateLimitStore,
 } from '@ai-review/core';
-import { env } from '../infra/env';
-import { safeError } from '../infra/safe-error';
+import { env } from '@/lib/infra/env';
+import { safeError } from '@/lib/infra/safe-error';
 
 /**
  * The process-wide limiter (AC-032, AC-002, E8-02).

@@ -1,7 +1,7 @@
 import localFont from 'next/font/local';
 import type { CommercialTerms } from '@/lib/marketing/commercial-terms';
 import { ActionLink, MarketingIcon, marketingStyles as styles } from '../site/MarketingSite';
-import { PricingDetailsLink } from './PricingDetails';
+import { PricingDetailsLink } from './PricingDetailsLink';
 
 const priceFont = localFont({
   src: '../../../assets/fonts/inter-latin-600-normal.woff',

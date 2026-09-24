@@ -5,10 +5,15 @@ import {
   parseQrSourceCreate,
   parseQrSourcePatch,
   toQrSourceWire,
-} from '../qr-source';
+} from '../qr-source-api';
 // The client pre-check, imported across the boundary on purpose: the point of the length tests
 // below is that the dialog and the endpoint measure the same string.
-import { LABEL_MAX, NOTE_MAX, labelError, noteError } from '@/components/dashboard/qr/qr-sources';
+import {
+  LABEL_MAX,
+  NOTE_MAX,
+  labelError,
+  noteError,
+} from '@/components/dashboard/qr/qr-screen-model';
 
 /**
  * Request validation for the QR-01 write endpoints.

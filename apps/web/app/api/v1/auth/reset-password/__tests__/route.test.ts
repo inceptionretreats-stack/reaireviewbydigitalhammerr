@@ -21,7 +21,7 @@ vi.mock('@/lib/infra/db', () => ({
   }),
 }));
 vi.mock('@/lib/http/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
-vi.mock('@/lib/auth/helpers', () => ({ passwordHasher: () => ({ hash: mocks.hash }) }));
+vi.mock('@/lib/auth/password-hasher', () => ({ passwordHasher: () => ({ hash: mocks.hash }) }));
 vi.mock('@/lib/auth/session', () => ({ clearSessionCookie: mocks.clearCookie }));
 vi.mock('@/lib/activity/recorder', () => ({ recordActivity: mocks.recordActivity }));
 vi.mock('@ai-review/core', () => ({

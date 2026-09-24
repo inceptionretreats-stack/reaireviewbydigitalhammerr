@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { and, eq, gt } from 'drizzle-orm';
 import { anonymousSessions } from '@ai-review/db';
 import { ipPrefixHash, privacyHash } from '@ai-review/core';
-import { db } from '../infra/db';
-import { env } from '../infra/env';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
 
 /**
  * Anonymous public session (E3-02).

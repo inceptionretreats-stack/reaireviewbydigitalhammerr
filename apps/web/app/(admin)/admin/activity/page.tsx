@@ -3,8 +3,8 @@ import Link from 'next/link';
 import { adminActivityQuery } from '@ai-review/contracts';
 import { ACTIVITY_ACTIONS } from '@ai-review/core';
 import { Card } from '@ai-review/ui';
-import { ActivityFilters } from '@/components/admin/ActivityFilters';
-import { ActivityTable } from '@/components/admin/ActivityTable';
+import { ActivityFilters } from '@/components/admin/activity/ActivityFilters';
+import { ActivityTable } from '@/components/admin/activity/ActivityTable';
 import { activityFilterFrom, loadActivity, resolveUserIdByEmail } from '@/lib/admin/activity';
 
 export const metadata: Metadata = { title: 'Activity | Ai Review admin' };
