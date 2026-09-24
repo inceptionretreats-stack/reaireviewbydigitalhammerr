@@ -50,3 +50,7 @@ test-results/
 
 # Vercel CLI project link and pulled environment files.
 .vercel/
+
+# Third-party AI-assistant skills (Resend) installed locally by the skills CLI; not part of the product.
+.agents/
+skills-lock.json
