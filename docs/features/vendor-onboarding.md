@@ -80,8 +80,9 @@ republish, bumps `config_version`, adds a default "Review Us" section if the bus
 page sections, and creates the first QR code, labelled **Main QR**, if it has none. The response
 returns the public page URL, the QR code and its URL.
 
-The dashboard (`/app`) then shows setup progress across all five steps, the public page, live
-figures and the plan. Everything after that is managed from the `/app/*` screens listed in
+The vendor workspace home (`/app`, built from `components/dashboard/overview/`) then shows
+setup progress across all five steps, the public page, live figures and the plan. Everything after
+that is managed from the `/app/*` screens listed in
 [routes](../architecture/routes.md#vendor-workspace--appvendor).
 
 ## 4. The public page and slug
@@ -94,7 +95,9 @@ figures and the plan. Everything after that is managed from the `/app/*` screens
   controlled "not available" page rather than a 404.
 - Slugs are 3–48 characters and must not be on the reserved list in
   `packages/core/src/business/slug.ts` (route names such as `r`, `api`, `app`, `admin`, `legal`,
-  `review`). Live and retired slugs share one namespace.
+  `review`). Live and retired slugs share one namespace. The list currently misses the auth pages
+  `invite`, `forgot-password` and `reset-password`, so a business given one of those slugs would
+  have its public page hidden behind the auth page (see [known issues](../known-issues.md)).
 - Changing the slug keeps the old one as a redirect to the new page for 180 days
   (`packages/core/src/business/slug-service.ts`), including its `/review` and `/feedback` paths.
 - Sections render only when they have a usable target; stored URLs must be `http(s)`. Logo, cover and
@@ -137,4 +140,4 @@ all-or-nothing save; reordering saves immediately.
 | Publishing                    | `apps/web/app/api/v1/business/publish/route.ts`                                                                                  |
 | Public page                   | `apps/web/app/(customer)/[slug]/page.tsx`, `apps/web/components/customer/profile/PublicProfile.tsx`                              |
 | QR sources and printable card | `apps/web/app/api/v1/qr/`, `apps/web/lib/qr/`, `apps/web/components/dashboard/qr/`                                               |
-| Dashboard overview            | `apps/web/components/dashboard/overview/`, `apps/web/lib/dashboard/summary.ts`                                                   |
+| Vendor workspace home         | `apps/web/components/dashboard/overview/`, `apps/web/lib/dashboard/summary.ts`                                                   |

@@ -1,5 +1,16 @@
 # Vendor workspace and onboarding redesign
 
+The design rules and tokens for the business owner's workspace ("vendor workspace") and the
+onboarding steps, plus the record of the 23 September 2026 release that introduced them. Read the
+"Implemented experience" and "Design tokens and responsive rules" sections before changing vendor
+or onboarding styles; the approved decisions they carry are also listed in
+[product decisions](../decisions/product-decisions.md#vendor-workspace).
+
+> **Partly historical.** The design rules and tokens describe the current code. The release status,
+> fidelity ledger, visual evidence, verification results and isolation notes are a dated QA record
+> of 23 September 2026: counts, deployment IDs and helper files named there are as they were that
+> day. "Merchant" in this document means a business owner.
+
 Verified: 23 September 2026.
 
 ## Scope and release status
@@ -71,9 +82,8 @@ Intentional deviations include the working sign-out button, actual tenant-specif
 
 ## Visual comparison and evidence
 
-Reference concept, native dimensions **1487 × 1058px**:
-
-`C:/Users/digital hammerr/.codex/generated_images/01a08476-d4ff-7850-8a31-f20263de0681/exec-a5ff0605-9e30-4eb7-add2-748c870d8038.png`
+Reference concept, native dimensions **1487 × 1058px**: a generated image kept on the project
+owner's computer (in the Codex generated-images folder), not in the repository.
 
 Final browser evidence names and dimensions:
 
@@ -91,6 +101,10 @@ The final desktop viewport was deliberately set to the concept's native dimensio
 The synthetic QA stack was stopped successfully after verification; its browser tab was closed and viewport reset. Automatic directory cleanup was blocked by command-execution policy, so the synthetic database and screenshot artifacts remain in the run's OS-temp directory. No deletion was performed or bypass attempted. Screenshots are verification-only artifacts, **not deployed or committed product assets**; their evidence names and measured results above remain the durable record.
 
 ## Verification results
+
+_Note, 24 September 2026:_ `eslint.config.mjs` now ignores `tmp/`, `.agents/` and `.dev/`, and the
+local `tmp/` folder has since been removed, so the full-repository `pnpm lint` row below describes
+that day only. `pnpm lint` is the same check CI runs.
 
 | Check                                                        | Result                                                                                                                                                                            |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -128,4 +142,4 @@ Maintained regression files:
 - `e2e/vendor/dashboard.spec.ts`
 - `apps/web/components/dashboard/shell/__tests__/nav-items.test.ts`
 
-Local operational helpers under `tmp/vendor-ui-*` remain ignored convenience scripts because automatic cleanup was blocked. They are not deployed application code or deployment prerequisites. Do not run the unguarded seed/migration/e2e commands against a production-configured `.env` to reproduce this visual QA. Use an independently verified disposable local database and process-only overrides. No credentials are included in this document.
+Local operational helpers under `tmp/vendor-ui-*` remained ignored convenience scripts because automatic cleanup was blocked (they were deleted when the local `tmp/` folder was cleared on 24 September 2026). They are not deployed application code or deployment prerequisites. Do not run the unguarded seed/migration/e2e commands against a production-configured `.env` to reproduce this visual QA. Use an independently verified disposable local database and process-only overrides. No credentials are included in this document.

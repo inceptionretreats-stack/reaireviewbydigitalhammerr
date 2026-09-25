@@ -18,21 +18,21 @@ Runtime dependencies: `@ai-review/db`, `drizzle-orm`, `@node-rs/argon2`, `@anthr
 
 One row per folder in `src/`; the larger folders are broken down below the table.
 
-| Folder        | Owns                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------ |
-| `ai/`         | Ai draft generation: prompts, prompt versions, provider adapters, quality gates      |
-| `auth/`       | Passwords, tokens, sessions, admin MFA, the admin team                               |
-| `billing/`    | Razorpay checkout, entitlements, expiry and reminders, refunds, invoices and GST     |
-| `business/`   | Slugs, Google review-link validation, phone normalisation                            |
-| `quota/`      | Draft allowance: reserve before the provider call, then commit or release            |
-| `rate-limit/` | Named limit policies and their Redis and in-memory stores                            |
-| `abuse/`      | Abuse signals (four thresholds computed on read) and the admin responses to them     |
-| `activity/`   | The closed list of user-activity actions and the recorder for `user_activity_logs`   |
-| `audit/`      | `AuditWriter` for `admin_audit_logs`; high-risk actions must carry a reason          |
-| `crypto/`     | `SecretBox`: AES-256-GCM sealing under `APP_ENCRYPTION_KEY` (admin TOTP seeds)       |
-| `platform/`   | `PlatformSettingsService`: reads and writes `platform_settings`, audited             |
-| `qr/`         | Opaque dynamic QR codes: generate, validate format, `buildQrUrl`                     |
-| `tenant/`     | `TenantGuard` and the branded `ResolvedTenant` type for every private business query |
+| Folder        | Owns                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ai/`         | Ai draft generation: prompts, prompt versions, provider adapters, quality gates                                              |
+| `auth/`       | Passwords, tokens, sessions, admin MFA, the admin team                                                                       |
+| `billing/`    | Razorpay checkout, entitlements, expiry and reminders, refunds, invoices and GST                                             |
+| `business/`   | Slugs, Google review-link validation, phone normalisation                                                                    |
+| `quota/`      | Draft allowance: reserve before the provider call, then commit or release                                                    |
+| `rate-limit/` | Named limit policies and their Redis and in-memory stores                                                                    |
+| `abuse/`      | Abuse signals (`signals.ts`, four thresholds computed on read) and the admin responses to them (`abuse-service.ts`)          |
+| `activity/`   | The closed list of user-activity actions and the recorder for `user_activity_logs`                                           |
+| `audit/`      | `AuditWriter` for `admin_audit_logs` (`writer.ts`; high-risk actions must carry a reason) and the actor helpers (`actor.ts`) |
+| `crypto/`     | `SecretBox`: AES-256-GCM sealing under `APP_ENCRYPTION_KEY` (admin TOTP seeds)                                               |
+| `platform/`   | `PlatformSettingsService`: reads and writes `platform_settings`, audited                                                     |
+| `qr/`         | Opaque dynamic QR codes: generate, validate format, `buildQrUrl`                                                             |
+| `tenant/`     | `TenantGuard` and the branded `ResolvedTenant` type for every private business query                                         |
 
 `src/db-executor.ts` defines `Executor` (the pool or a transaction handle). Services take it so an
 audit row commits or rolls back together with the change it describes.
@@ -72,24 +72,39 @@ audit row commits or rolls back together with the change it describes.
 `business_slugs` namespace, with old slugs kept as redirects), `review-url.ts` (Google review-link
 validation), `phone.ts` (E.164, India-first).
 
-## Two things that surprise newcomers
+**`audit/`**: `writer.ts` holds `AuditWriter`, the high-risk action list and the `AuditActorType`
+union. `actor.ts` holds what every admin-audited service shares: `AdminActor` (who acted),
+`SYSTEM_ACTOR` (the platform acting on its own, for example the expiry sweep),
+`auditActorType()` and the `AdminAction` shape (actor plus a required reason). Billing, the admin
+team, MFA resets and abuse handling all import them from here.
 
-- **The admin team lives in `auth/team-service.ts`.** Inviting admins, changing roles
-  (`SUPER_ADMIN`, `BUSINESS_SUPPORT_VIEWER`), disabling and re-enabling accounts are all there,
-  not in an `admin/` folder.
-- **Generic admin-audit helpers live in `billing/subscription-service.ts`.** `AdminActor`,
-  `SYSTEM_ACTOR`, `auditActorType()` and the `AdminAction` shape are defined there and imported by
-  `auth/team-service.ts`, `auth/mfa-service.ts` and `abuse/service.ts`, even though they have
-  nothing to do with billing.
+## Naming
+
+A service file is named `<noun>-service.ts` (`abuse/abuse-service.ts`, `auth/mfa-service.ts`,
+`billing/checkout-service.ts`, `business/slug-service.ts`). The exceptions are `quota/` and
+`rate-limit/`: each is a self-contained subsystem behind its own `index.ts`, where `service.ts` is
+the entry class and the `*-store.ts` files are its storage backends. `ai/` also has an `index.ts`;
+other folders are imported file by file from `src/index.ts`.
+
+## One thing that surprises newcomers
+
+**The admin team lives in `auth/team-service.ts`.** Inviting admins, changing roles
+(`SUPER_ADMIN`, `BUSINESS_SUPPORT_VIEWER`), disabling and re-enabling accounts are all there, not
+in an `admin/` folder, because the service is built from auth primitives (password hashing,
+tokens, sessions).
 
 ## Tests
 
-- Co-located unit tests in `src/<module>/__tests__/` (for example `ai/__tests__`,
+- Unit tests sit beside the module they test, in `src/<module>/__tests__/` (for example
+  `ai/__tests__`, `audit/__tests__/writer.test.ts`, `billing/__tests__/razorpay.test.ts`,
   `rate-limit/__tests__`, `quota/__tests__`).
-- Cross-module unit tests in `src/__tests__/` (generation, QR and AI, Razorpay, audit writer).
+- `src/__tests__/` holds only tests that span modules: `generation.test.ts` (generator, provider,
+  similarity and quota together) and `qr-and-ai.test.ts` (QR codes and the regeneration
+  similarity gate).
 - Integration tests in `src/__tests__/integration/` (quota concurrency, checkout, lifecycle,
   payments, subscriptions, MFA, team, activity, abuse, slugs, prompt versions). They need a real
   PostgreSQL at `DATABASE_URL`; run them with `pnpm test:integration` against a disposable
   database.
 
-Unit tests run with `pnpm test` and use the in-memory stores and `StubAiProvider`.
+Put a new unit test beside its module; use `src/__tests__/` only when a test genuinely exercises
+several modules. Unit tests run with `pnpm test` and use the in-memory stores and `StubAiProvider`.

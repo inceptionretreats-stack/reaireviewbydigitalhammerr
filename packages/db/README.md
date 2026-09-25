@@ -52,7 +52,9 @@ are recorded in the database table `drizzle.__drizzle_migrations`.
   if any migration after `0000` touches `analytics_events` or if `0000` loses its partition DDL.
   CI runs it. Review every generated migration by hand before committing it.
 - **New tables** must also be added to the allowlist in `scripts/supabase/lock-down.sql`;
-  `scripts/supabase/__tests__/lock-down.test.ts` (part of `pnpm test`) fails until you do.
+  `scripts/supabase/__tests__/lock-down.test.ts` (part of `pnpm test`) fails until you do. After
+  the migration reaches production, the owner re-applies that script there; see
+  [database on Supabase](../../docs/operations/database-supabase.md#keeping-lock-downsql-in-step).
 
 ## Commands
 
@@ -70,20 +72,27 @@ Run from the repository root.
 `DIRECT_DATABASE_URL` exists for hosts whose `DATABASE_URL` goes through a transaction pooler;
 migrations need a direct or session connection. The migration runner uses a single connection.
 
-None of these commands read `.env` on their own. Load it explicitly, and check which database it
-points at first:
+None of these commands read `.env` on their own. To migrate the local database, use the canonical
+command in
+[first-time setup](../../docs/operations/local-development.md#first-time-setup), which loads `.env`
+explicitly and runs the runner through `tsx` (check which database `.env` points at first).
+`node --env-file=.env --run db:migrate` does **not** work: on Node 24, `--run` does not pass the
+file's variables on, and the runner stops with "DIRECT_DATABASE_URL or DATABASE_URL is required".
+`pnpm dev:up` also migrates on every start, against whatever database `DIRECT_DATABASE_URL` (else
+`DATABASE_URL`) names in your shell or `.env`, which need not be a local one.
 
-```sh
-node --env-file=.env --run db:migrate
-```
+AI agents ask the owner before generating or running a migration, on any database; see
+[approval before migrating, seeding or testing](../../docs/operations/local-development.md#approval-before-migrating-seeding-or-testing).
 
-Migrations run as a deliberate release step, never on app start-up. See
-[docs/operations/database-supabase.md](../../docs/operations/database-supabase.md) before touching
-a hosted database.
+Migrations run as a deliberate release step, never on app start-up. For the hosted production
+database, follow
+[database on Supabase](../../docs/operations/database-supabase.md#running-later-migrations) instead;
+never point the local command at it with the local `.env`.
 
 ## Tests
 
 - `src/__tests__/connection.test.ts`, `src/__tests__/migrate.test.ts`: unit tests (`pnpm test`).
 - `src/__tests__/integration/migration.test.ts`: checks that an already-migrated database has the
-  extensions, tables and hand-written DDL. Run `pnpm db:migrate` first, then
+  extensions, tables and hand-written DDL. Migrate first (see
+  [first-time setup](../../docs/operations/local-development.md#first-time-setup)), then run
   `pnpm test:integration`, against a disposable database only.

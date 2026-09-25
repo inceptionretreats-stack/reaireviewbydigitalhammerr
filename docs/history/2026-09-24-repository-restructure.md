@@ -256,7 +256,7 @@ contract, test doubles, and `isLadderStatus` (an exhaustiveness guard).
 | `scripts/dev-up.mjs`                     | `scripts/dev/dev-up.mjs`                     |
 | `scripts/generate-qr-card-fonts.mjs`     | `scripts/codegen/generate-qr-card-fonts.mjs` |
 | `scripts/mark-payment-failed.mjs`        | `scripts/ops/mark-payment-failed.mjs`        |
-| `scripts/media/robot-artwork-prompts.md` | `docs/compliance/robot-artwork-prompts.md`   |
+| `scripts/media/robot-artwork-prompts.md` | `docs/media-rights/robot-artwork-prompts.md` |
 | `scripts/prompt-versions`                | `scripts/db/prompt-versions`                 |
 | `scripts/reconcile-payment.mjs`          | `scripts/ops/reconcile-payment.mjs`          |
 | `scripts/render-hero-walkthrough.mjs`    | `scripts/media/render-hero-walkthrough.mjs`  |
@@ -313,13 +313,62 @@ contract, test doubles, and `isLadderStatus` (an exhaustiveness guard).
 
 | Old path                                      | New path                                            |
 | --------------------------------------------- | --------------------------------------------------- |
-| `apps/web/public/marketing/CONCEPT_ASSETS.md` | `docs/compliance/marketing-concept-assets.md`       |
-| `apps/web/public/marketing/faq/SOURCES.md`    | `docs/compliance/faq-screenshot-sources.md`         |
-| `docs/ASSET_LICENSE_AUDIT.md`                 | `docs/compliance/asset-license-audit.md`            |
+| `apps/web/public/marketing/CONCEPT_ASSETS.md` | `docs/media-rights/marketing-concept-assets.md`     |
+| `apps/web/public/marketing/faq/SOURCES.md`    | `docs/media-rights/faq-screenshot-sources.md`       |
+| `docs/ASSET_LICENSE_AUDIT.md`                 | `docs/media-rights/asset-license-audit.md`          |
 | `docs/DEPLOY_SUPABASE.md`                     | `docs/operations/database-supabase.md`              |
-| `docs/DEPLOY_VERCEL.md`                       | `docs/operations/deploy-vercel.md`                  |
+| `docs/DEPLOY_VERCEL.md`                       | `docs/history/2026-09-17-vercel-deploy-runbook.md`  |
 | `docs/FRESH_START_RESET_2026-09-23.md`        | `docs/history/2026-09-23-fresh-start-reset.md`      |
 | `docs/GOOGLE_SIGN_IN.md`                      | `docs/operations/google-sign-in.md`                 |
 | `docs/SPEC_AMENDMENTS.md`                     | `docs/decisions/spec-amendments.md`                 |
 | `docs/VENDOR_UI_REDESIGN.md`                  | `docs/design/vendor-ui-redesign.md`                 |
 | `promotional-video-hindi-script.txt`          | `docs/marketing/promotional-video-hindi-script.txt` |
+
+## Second pass (24–25 September 2026)
+
+After newcomer reviewers walked the repository cold, a second pass grouped the admin components by
+screen (mirroring the vendor dashboard), renamed files whose names misled readers, tidied
+`packages/core` (admin-audit actor helpers now in `audit/actor.ts`), added ESLint rules that
+enforce the `lib/` and `components/` boundaries, renamed `docs/compliance/` to
+`docs/media-rights/`, and moved the outdated Vercel runbook into history. Local-only clutter
+(`tmp/`, pulled production env files, a dead Vercel token) moved to the owner's private backup
+folder outside the repository; Supabase's public CA certificate is now committed in
+`scripts/supabase/`. The production build still lists the same 130 routes.
+
+| Old path                                                                | New path                                                                                        |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `apps/web/app/api/v1/analytics/range-request.ts`                        | `apps/web/lib/analytics/range-request.ts`                                                       |
+| `apps/web/components/admin/AbuseActions.tsx`                            | `apps/web/components/admin/businesses/AbuseActions.tsx`                                         |
+| `apps/web/components/admin/ActivityFilters.tsx`                         | `apps/web/components/admin/activity/ActivityFilters.tsx`                                        |
+| `apps/web/components/admin/ActivityTable.tsx`                           | `apps/web/components/admin/activity/ActivityTable.tsx`                                          |
+| `apps/web/components/admin/AdminNav.tsx`                                | `apps/web/components/admin/shell/AdminNav.tsx`                                                  |
+| `apps/web/components/admin/BusinessActions.tsx`                         | `apps/web/components/admin/businesses/BusinessActions.tsx`                                      |
+| `apps/web/components/admin/PaymentFilters.tsx`                          | `apps/web/components/admin/payments/PaymentFilters.tsx`                                         |
+| `apps/web/components/admin/PaymentsScreen.tsx`                          | `apps/web/components/admin/payments/PaymentsScreen.tsx`                                         |
+| `apps/web/components/admin/PlatformSettingsForm.tsx`                    | `apps/web/components/admin/settings/PlatformSettingsForm.tsx`                                   |
+| `apps/web/components/admin/PromptVersionEditor.tsx`                     | `apps/web/components/admin/ai/PromptVersionEditor.tsx`                                          |
+| `apps/web/components/admin/SendPasswordResetButton.tsx`                 | `apps/web/components/admin/businesses/SendPasswordResetButton.tsx`                              |
+| `apps/web/components/admin/TeamScreen.tsx`                              | `apps/web/components/admin/team/TeamScreen.tsx`                                                 |
+| `apps/web/components/admin/business-tabs/index.tsx`                     | `apps/web/components/admin/businesses/BusinessTabs.tsx`                                         |
+| `apps/web/components/dashboard/qr/__tests__/qr-sources.test.ts`         | `apps/web/components/dashboard/qr/__tests__/qr-screen-model.test.ts`                            |
+| `apps/web/components/dashboard/qr/qr-sources.ts`                        | `apps/web/components/dashboard/qr/qr-screen-model.ts`                                           |
+| `apps/web/components/dashboard/settings/__tests__/submit-state.test.ts` | `apps/web/components/dashboard/settings/__tests__/use-settings-submit.test.ts`                  |
+| `apps/web/components/marketing/pricing/PricingDetails.module.css`       | `apps/web/components/marketing/pricing/PricingDetailsLink.module.css`                           |
+| `apps/web/components/marketing/pricing/PricingDetails.tsx`              | `apps/web/components/marketing/pricing/PricingDetailsLink.tsx`                                  |
+| `apps/web/lib/admin/business-detail/loaders.ts`                         | `apps/web/lib/admin/business-tab-loaders.ts`                                                    |
+| `apps/web/lib/auth/helpers.ts`                                          | `apps/web/lib/auth/password-hasher.ts`                                                          |
+| `apps/web/lib/crm/customers/__tests__/query.test.ts`                    | `apps/web/lib/crm/customers/__tests__/list-params.test.ts`                                      |
+| `apps/web/lib/crm/customers/query.ts`                                   | `apps/web/lib/crm/customers/list-params.ts`                                                     |
+| `apps/web/lib/crm/review-requests/__tests__/service-scope.test.ts`      | `apps/web/lib/crm/review-requests/__tests__/repository-scope.test.ts`                           |
+| `apps/web/lib/crm/review-requests/service.ts`                           | `apps/web/lib/crm/review-requests/repository.ts`                                                |
+| `apps/web/lib/qr/__tests__/qr-source.test.ts`                           | `apps/web/lib/qr/__tests__/qr-source-api.test.ts`                                               |
+| `apps/web/lib/qr/qr-source.ts`                                          | `apps/web/lib/qr/qr-source-api.ts`                                                              |
+| `docs/compliance/asset-license-audit.md`                                | `docs/media-rights/asset-license-audit.md`                                                      |
+| `docs/compliance/faq-screenshot-sources.md`                             | `docs/media-rights/faq-screenshot-sources.md`                                                   |
+| `docs/compliance/marketing-concept-assets.md`                           | `docs/media-rights/marketing-concept-assets.md`                                                 |
+| `docs/compliance/robot-artwork-prompts.md`                              | `docs/media-rights/robot-artwork-prompts.md`                                                    |
+| `docs/operations/deploy-vercel.md`                                      | `docs/history/2026-09-17-vercel-deploy-runbook.md`                                              |
+| `packages/core/src/__tests__/audit-writer.test.ts`                      | `packages/core/src/audit/__tests__/writer.test.ts`                                              |
+| `packages/core/src/__tests__/razorpay.test.ts`                          | `packages/core/src/billing/__tests__/razorpay.test.ts`                                          |
+| `packages/core/src/abuse/service.ts`                                    | `packages/core/src/abuse/abuse-service.ts`                                                      |
+| `apps/web/components/dashboard/ai-review/styles.ts`                     | merged into `apps/web/components/dashboard/link-styles.ts` and `ai-review/AiReviewSettings.tsx` |

@@ -68,6 +68,9 @@ the schema validates it but no application code uses it today; setting it change
 
 Do not rotate `SESSION_SECRET`, `APP_ENCRYPTION_KEY` or `HASH_PEPPER` casually: a new pepper makes
 every stored password unverifiable, and a new encryption key makes enrolled MFA secrets unreadable.
+A new `SESSION_SECRET` only cancels Google sign-ins in progress (it signs their short-lived
+cookies); it does not sign anyone out. How to set a variable on Vercel is in the
+[deployment checklist](deployment-checklist.md#other-vercel-tasks).
 
 ### Database
 
@@ -78,15 +81,15 @@ every stored password unverifiable, and a new encryption key makes enrolled MFA 
 | `DATABASE_POOL_MIN`      | Optional | Pool size floor                                                                                                                                                                                                                                                                                               |
 | `DATABASE_POOL_MAX`      | Optional | Pool size ceiling. Keep it very small on serverless                                                                                                                                                                                                                                                           |
 | `DATABASE_SSL`           | Optional | `disable`, `require` or `verify-full`. When unset, TLS is off for localhost and required for remote hosts                                                                                                                                                                                                     |
-| `DATABASE_SSL_ROOT_CERT` | Optional | PEM CA certificate for `verify-full`                                                                                                                                                                                                                                                                          |
+| `DATABASE_SSL_ROOT_CERT` | Optional | The CA certificate's PEM **text** (not a file path), required by `verify-full`. For the hosted database it is Supabase's public root CA, committed as `scripts/supabase/supabase-root-2021-ca.crt`; see [database on Supabase](database-supabase.md#the-ca-certificate)                                       |
 | `MIGRATION_MAINTENANCE`  | Optional | Server-only switch, not in the schema. Exactly `1` makes `apps/web/proxy.ts` answer every request except static assets with a retryable 503 maintenance response. Read per request by `apps/web/lib/infra/migration-maintenance.ts`. It does not stop requests already running or a separately running worker |
 
 ### Redis and rate limits
 
-| Name                    | Required | Purpose                                                                                                                           |
-| ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `REDIS_URL`             | Yes      | Shared rate-limit store (and the worker's BullMQ queue). If unreachable, the web app falls back to per-process limits and logs it |
-| `RATE_LIMIT_MULTIPLIER` | Optional | Multiplies every rate-limit allowance. For test environments that drive the real flow many times                                  |
+| Name                    | Required | Purpose                                                                                                                                                                                                                                                      |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `REDIS_URL`             | Yes      | Shared rate-limit store (and the worker's BullMQ queue). If unreachable, the web app falls back to per-process limits and logs it                                                                                                                            |
+| `RATE_LIMIT_MULTIPLIER` | Optional | Multiplies every rate-limit allowance (counts only, never time windows). A positive number up to 1000; default `1`, the calibrated policy, which production uses. Raise it only for a test environment where end-to-end runs would otherwise trip the limits |
 
 ### Ai generation
 
@@ -96,8 +99,8 @@ every stored password unverifiable, and a new encryption key makes enrolled MFA 
 | `OPENAI_API_KEY`               | One in production | As above                                                                                                                  |
 | `GEMINI_API_KEY`               | One in production | As above (Google AI Studio key)                                                                                           |
 | `AI_REQUEST_TIMEOUT_MS`        | Optional          | Time budget for one whole generation, shared by its internal attempts                                                     |
-| `AI_DEFAULT_MODEL`             | Optional          | Read only by the seed: the model written into the ACTIVE prompt version. Not in the schema                                |
-| `AI_REASONING_EFFORT_OVERRIDE` | Optional          | Read only by the seed, with `AI_DEFAULT_MODEL`                                                                            |
+| `AI_DEFAULT_MODEL`             | Optional          | Read only by the seed: the model written into the prompt versions it seeds. Not in the schema                             |
+| `AI_REASONING_EFFORT_OVERRIDE` | Optional          | Read only by the seed: the reasoning effort written into the prompt versions it seeds. Not in the schema                  |
 | `OPENAI_DEFAULT_MODEL`         | Optional          | Not read                                                                                                                  |
 | `OPENAI_FALLBACK_MODEL`        | Optional          | Not read. There is deliberately no automatic fallback model                                                               |
 | `OPENAI_REASONING_EFFORT`      | Optional          | Not read                                                                                                                  |
@@ -176,22 +179,27 @@ plan variables above are left over from an earlier design.
 | `SEED_ADMIN_PASSWORD`    | Gives the demo admin a usable password (otherwise it has none) and lets a re-seed overwrite it |
 | `SEED_GOOGLE_REVIEW_URL` | Points the demo tenant at a real, validated Google review link instead of the placeholder      |
 
-### Standalone worker only (`apps/worker/src/config.ts`)
+### Maintenance settings (`WORKER_*`)
 
-All optional, each with a default: `WORKER_QUEUE_PREFIX`, `WORKER_CONCURRENCY`,
-`WORKER_HEALTH_PORT`, `WORKER_SHUTDOWN_TIMEOUT_MS`, `WORKER_ANALYTICS_LOOKBACK_DAYS`,
-`WORKER_PARTITION_MONTHS_AHEAD`, `WORKER_ANALYTICS_RETENTION_MONTHS`,
-`WORKER_PARTITION_DROP_ENABLED`, `WORKER_MAX_PARTITION_DROPS_PER_RUN`,
-`WORKER_SESSION_PURGE_GRACE_DAYS`, `WORKER_DOMAIN_POLL_BATCH`. The worker also needs everything in
-[Required to boot](#required-to-boot). Read the file for defaults and limits.
+Read by the standalone worker (`apps/worker/src/config.ts`), all optional, each with a default:
+`WORKER_QUEUE_PREFIX`, `WORKER_CONCURRENCY`, `WORKER_HEALTH_PORT`, `WORKER_SHUTDOWN_TIMEOUT_MS`,
+`WORKER_ANALYTICS_LOOKBACK_DAYS`, `WORKER_PARTITION_MONTHS_AHEAD`,
+`WORKER_ANALYTICS_RETENTION_MONTHS`, `WORKER_PARTITION_DROP_ENABLED`,
+`WORKER_MAX_PARTITION_DROPS_PER_RUN`, `WORKER_SESSION_PURGE_GRACE_DAYS`,
+`WORKER_DOMAIN_POLL_BATCH`. The worker also needs everything in
+[Required to boot](#required-to-boot). Read the file for defaults and limits. None is in the schema.
+
+Two of them are **not worker-only**: the deployed maintenance cron (`/api/cron/maintenance`,
+through `apps/web/lib/cron/maintenance-store.ts`) also reads `WORKER_PARTITION_MONTHS_AHEAD`
+(default 3) and `WORKER_SESSION_PURGE_GRACE_DAYS` (default 7). Setting either in the Vercel project
+changes production maintenance.
 
 ### Tests and tooling
 
-| Name                                                                                                                                                          | Used by                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `E2E_BASE_URL`, `E2E_SLUG`, `E2E_OWNER_EMAIL`, `E2E_OWNER_PASSWORD`                                                                                           | Playwright specs; see [testing](testing.md#browser-tests-playwright) |
-| `FAQ_SCREENSHOT_DIR`, `PRICING_SCREENSHOT_DIR`, `PUBLIC_INFORMATION_SCREENSHOT_DIR`, `VENDOR_UI_ARTIFACT_DIR`, `RESPONSIVE_QA_SCREENSHOT`, `RESPONSIVE_DEBUG` | Optional screenshot and debug output from individual specs           |
-| `FFMPEG_PATH`                                                                                                                                                 | `scripts/media/render-*.mjs`: path to a full `ffmpeg` build          |
+| Name                                                                         | Used by                                                                                                                   |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Browser-test variables (`E2E_*` and the specs' screenshot and debug folders) | The Playwright config and specs. Listed once, with their meaning, in [e2e/README.md](../../e2e/README.md#other-variables) |
+| `FFMPEG_PATH`                                                                | `scripts/media/render-*.mjs`: path to a full `ffmpeg` build                                                               |
 
 ## Adding a variable
 

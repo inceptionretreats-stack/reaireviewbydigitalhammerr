@@ -25,8 +25,13 @@ works. Setting up the database and dev server is covered in
 - fails when no test file is selected (`passWithNoTests: false`).
 
 Unit tests use pure functions and in-memory doubles: no database, Redis, network or Ai provider.
-Only `.test.ts` files are collected (a `.test.tsx` file would be ignored); tests beside components
-exercise their plain helper modules, not rendered JSX. To run one file: `pnpm vitest run apps/web/lib/http/__tests__/csrf.test.ts`.
+Only `.test.ts` files are collected (a `.test.tsx` file would be ignored). The default environment
+is Node. In `apps/web`, tests beside components exercise their plain helper modules, not rendered
+JSX. The exception is `packages/ui`: five of its tests opt into a browser-like DOM (jsdom) with a
+`// @vitest-environment jsdom` first line, and four of those render components with
+`@testing-library/react` (`packages/ui/src/tsconfig.json` exists so Vitest can transform the JSX
+they import). To run one file:
+`pnpm vitest run apps/web/lib/http/__tests__/csrf.test.ts`.
 
 ## Integration tests
 
@@ -42,54 +47,40 @@ Current locations:
 - `packages/db/src/__tests__/integration/` — the migration test and shared setup;
 - `apps/web/lib/cron/__tests__/integration/` — the maintenance job.
 
-They need a real PostgreSQL 17 or newer at `DATABASE_URL` with migrations applied
-(`node --env-file=.env --run db:migrate` first). They create and clean up fixture rows, so point
-them at a **disposable** database, never a shared or valuable one.
+They need a real PostgreSQL 17 or newer at `DATABASE_URL` with migrations applied (the migrate
+command in [local development](local-development.md#first-time-setup) first). They create and clean
+up fixture rows, so point them at a **disposable** database, never a shared or valuable one; see
+[a separate database for tests](local-development.md#a-separate-database-for-tests). AI agents ask
+the owner before migrating, or before running the integration or browser suites against the
+owner's local database; see
+[approval before migrating, seeding or testing](local-development.md#approval-before-migrating-seeding-or-testing).
 
 ## Browser tests (Playwright)
 
 ```sh
 pnpm e2e                                   # all specs, both projects
 pnpm e2e:headed                            # same, with a visible browser
-pnpm exec playwright test e2e/marketing/pricing.spec.ts --project=chrome
+pnpm e2e e2e/marketing/pricing.spec.ts --project=chrome
 ```
 
-`playwright.config.ts`:
-
-- drives the **installed Google Chrome** (`channel: 'chrome'`); no browser is downloaded;
-- does **not** start a web server. Start the app first
-  ([local development](local-development.md#running-the-app));
-- uses `E2E_BASE_URL`, or `http://localhost:3000` when unset. For a plain-HTTP LAN address it tells
-  Chrome to treat that origin as secure, so the clipboard path can be tested;
-- loads the root `.env`, so a test can compare QR payloads against the real `APP_BASE_URL`;
-- runs one worker, not fully parallel, with a 60 s test timeout;
-- has two projects: `chrome` (Desktop Chrome, every spec) and `mobile` (Pixel 7, only files named
-  `customer-*.spec.ts`). Some marketing specs set their own phone widths inside the `chrome` project.
-
-| Folder           | Covers                                                                     |
-| ---------------- | -------------------------------------------------------------------------- |
-| `e2e/marketing/` | Landing page, FAQ, pricing, promo video, public information pages          |
-| `e2e/auth/`      | Sign-in and sign-up layouts, Google sign-up UI                             |
-| `e2e/customer/`  | QR/slug review flow, public profile, customer visuals and responsiveness   |
-| `e2e/vendor/`    | Onboarding, dashboard, review location, subscription, invoice              |
-| `e2e/admin/`     | Admin console, MFA, payments, team, activity                               |
-| `e2e/system/`    | The subscription cron endpoint (skipped unless `CRON_SECRET` is set)       |
-| `e2e/support/`   | Shared helpers: direct database fixtures, TOTP codes, marketing navigation |
+`pnpm e2e` is `playwright test`, so it takes the same arguments. `playwright.config.ts` does
+**not** start a web server, so start the app first
+([local development](local-development.md#running-the-app)). The folder layout, setup steps, the
+base URL, the desktop and mobile projects, the Chrome requirement and the variables individual
+specs read are described once, in [e2e/README.md](../../e2e/README.md).
 
 What the suite expects:
 
-- A migrated database seeded with the demo tenant (`node --env-file=.env --run seed`). Specs default
-  to the slug `demo-south-cafe` and the demo owner; override with `E2E_SLUG`, `E2E_OWNER_EMAIL` and
-  `E2E_OWNER_PASSWORD`.
+- A migrated database seeded with the demo tenant (the seed command in
+  [local development](local-development.md#seeding-the-demo-tenant); after an earlier suite run it
+  needs `--force`, see [e2e/README.md](../../e2e/README.md#what-it-needs)). Specs default to the
+  slug `demo-south-cafe` and the demo owner.
 - `e2e/support/db.ts` connects straight to `DATABASE_URL` to arrange state the UI cannot (for
   example resetting the demo tenant's free-draft counter, payments and entitlement). Run the suite
-  only against a local or disposable database.
+  only against a local, disposable database; see
+  [a separate database for tests](local-development.md#a-separate-database-for-tests).
 - The customer flow generates drafts; with no provider key the stub provider answers, so no real
   allowance or money is spent.
-
-Other environment switches used by individual specs: `CRON_SECRET`, `FAQ_SCREENSHOT_DIR`,
-`PRICING_SCREENSHOT_DIR`, `PUBLIC_INFORMATION_SCREENSHOT_DIR`, `VENDOR_UI_ARTIFACT_DIR`,
-`RESPONSIVE_QA_SCREENSHOT`, `RESPONSIVE_DEBUG`.
 
 Read a spec before running it. Some create data or follow external links. Do not post real Google
 reviews, send WhatsApp messages or email, accept terms for a real user, or charge or refund money
@@ -109,8 +100,9 @@ from a test.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`, on Node 24, with a
-newer run cancelling an older one for the same ref. Its four jobs run in parallel:
+This section is the one description of the pipeline; other documents link here rather than
+repeating it. `.github/workflows/ci.yml` runs on every pull request and on pushes to `main`, on
+Node 24, with a newer run cancelling an older one for the same ref. Its four jobs run in parallel:
 
 | Job                | Steps                                                                                                                                    |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |

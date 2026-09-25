@@ -51,7 +51,10 @@ reset and warning actions skip the send and report it as not sent.
 ## Vercel Cron jobs
 
 Declared in `apps/web/vercel.json` (which also pins functions to the `sin1` region). Vercel calls
-each path with `GET` and `Authorization: Bearer <CRON_SECRET>`.
+each path with `GET` and `Authorization: Bearer <CRON_SECRET>`. This table is the one place the
+schedules are written out; other documents link here, and `vercel.json` is the source of truth.
+How to call a job by hand is in the
+[deployment checklist](deployment-checklist.md#checking-a-cron-job-by-hand).
 
 | Path                      | Schedule (UTC) | IST   | Handler                                                             | Does                                                                                                                                                                    |
 | ------------------------- | -------------- | ----- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -93,6 +96,11 @@ credentials or raw errors, and are sent `no-store`.
 
 ### Maintenance
 
+**Status:** the route and its schedule are in the committed source and `vercel.json`, and migration
+`0007` was applied to production at the Supabase cutover, but no document records a successful
+production run. Check the Vercel project's cron logs before claiming it works (see
+[launch verification](../decisions/open-decisions.md#launch-verification)).
+
 `/api/cron/maintenance` depends on the `maintenance_jobs` table from migration
 `0007_maintenance_jobs`. Each run has a 30 s work budget and up to 200 analytics units. Every
 completed unit is checkpointed in the database, and each job takes a transaction-level advisory
@@ -110,23 +118,26 @@ catch up.
 ## The optional standalone worker
 
 `apps/worker` is a BullMQ worker (`apps/worker/src/index.ts`). It is **not deployed** on Vercel and
-needs a real Redis plus the full [boot environment](environment.md#required-to-boot). It schedules,
-in UTC:
+needs a real Redis plus the full [boot environment](environment.md#required-to-boot). It is still
+live code: the deployed web app imports its maintenance helpers (below), so deleting the folder
+would break the production build. Its four repeatable jobs, with their UTC schedules, are listed in
+[apps/worker/README.md](../../apps/worker/README.md#what-it-does) (source:
+`apps/worker/src/queue/names.ts`). How each relates to the Vercel Cron path:
 
-| Job                               | Schedule        | Overlaps with the Vercel Cron path                                                                                         |
-| --------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `analytics.daily-rollup`          | 00:20 daily     | Yes: `/api/cron/maintenance` rollups                                                                                       |
-| `analytics.partition-maintenance` | 03:10 daily     | Yes, except the worker can also drop partitions past retention when `WORKER_PARTITION_DROP_ENABLED` is on (off by default) |
-| `auth.session-purge`              | Hourly at :40   | Yes: `/api/cron/maintenance` session purge                                                                                 |
-| `domains.status-poll`             | Every 5 minutes | No. Uses `UnconfiguredCustomDomainProvider`, so every check fails fast; custom domains are not built                       |
+| Job                               | Overlaps with the Vercel Cron path                                                                                         |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `analytics.daily-rollup`          | Yes: `/api/cron/maintenance` rollups                                                                                       |
+| `analytics.partition-maintenance` | Yes, except the worker can also drop partitions past retention when `WORKER_PARTITION_DROP_ENABLED` is on (off by default) |
+| `auth.session-purge`              | Yes: `/api/cron/maintenance` session purge                                                                                 |
+| `domains.status-poll`             | No. Uses `UnconfiguredCustomDomainProvider`, so every check fails fast; custom domains are not built                       |
 
 The web app reuses the worker's side-effect-free helpers through the package export
 `@ai-review/worker/maintenance` (`apps/worker/src/maintenance.ts`): date buckets, rollup metrics and
 the analytics and partition stores. It never imports the worker's startup entry.
 
 Do not run the worker blindly against a database that Vercel Cron already maintains; decide first
-which path owns each job. `pnpm dev` at the
-repository root starts the worker too (see [local development](local-development.md#commands-with-side-effects)).
+which path owns each job. `pnpm dev` at the repository root starts the worker too (see
+[local development](local-development.md#commands-with-side-effects)).
 
 ## Related
 

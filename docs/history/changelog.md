@@ -9,7 +9,36 @@ quoted as they were then (see the [2026-09-24 restructure](2026-09-24-repository
 for the old → new path map). Entries on the same day are in the order the handover recorded them
 where that order is known.
 
+## Milestones at a glance
+
+A plain summary of the project's timeline so far. The detailed entries below start on 18 September;
+earlier milestones are recorded in the documents linked here.
+
+| Date        | Milestone                                                                                                                                                                                    | Where it is recorded                                                                                                                          |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 29 Aug 2026 | The product specification was frozen and development began                                                                                                                                   | [Spec pack](../spec/README_FIRST.md)                                                                                                          |
+| 10 Sep 2026 | Pro capped at 2,000 Ai drafts a year; the product writes "Ai" rather than "AI"                                                                                                               | [CHANGE-001 and CHANGE-002](../decisions/spec-amendments.md#approved-product-changes)                                                         |
+| 11 Sep 2026 | Hinglish became the default draft language; an admin console, editable Ai writing rules and prices, and self-service Razorpay payment were approved                                          | [CHANGE-003 and CHANGE-004](../decisions/spec-amendments.md#approved-product-changes)                                                         |
+| 12 Sep 2026 | First production deployment, on Vercel                                                                                                                                                       | [Vercel runbook](2026-09-17-vercel-deploy-runbook.md) (historical)                                                                            |
+| 16 Sep 2026 | Admin two-step sign-in switched off in production at the project owner's request                                                                                                             | [AMENDMENT-027](../decisions/spec-amendments.md#amendment-027--admin-mfa-is-built-and-mandatory-a-support-viewer-role-12-hour-admin-sessions) |
+| 18 Sep 2026 | Original handover; the project owner confirmed commercial rights to the robot artwork and the shopkeeper video                                                                               | [18 September](#18-september-2026), [asset licence audit](../media-rights/asset-license-audit.md)                                             |
+| 23 Sep 2026 | Database moved to Supabase; customer flow changed to "services first"; vendor workspace redesigned; all earlier production data removed at the project owner's request; landing-page updates | [23 September](#23-september-2026)                                                                                                            |
+| 24 Sep 2026 | Google sign-in for business owners; mobile-responsive pass; shared pricing details page (local change); repository and documentation reorganised                                             | [24 September](#24-september-2026)                                                                                                            |
+
 ## 24 September 2026
+
+### Business and reference documentation
+
+A second documentation pass added documents for readers who do not write code and for newcomers: a
+[product overview](../product/README.md), a [glossary](../glossary.md) with the ID prefixes cited in
+code, and a [decisions](../decisions/README.md) folder that now holds the approved
+[product decisions](../decisions/product-decisions.md) (moved out of `AI_HANDOVER.md` section 2) and
+the [open decisions](../decisions/open-decisions.md) (moved out of `docs/known-issues.md`). The
+image and video provenance records moved from `docs/compliance/` to
+[`docs/media-rights/`](../media-rights/README.md); the Vercel deployment runbook moved to
+[history](2026-09-17-vercel-deploy-runbook.md); the Supabase cutover evidence was split into its own
+[history record](2026-09-23-supabase-cutover.md). Spec amendments gained a status note listing its
+superseded entries, and the known issues gained a business-impact line per item.
 
 ### Repository restructure
 
@@ -92,7 +121,7 @@ Production deployment `dpl_3FegzB6fTdcYRNR4ecDnAc5fKVtC` was READY and promoted 
   section (`ReviewBenefits.tsx` / `.module.css`): truthful feature chips and three
   customer-controlled steps on the left; a real local-shop photograph with the editable illustrative
   draft preview on the right. The photo is an optimised, licensed Pexels image; source and usage
-  limits are in the [asset licence audit](../compliance/asset-license-audit.md). The people pictured
+  limits are in the [asset licence audit](../media-rights/asset-license-audit.md). The people pictured
   are not customers or endorsers. Do not restore the AI-looking floating robot concept or
   unsupported review counts or results. The section keeps its `#why-ai-review` anchor, sign-up link,
   How it works link and locally editable example draft.
@@ -272,6 +301,7 @@ before promotion). The Next.js application and API stayed on the existing Incept
 PostgreSQL moved to the **Ai Review** Supabase Free project `vouqzekpujgzsplhqqor` in the **Digital
 Hammerr** organisation `fmqzifenquuoysefzfui`, Mumbai (`ap-south-1`). No paid upgrade was made. Full
 backup, migration, deployment and verification evidence:
+[2026-09-23 Supabase cutover](2026-09-23-supabase-cutover.md); the current runbook is
 [database on Supabase](../operations/database-supabase.md).
 
 - The final source snapshot held nine accounts and five businesses. Public-table row hashes and
@@ -312,7 +342,7 @@ policy.
   dashboard updates").
 - The owner explicitly confirmed commercial rights to the existing robot artwork and the shopkeeper
   promotional video, including its voice and music. This is the owner's confirmation, not
-  independent proof; see the [asset licence audit](../compliance/asset-license-audit.md).
+  independent proof; see the [asset licence audit](../media-rights/asset-license-audit.md).
 - Local read-only checks found Free = 10 and Pro = 2,000 drafts stored in platform settings, the
   price at the application default of 99,900 paise, and no local seller GSTIN or state, so no GST
   split was configured. These did not verify live production settings, tax registration or

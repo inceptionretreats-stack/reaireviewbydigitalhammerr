@@ -29,6 +29,24 @@ The figures above are the defaults. The live values are read from `platform_sett
 - **Payments and invoices** keep their own amount and snapshots and are never rewritten when
   settings change.
 
+### Changing the price or allowances
+
+- **On a running system**, a `SUPER_ADMIN` changes the values at `/admin/settings`
+  (`PATCH /api/v1/admin/settings`, which needs a fresh MFA step-up and a reason, and is audited).
+  Nothing needs deploying: public pages and checkout read the new values on the next request.
+- **The fallback defaults** (used when no row is stored, and on a fresh database) are
+  `PLATFORM_SETTING_DEFAULTS` in `packages/core/src/platform/settings.ts`. The
+  `FREE_AI_GENERATION_LIMIT`, `PRO_ANNUAL_GENERATION_LIMIT` and `PRO_ANNUAL_PRICE_PAISE`
+  environment variables are no longer read.
+- **Browser tests assume the defaults.** Pricing, landing, public-information, subscription,
+  invoice, cron and admin-payments specs, and `e2e/support/db.ts`, expect ₹999 (99900 paise). Do
+  not change the settings on the test database; if you change the defaults, update those specs too
+  (see [e2e](../../e2e/README.md)).
+- **Public copy that states a price or allowance** reads it through
+  `apps/web/lib/marketing/commercial-terms.ts`; never hard-code the number.
+
+### How allowances are used
+
 Allowances belong to one business profile and its Google review link. Each successful customer draft,
 including a "New review", uses one; editing, copying, opening Google and the owner's preview do not.
 When Pro is active the Pro counter is used; when a Pro period ends, unused Pro drafts do not roll
@@ -120,7 +138,9 @@ deadlines are an owner decision still pending; do not invent them in copy or cod
 
 ## Daily subscription job
 
-`GET /api/cron/subscriptions` (Vercel Cron, 00:30 UTC; `apps/web/lib/cron/subscriptions.ts`):
+`GET /api/cron/subscriptions` (Vercel Cron, once a day; see the
+[schedule](../operations/email-and-scheduled-jobs.md#vercel-cron-jobs);
+`apps/web/lib/cron/subscriptions.ts`):
 
 1. Marks `PRO_ACTIVE`/`PAST_DUE` rows whose period has ended as `EXPIRED` and queues an expiry
    notice.

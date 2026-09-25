@@ -63,8 +63,9 @@ Every vendor owns exactly one business, and every owner API handler must scope i
   a stranger.
 - **MFA** is TOTP. It is enforced while `ADMIN_MFA_REQUIRED` is `true` (the default); check the
   deployed value before claiming MFA is enforced anywhere. Sensitive actions — refunds, platform
-  settings, team changes, MFA resets — pass `stepUp`, which also demands a verification from the last
-  15 minutes.
+  settings changes, sending an admin invitation, changing, disabling or re-enabling an admin, MFA resets — pass
+  `stepUp`, which also demands a verification from the last 15 minutes. Withdrawing a pending
+  invitation (`DELETE /api/v1/admin/team/invites/{id}`) does not.
 - **MFA secrets** are sealed at rest with AES-256-GCM under a key derived from
   `APP_ENCRYPTION_KEY` (`packages/core/src/crypto/secret-box.ts`). A used time step is remembered to
   stop replay. Eight one-time recovery codes are stored as peppered hashes. MFA attempts are
@@ -98,12 +99,12 @@ and owner previews are refused. Keys use a
 peppered hash of the caller's /24 (IPv4) or /48 (IPv6) network prefix, the anonymous session and the
 business.
 
-| Check                   | Main limits (defaults)                                                                                                                                      |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public draft generation | 3 per 20 s and 10 per hour per session per business; per-prefix allowance of 20 + 8 per active session, capped at 240 per hour; admin throttle per business |
-| Owner preview           | 3 per 30 s and 20 per hour per business                                                                                                                     |
-| Private feedback        | Per session and per prefix, plus a database cap of 5 per session per hour                                                                                   |
-| Sign-in, MFA, sign-up   | See [authentication](#authentication) and [admin roles](#admin-roles-and-mfa)                                                                               |
+| Check                   | Main limits (defaults)                                                                                                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public draft generation | 3 per 20 s and 10 per hour per session per business; per network prefix, 20 per hour plus 8 for each additional distinct session, capped at 240; admin throttle per business |
+| Owner preview           | 3 per 30 s and 20 per hour per business                                                                                                                                      |
+| Private feedback        | Per session and per prefix, plus a database cap of 5 per session per hour                                                                                                    |
+| Sign-in, MFA, sign-up   | See [authentication](#authentication) and [admin roles](#admin-roles-and-mfa)                                                                                                |
 
 `RATE_LIMIT_MULTIPLIER` scales every count (not window) for test environments; it is 1 in
 production. The client address comes only from Vercel's forwarding headers when running on Vercel;
@@ -169,19 +170,19 @@ Variable names and purposes: [environment variables](../operations/environment.m
 
 ## Where the code lives
 
-| What                       | Path                                                                                                      |
-| -------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Session cookie and lookup  | `apps/web/lib/auth/session.ts`, `packages/core/src/auth/session.ts`                                       |
-| Password hashing and rules | `packages/core/src/auth/password.ts`, `apps/web/lib/auth/password-hasher.ts`                              |
-| Token and privacy hashing  | `packages/core/src/auth/tokens.ts`                                                                        |
-| Google sign-in             | `apps/web/lib/auth/google-auth.ts`, `apps/web/app/api/v1/auth/google/`                                    |
-| Tenant guard               | `apps/web/lib/tenant/require-tenant.ts`, `packages/core/src/tenant/guard.ts`                              |
-| Admin guard and MFA        | `apps/web/lib/auth/require-admin.ts`, `apps/web/lib/auth/mfa.ts`, `packages/core/src/auth/mfa-service.ts` |
-| Secret sealing             | `packages/core/src/crypto/secret-box.ts`                                                                  |
-| Audit and activity         | `packages/core/src/audit/writer.ts`, `apps/web/lib/activity/recorder.ts`                                  |
-| CSRF                       | `apps/web/lib/http/csrf.ts`                                                                               |
-| Rate limits and client IP  | `apps/web/lib/http/rate-limit.ts`, `packages/core/src/rate-limit/policies.ts`                             |
-| Anonymous session          | `apps/web/proxy.ts`, `apps/web/lib/customer/anonymous-session.ts`                                         |
-| Environment validation     | `packages/config/src/env.ts`, `apps/web/lib/infra/env.ts`                                                 |
-| Safe error logging         | `apps/web/lib/infra/safe-error.ts`                                                                        |
-| Hosted-database lock-down  | `scripts/supabase/lock-down.sql`                                                                          |
+| What                       | Path                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Session cookie and lookup  | `apps/web/lib/auth/session.ts`, `packages/core/src/auth/session.ts`                                          |
+| Password hashing and rules | `packages/core/src/auth/password.ts`, `apps/web/lib/auth/password-hasher.ts`                                 |
+| Token and privacy hashing  | `packages/core/src/auth/tokens.ts`                                                                           |
+| Google sign-in             | `apps/web/lib/auth/google-auth.ts`, `apps/web/app/api/v1/auth/google/`                                       |
+| Tenant guard               | `apps/web/lib/tenant/require-tenant.ts`, `packages/core/src/tenant/guard.ts`                                 |
+| Admin guard and MFA        | `apps/web/lib/auth/require-admin.ts`, `apps/web/lib/auth/mfa.ts`, `packages/core/src/auth/mfa-service.ts`    |
+| Secret sealing             | `packages/core/src/crypto/secret-box.ts`                                                                     |
+| Audit and activity         | `packages/core/src/audit/writer.ts`, `packages/core/src/audit/actor.ts`, `apps/web/lib/activity/recorder.ts` |
+| CSRF                       | `apps/web/lib/http/csrf.ts`                                                                                  |
+| Rate limits and client IP  | `apps/web/lib/http/rate-limit.ts`, `packages/core/src/rate-limit/policies.ts`                                |
+| Anonymous session          | `apps/web/proxy.ts`, `apps/web/lib/customer/anonymous-session.ts`                                            |
+| Environment validation     | `packages/config/src/env.ts`, `apps/web/lib/infra/env.ts`                                                    |
+| Safe error logging         | `apps/web/lib/infra/safe-error.ts`                                                                           |
+| Hosted-database lock-down  | `scripts/supabase/lock-down.sql`                                                                             |

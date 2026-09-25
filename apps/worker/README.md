@@ -2,12 +2,27 @@
 
 This is an optional background process that runs scheduled maintenance jobs from a BullMQ queue
 in Redis. Read this before running it, before changing a maintenance job, or when you wonder how
-the same maintenance happens in production without it. **It is not deployed on Vercel.**
-Production maintenance runs through Vercel Cron in `apps/web` (see below).
+the same maintenance happens in production without it.
+
+**Optional, but not dead code.**
+
+- **Not deployed.** The delivered specification planned the worker as a separate long-running
+  service. Production moved to Vercel, which runs no long-lived processes, so the worker process
+  is not deployed (see the Vercel entry in
+  [spec amendments](../../docs/decisions/spec-amendments.md)). Production maintenance runs through
+  the Vercel Cron route `/api/cron/maintenance` in `apps/web` instead.
+- **Still part of the production build.** That cron route runs this package's own job code: the
+  web app imports `src/maintenance.ts` through `@ai-review/worker/maintenance`, lists
+  `@ai-review/worker` as a dependency in `apps/web/package.json` and compiles it through
+  `transpilePackages` in `apps/web/next.config.ts`. Deleting this folder would break the web build.
+- **Still runnable.** The worker can be started locally, and `pnpm dev` at the repository root
+  tries to start it; read [running it](#running-it) first.
 
 ## What it does
 
-One queue (`maintenance`) with four repeatable jobs, all scheduled in UTC (`src/queue/names.ts`):
+One queue (`maintenance`) with four repeatable jobs, all scheduled in UTC (`src/queue/names.ts`).
+This table is the one place the worker's schedules are written out; the Vercel Cron schedules are
+in [email and scheduled jobs](../../docs/operations/email-and-scheduled-jobs.md#vercel-cron-jobs).
 
 | Job name                          | Schedule (UTC)  | Folder                 | Does                                                      |
 | --------------------------------- | --------------- | ---------------------- | --------------------------------------------------------- |
@@ -48,8 +63,9 @@ Each job folder follows the same split:
 
 ## How production does this without the worker
 
-`vercel.json` in `apps/web` schedules `GET /api/cron/maintenance` daily at 03:10 UTC. The route
-(`apps/web/app/api/cron/maintenance/route.ts`) runs `apps/web/lib/cron/maintenance.ts` with
+`vercel.json` in `apps/web` schedules `GET /api/cron/maintenance` once a day (time in
+[email and scheduled jobs](../../docs/operations/email-and-scheduled-jobs.md#vercel-cron-jobs)). The
+route (`apps/web/app/api/cron/maintenance/route.ts`) runs `apps/web/lib/cron/maintenance.ts` with
 `apps/web/lib/cron/maintenance-store.ts`, which imports the worker's helpers through the package's
 only export:
 
@@ -74,14 +90,16 @@ maintenance. The other Vercel Cron jobs (subscriptions, health) are described in
 | `pnpm --filter @ai-review/worker start` | `tsx src/index.ts`                                               |
 | `pnpm dev` (repo root)                  | Runs the `dev` scripts of `apps/web` and this worker in parallel |
 
-Two things to know first:
+Three things to know first:
 
 - It needs a reachable **Redis** (`REDIS_URL`) and **PostgreSQL**. The local dev scripts do not
   start Redis.
 - It reads `process.env` only and does **not** load the root `.env` (`apps/web` does, in
-  `next.config.ts`). Export the variables first, or start it from `apps/worker` with
-  `node --env-file=../../.env --run dev`. If you only need the web app, run
-  `pnpm --filter @ai-review/web dev` instead of `pnpm dev`.
+  `next.config.ts`). Export the variables first, or run it from the repository root with
+  `node --env-file=.env node_modules/tsx/dist/cli.mjs apps/worker/src/index.ts`. Do not use
+  `node --env-file=… --run dev`: on Node 24 `--run` does not pass the file's variables on. If you
+  only need the web app, run `pnpm --filter @ai-review/web dev` instead of `pnpm dev`.
+- It maintains whatever database `DATABASE_URL` names (see the ownership rule above).
 
 ## Environment (names only)
 
@@ -91,12 +109,13 @@ Two things to know first:
   also requires `CRON_SECRET` and one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`.
 - **Read by the worker:** `DATABASE_POOL_MIN`, `DATABASE_POOL_MAX`, `DATABASE_SSL`,
   `DATABASE_SSL_ROOT_CERT`, `LOG_LEVEL`, `DEFAULT_TIMEZONE`, `NODE_ENV`.
-- **Worker-only, all optional with defaults** (`src/config.ts`): `WORKER_QUEUE_PREFIX`,
-  `WORKER_CONCURRENCY`, `WORKER_HEALTH_PORT` (0 disables the health listener),
-  `WORKER_SHUTDOWN_TIMEOUT_MS`, `WORKER_ANALYTICS_LOOKBACK_DAYS`, `WORKER_PARTITION_MONTHS_AHEAD`,
-  `WORKER_ANALYTICS_RETENTION_MONTHS`, `WORKER_PARTITION_DROP_ENABLED` (default off; dropping a
-  partition is irreversible), `WORKER_MAX_PARTITION_DROPS_PER_RUN`,
-  `WORKER_SESSION_PURGE_GRACE_DAYS`, `WORKER_DOMAIN_POLL_BATCH`.
+- **The worker's own settings, all optional with defaults** (`src/config.ts`):
+  `WORKER_QUEUE_PREFIX`, `WORKER_CONCURRENCY`, `WORKER_HEALTH_PORT` (0 disables the health
+  listener), `WORKER_SHUTDOWN_TIMEOUT_MS`, `WORKER_ANALYTICS_LOOKBACK_DAYS`,
+  `WORKER_PARTITION_MONTHS_AHEAD`, `WORKER_ANALYTICS_RETENTION_MONTHS`,
+  `WORKER_PARTITION_DROP_ENABLED` (default off; dropping a partition is irreversible),
+  `WORKER_MAX_PARTITION_DROPS_PER_RUN`, `WORKER_SESSION_PURGE_GRACE_DAYS`,
+  `WORKER_DOMAIN_POLL_BATCH`.
 
 The cron path in `apps/web` also reads `WORKER_PARTITION_MONTHS_AHEAD` and
 `WORKER_SESSION_PURGE_GRACE_DAYS`. See

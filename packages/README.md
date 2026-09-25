@@ -27,7 +27,8 @@ environment validation live, and which way imports are allowed to point.
 | `@ai-review/db`        | [db](db/)               | Drizzle schema, connection pool, SQL migrations                                         | `core`, `apps/web`, `apps/worker`, `scripts/`                    |
 | `@ai-review/ui`        | [ui](ui/)               | Shared React primitives and the Tailwind v4 stylesheet with the design tokens           | `apps/web` components                                            |
 
-Each package has its own README with details.
+Each package has its own README with details. This table and the sketch below are the one place
+the package dependencies are described; other documents link here.
 
 ## Dependency direction
 
@@ -57,7 +58,8 @@ entry that re-exports everything (see the note in
   `@ai-review/ui/styles.css` and so on. Never import `@ai-review/<pkg>/src/...`; the `exports` map
   does not expose those paths.
 - **Unit tests** live in `__tests__/` folders next to the code and run with `pnpm test` (root
-  `vitest.config.mts`). They use pure functions and in-memory doubles only.
+  `vitest.config.mts`). They use pure functions and in-memory doubles only, in Node, except in
+  `ui`, whose component tests opt into jsdom and render React (see [ui](ui/README.md#tests)).
 - **Integration tests** live under `__tests__/integration/` (today in `core` and `db`) and run
   with `pnpm test:integration` (root `vitest.integration.config.mts`). They need a real PostgreSQL
   at `DATABASE_URL` (the config loads the root `.env`), run one file at a time, and create and

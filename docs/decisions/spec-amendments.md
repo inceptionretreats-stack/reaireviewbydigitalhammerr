@@ -10,6 +10,37 @@ touches an ADR it is called out as needing sign-off.
 
 Status legend: **Applied** — in the initial migration / code. **Open** — identified, scheduled.
 
+## Status of this record
+
+_Added 24 September 2026._ The entries below are kept as they were written, because code comments
+and `.env.example` cite their IDs; new decisions are added as new entries rather than by rewriting
+old ones. This note says which statements no longer describe the current system. For how things
+work now, read the [architecture](../architecture/overview.md), feature and operations documents;
+the only live list of open problems is [known issues](../known-issues.md), and pending business
+decisions are in [open decisions](open-decisions.md).
+
+**Reading the IDs.** `CHANGE-` entries are product changes the project owner approved; `AMENDMENT-`
+entries are technical corrections; `ADR-AMEND-` entries change an original architecture decision;
+`OPEN-` entries are gaps found against the spec during the build. `D-` IDs refer to the original
+[decision log](../spec/22_Decision_Log.md), which now runs from D-001 to D-031: D-030 and D-031 were
+added on 10 September 2026 with CHANGE-001 and CHANGE-002, after ADR-AMEND-A's "D-001 through D-029"
+was written. Every prefix, and the file that defines it, is listed in the
+[glossary](../glossary.md#id-prefixes).
+
+**Superseded or out-of-date statements:**
+
+| Entry                                             | What it says                                                                                                                                                         | Current position                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CHANGE-004, "Not built"                           | Refunds, GST invoices and MFA are not built                                                                                                                          | Built later: admin MFA in AMENDMENT-027; GST invoices and refunds in AMENDMENT-029                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| AMENDMENT-017                                     | The root of `review.digitalhammerr.com`                                                                                                                              | The live address is `aireview.digitalhammerr.com`                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| AMENDMENT-022                                     | The draft is written on arrival                                                                                                                                      | Superseded on 23 September 2026: the customer picks services first and then explicitly asks for a draft; a saved draft is reached through "Return to draft" ([customer review flow](../features/customer-review-flow.md)). The single "Copy & open" action and the confirmation tick box it describes still apply                                                                                                                                                                                             |
+| ADR-AMEND-B                                       | Launch hosting is DigitalOcean BLR1; Terraform in `infra/` targets AWS                                                                                               | Never carried out. Production runs on Vercel (since 12 September 2026) with PostgreSQL on Supabase (since 23 September 2026). There is no `infra/` folder and no active AWS plan. See [hosting](../architecture/overview.md#hosting)                                                                                                                                                                                                                                                                          |
+| OPEN-01                                           | Quota consumption is not yet atomic                                                                                                                                  | Resolved: an atomic conditional update in `packages/core/src/quota/postgres-store.ts`                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| OPEN-02                                           | Nothing resolves a review request's tracking token                                                                                                                   | Resolved: `GET /r/req/{token}` in `apps/web/app/(customer)/r/req/[token]/route.ts`                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| OPEN-04                                           | The OpenAPI file is a skeleton                                                                                                                                       | Still true of the frozen `docs/spec/08_OpenAPI_v1.yaml`; the maintained, partial contract is [`docs/openapi/v1.yaml`](../openapi/README.md)                                                                                                                                                                                                                                                                                                                                                                   |
+| Implementation notes, "Production runs on Vercel" | Neon's pooled URL; the Vercel runbook "is the runbook"; the worker is not deployed, so rollup, partition maintenance and session purge do not run; no mail transport | The database moved from Neon to Supabase on 23 September 2026 ([database on Supabase](../operations/database-supabase.md)), and the Vercel runbook is now a [historical record](../history/2026-09-17-vercel-deploy-runbook.md). Maintenance and subscription jobs now exist as Vercel Cron routes (`apps/web/vercel.json`) and email is sent through Resend when configured; whether they run and deliver in production has not been verified ([launch verification](open-decisions.md#launch-verification)) |
+| AI unit economics                                 | Prices OpenAI `gpt-5.6-luna` (August 2026) with a 220-token output cap                                                                                               | Production was last recorded on Google Gemini (12 September 2026; see AMENDMENT-024), and prompt version 1.1.0 raised the cap to 320 tokens (CHANGE-003). Recompute before any pricing or procurement decision ([open decisions](open-decisions.md#ai-provider-and-running-cost))                                                                                                                                                                                                                             |
+
 ---
 
 ## Approved product changes
@@ -525,6 +556,8 @@ drafts. That mismatch is what made the third generation in a session fail every 
 
 ### AMENDMENT-022 — the draft is written on arrival, and copy-and-continue is one action
 
+> **Status, 24 September 2026:** superseded in part. See [status of this record](#status-of-this-record).
+
 REV-01 specifies a "Generate My Review" action on the review landing page, and REV-03 a separate
 continue-to-Google step that appears after copying. Watching the flow, both are steps that ask
 nothing and decide nothing:
@@ -858,6 +891,9 @@ _No Decision Log entry names NestJS; D-001 through D-029 are all product decisio
 
 ### ADR-AMEND-B — launch hosting is DigitalOcean BLR1; AWS Mumbai remains the destination
 
+> **Status, 24 September 2026:** superseded. This hosting plan was never carried out; production runs
+> on Vercel and Supabase. See [status of this record](#status-of-this-record).
+
 ADR-010's reasoning — proximity to the Indian market, mature managed services — is satisfied by
 Bangalore. What differs is fixed cost: a Fargate footprint needs an ALB and NAT Gateway before a
 single container runs, against under ₹50,000 of annual revenue at 50 tenants. Same three service
@@ -877,6 +913,8 @@ functional gain.
 
 ## Open — identified, not yet addressed
 
+> **Status, 24 September 2026:** superseded in part. See [status of this record](#status-of-this-record).
+
 | ID          | Item                                                                                                                                                                                                                                                                                                                                                                                                                                        | Epic    |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | OPEN-01     | Quota concurrency: consume via an atomic conditional UPDATE with a `free_generations_used < free_generation_limit` guard and RETURNING, never read-modify-write. AC-013 fails otherwise. Compensate on provider failure for AC-014.                                                                                                                                                                                                         | Phase 4 |
@@ -891,6 +929,8 @@ functional gain.
 
 ## Implementation notes
 
+> **Status, 24 September 2026:** superseded in part. See [status of this record](#status-of-this-record).
+
 Not spec changes; recorded so the choices are traceable.
 
 - **TypeScript pinned to 6.0.3.** TypeScript 7.0 (the native port) typechecks this codebase
@@ -901,7 +941,7 @@ Not spec changes; recorded so the choices are traceable.
   that no event name implies submission and no event property carries a star rating — the latter
   because D-009 means the customer is never asked for one.
 - **Production runs on Vercel (12 September 2026), not the persistent containers
-  14_DevOps_Deployment_Runbook.md describes.** `docs/operations/deploy-vercel.md` is the runbook. What that
+  14_DevOps_Deployment_Runbook.md describes.** `docs/history/2026-09-17-vercel-deploy-runbook.md` is the runbook. What that
   changes: the web app is serverless functions in `sin1`, so `DATABASE_POOL_MIN=0` /
   `DATABASE_POOL_MAX=5` per instance against Neon's pooled (pgbouncer, transaction-mode) URL —
   safe because nothing uses session-level advisory locks, LISTEN/NOTIFY or named prepared
@@ -922,6 +962,8 @@ Not spec changes; recorded so the choices are traceable.
 ---
 
 ## AI unit economics — verified
+
+> **Status, 24 September 2026:** superseded in part. See [status of this record](#status-of-this-record).
 
 Resolves OPEN-05. Verified against the OpenAI model catalogue, August 2026. Recheck before
 procurement, as PRD §24 requires.

@@ -55,9 +55,10 @@ Rules the schema enforces that code relies on:
   `ON DELETE CASCADE`. `businesses.deleted_at` (soft delete) is honoured by every public resolver.
 
 `platform_settings` is the source of truth for the Free and Pro allowances, the Pro price and the
-seller/GST details. The `FREE_AI_GENERATION_LIMIT`, `PRO_ANNUAL_GENERATION_LIMIT` and
-`PRO_ANNUAL_PRICE_PAISE` environment variables are bootstrap defaults only. Code:
-`packages/core/src/platform/settings.ts`.
+seller/GST details; admins edit it at `/admin/settings`. A key with no stored row falls back to
+`PLATFORM_SETTING_DEFAULTS` in `packages/core/src/platform/settings.ts`. The
+`FREE_AI_GENERATION_LIMIT`, `PRO_ANNUAL_GENERATION_LIMIT` and `PRO_ANNUAL_PRICE_PAISE` environment
+variables are still accepted by the configuration schema, but nothing reads them.
 
 ## Analytics events
 
@@ -74,9 +75,10 @@ regenerates it and fails if the committed file differs. From the generated list:
 
 - `EventPayload<'event_name'>` makes a server-side insert with a missing or unknown property a
   compile error.
-- `validateEvent` checks browser-sent events at runtime in `POST /api/v1/public/events`, which
-  accepts only allow-listed names and injects `business_id`, `anonymous_session_id` and `qr_code_id`
-  from server-resolved state rather than trusting the request.
+- `POST /api/v1/public/events` accepts any event name in the taxonomy (`isEventName`), not only the
+  ones the browser normally sends. It injects `business_id`, `anonymous_session_id` and `qr_code_id`
+  from server-resolved state rather than trusting the request, then checks the payload at runtime
+  with `validateEvent`; an unknown name or an invalid payload is dropped with a 202.
 - `FUNNEL_EVENTS` is the customer funnel: `qr_scan` → `review_page_view` → `ai_generate_success` →
   `review_copy` → `google_open`. It deliberately ends at `google_open`.
 
@@ -110,8 +112,10 @@ text never goes into an event.
 
 ## Scheduled maintenance
 
-`GET /api/cron/maintenance` (daily 03:10 UTC, `apps/web/vercel.json`) runs
-`apps/web/lib/cron/maintenance.ts` within a 30-second budget, using SQL shared with the worker through
+`GET /api/cron/maintenance` (daily; see the
+[schedule](../operations/email-and-scheduled-jobs.md#vercel-cron-jobs)) runs the loop in
+`apps/web/lib/cron/maintenance.ts` within a 30-second budget. Its database store,
+`apps/web/lib/cron/maintenance-store.ts`, uses SQL shared with the worker through
 `@ai-review/worker/maintenance`:
 
 1. **Housekeeping** — creates the analytics partitions for the next few months
@@ -135,8 +139,8 @@ never drops old partitions; the worker's partition dropping is off unless
   to one business, not a person.
 - The last observable step is `google_open`: the customer's browser opened the review page.
   **Nothing records whether a review was posted**, what it said or what rating it had. Never label a
-  figure "reviews", "reviews submitted" or "ratings"; ESLint fails the build on text such as "review
-  submitted" (rule AC-025 in `eslint.config.mjs`).
+  figure "reviews", "reviews submitted" or "ratings"; ESLint (`pnpm lint`, run in CI) fails on text
+  such as "review submitted" (rule AC-025 in `eslint.config.mjs`).
 - Browser-sent events (`review_copy`, `google_open`, `review_edit`, `experience_confirmed`, clicks)
   are best-effort telemetry. They can be blocked or lost, and `review_copy` is sent only when the
   clipboard write succeeded.

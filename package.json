@@ -2,7 +2,7 @@
   "name": "ai-review",
   "version": "1.0.0",
   "private": true,
-  "description": "AI Review by Digital Hammerr — multi-tenant review-writing assistant for local businesses",
+  "description": "Ai Review by Digital Hammerr — multi-tenant review-writing assistant for local businesses",
   "packageManager": "pnpm@11.24.0",
   "engines": {
     "node": ">=24"

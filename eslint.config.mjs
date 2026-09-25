@@ -2,12 +2,16 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 /**
- * Review-policy guard (12_QA_Acceptance_Criteria.md AC-025).
+ * Review-policy guard (docs/spec/12_QA_Acceptance_Criteria.md AC-025).
  *
  * The product may only ever report that Google was *opened*. Claiming a review was
  * *submitted* is something the platform cannot verify and Google's fake-engagement
  * policy treats as misrepresentation, so it is a build error rather than a QA note.
- * See 13_Security_Privacy_Compliance.md rule 8 and D-028 in the Decision Log.
+ * See docs/spec/13_Security_Privacy_Compliance.md rule 8 and D-028 in
+ * docs/spec/22_Decision_Log.md.
+ *
+ * The pattern matches "submitted" wording only. Claims that a review was "posted" are
+ * equally forbidden but are caught by the e2e assertions and by review, not here.
  */
 const FORBIDDEN_SUBMISSION_CLAIM = /review\s+submitted|submitted\s+(?:your|the|a)\s+review/i;
 
@@ -34,9 +38,9 @@ const reviewPolicyRules = {
 
 export default tseslint.config(
   {
-    // tmp/ is gitignored scratch work and .agents/ is vendored third-party skill material:
-    // neither is ours to lint, and 262 no-undef errors there kept the gate permanently red,
-    // which is how an unformatted route reached main unnoticed.
+    // tmp/ is gitignored scratch work and .agents/ is locally installed third-party skill
+    // material: neither is ours to lint, and 262 no-undef errors there kept the gate permanently
+    // red, which is how an unformatted route reached main unnoticed. .dev/ holds dev:up logs.
     ignores: [
       '**/node_modules/**',
       '**/dist/**',

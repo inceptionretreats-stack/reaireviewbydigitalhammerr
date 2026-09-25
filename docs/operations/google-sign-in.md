@@ -1,5 +1,10 @@
 # Google sign-in for vendors
 
+How "Continue with Google" for business owners is configured: the Google Cloud project, the
+`GOOGLE_CLIENT_ID` variable, the database migration it needs and what to test. Read it before
+changing the Google client, its authorised origins or the sign-in flow. How the flow works in code
+is covered in the architecture and feature docs.
+
 The existing email/password and vendor onboarding flows remain in place. Google Identity
 Services only proves the vendor's Google account identity; it does **not** fetch a Google
 Business Profile, location, reviews, or the business's review URL. Vendors still supply
@@ -25,7 +30,8 @@ provider. The web client has the live origin plus `http://127.0.0.1:3000`,
 3. Apply Drizzle migration `0008_bent_darkstar` before enabling the button. It preserves all
    password accounts, permits passwordless Google vendors, and stores the immutable Google
    `sub` in `google_identities`. That table has RLS enabled with no Data API grants for `anon`
-   or `authenticated`.
+   or `authenticated`. On production this was done on 24 September 2026, together with
+   re-applying the permissions script; see [database on Supabase](database-supabase.md).
 4. Test three cases: new Google vendor finishes name/mobile/terms and continues to business
    onboarding; an existing password vendor confirms their password once before linking; a
    returning linked vendor goes straight to their dashboard. Admin accounts cannot use Google

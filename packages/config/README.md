@@ -27,9 +27,10 @@ Things the schema does beyond type checks:
   `OPENAI_API_KEY` or `GEMINI_API_KEY` (otherwise the stub provider would serve canned drafts),
   `CRON_SECRET` set, `APP_BASE_URL` on HTTPS with a public host (it is printed into every QR code),
   and HTTPS public hosts in `CSRF_TRUSTED_ORIGINS`.
-- **Bootstrap defaults only:** `FREE_AI_GENERATION_LIMIT`, `PRO_ANNUAL_GENERATION_LIMIT` and
-  `PRO_ANNUAL_PRICE_PAISE` apply until the `platform_settings` table has rows; after that the
-  database is the source of truth.
+- **Validated but not read:** `FREE_AI_GENERATION_LIMIT`, `PRO_ANNUAL_GENERATION_LIMIT` and
+  `PRO_ANNUAL_PRICE_PAISE` are accepted because the frozen spec lists them, but no code reads
+  them. The draft allowances and the Pro price come from the `platform_settings` table, falling
+  back to `PLATFORM_SETTING_DEFAULTS` in `packages/core/src/platform/settings.ts`.
 
 ## Who uses it
 
@@ -39,10 +40,12 @@ Things the schema does beyond type checks:
   `WORKER_*` variables with a separate schema.
 
 Some variables are read directly by the tool that needs them and are **not** in this schema:
-`DIRECT_DATABASE_URL` (migrations, `packages/db`), `WORKER_*` (worker), `SEED_*` and
-`AI_DEFAULT_MODEL` (`scripts/db/seed.ts`, which deliberately does not call `loadEnv`),
-`MIGRATION_MAINTENANCE` (`apps/web/lib/infra/migration-maintenance.ts`) and the `E2E_*` test
-variables.
+`DIRECT_DATABASE_URL` (migrations, `packages/db`), `WORKER_*` (the worker; the deployed
+maintenance cron in `apps/web/lib/cron/maintenance-store.ts` also reads
+`WORKER_PARTITION_MONTHS_AHEAD` and `WORKER_SESSION_PURGE_GRACE_DAYS`), `SEED_*`,
+`AI_DEFAULT_MODEL` and `AI_REASONING_EFFORT_OVERRIDE` (`scripts/db/seed.ts`, which deliberately
+does not call `loadEnv`), `MIGRATION_MAINTENANCE` (`apps/web/lib/infra/migration-maintenance.ts`)
+and the `E2E_*` test variables.
 
 ## Changing the schema
 

@@ -1,6 +1,7 @@
 name: CI
 
-# Pipeline order follows 14_DevOps_Deployment_Runbook.md:
+# Intended order, from docs/spec/14_DevOps_Deployment_Runbook.md (the four jobs below run in
+# parallel; details in docs/operations/testing.md):
 #   format -> lint -> typecheck -> unit -> integration -> build -> vulnerability scan
 on:
   push:
@@ -44,7 +45,7 @@ jobs:
       - name: Migration guard
         run: pnpm check:migrations
 
-      # The event catalogue is derived from 11_Analytics_Event_Taxonomy.csv, a delivered
+      # The event catalogue is derived from docs/spec/11_Analytics_Event_Taxonomy.csv, a delivered
       # contract. Regenerating must be a no-op; a diff means code and contract have drifted,
       # which AN-01-01 forbids.
       - name: Analytics taxonomy is in sync
@@ -102,7 +103,7 @@ jobs:
       - name: Run migrations
         run: pnpm db:migrate
 
-      # Selected by PATH via vitest.integration.config.ts, with passWithNoTests disabled.
+      # Selected by PATH via vitest.integration.config.mts, with passWithNoTests disabled.
       # The previous form used `--testNamePattern integration`, which matched zero of the six
       # unit-test files: it started Postgres, ran the migration, selected nothing and reported
       # success. A green pipeline that asserts nothing is worse than none, because it is

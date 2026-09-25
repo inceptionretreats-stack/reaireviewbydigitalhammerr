@@ -103,19 +103,19 @@ message text.
 
 ## Where the code lives
 
-| What                             | Path                                                                                                         |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Feedback page and form           | `apps/web/app/(customer)/[slug]/feedback/page.tsx`, `apps/web/components/customer/feedback/FeedbackForm.tsx` |
-| Feedback submission              | `apps/web/app/api/v1/public/feedback/route.ts`                                                               |
-| Feedback inbox                   | `apps/web/app/api/v1/feedback/`, `apps/web/lib/feedback/`, `apps/web/components/dashboard/feedback/`         |
-| Customer API                     | `apps/web/app/api/v1/customers/`                                                                             |
-| Customer rules and queries       | `apps/web/lib/crm/customers/`                                                                                |
-| Customer screen                  | `apps/web/components/dashboard/customers/`                                                                   |
-| Review-request API               | `apps/web/app/api/v1/review-requests/`                                                                       |
-| Templates, tokens, status ladder | `apps/web/lib/crm/review-requests/`                                                                          |
-| Tracked-link resolver            | `apps/web/app/(customer)/r/req/[token]/route.ts`                                                             |
-| Review-request screen            | `apps/web/components/dashboard/review-requests/`                                                             |
-| Tables                           | `packages/db/src/schema/crm.ts`                                                                              |
+| What                             | Path                                                                                                                                            |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feedback page and form           | `apps/web/app/(customer)/[slug]/feedback/page.tsx`, `apps/web/components/customer/feedback/FeedbackForm.tsx`                                    |
+| Feedback submission              | `apps/web/app/api/v1/public/feedback/route.ts`                                                                                                  |
+| Feedback inbox                   | `apps/web/app/api/v1/feedback/`, `apps/web/lib/feedback/`, `apps/web/components/dashboard/feedback/`                                            |
+| Customer API                     | `apps/web/app/api/v1/customers/`                                                                                                                |
+| Customer rules and queries       | `apps/web/lib/crm/customers/`: `repository.ts` (queries), `body.ts` and `list-params.ts` (request parsing), `customer-status.ts`                |
+| Customer screen                  | `apps/web/components/dashboard/customers/`                                                                                                      |
+| Review-request API               | `apps/web/app/api/v1/review-requests/`                                                                                                          |
+| Templates, tokens, status ladder | `apps/web/lib/crm/review-requests/`: `repository.ts` (queries and tracked-link lookup), `template.ts`, `customer-journey.ts`, `link-preview.ts` |
+| Tracked-link resolver            | `apps/web/app/(customer)/r/req/[token]/route.ts`                                                                                                |
+| Review-request screen            | `apps/web/components/dashboard/review-requests/`                                                                                                |
+| Tables                           | `packages/db/src/schema/crm.ts`                                                                                                                 |
 
 Related: [customer review flow](customer-review-flow.md), [data model](../architecture/data-model.md),
 [security](../architecture/security.md#privacy).

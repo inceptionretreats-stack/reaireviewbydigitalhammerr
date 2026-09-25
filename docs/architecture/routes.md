@@ -11,8 +11,11 @@ contract for `/api/v1` is maintained separately in [`docs/openapi`](../openapi/R
   **route groups**. They organise code and share layouts but **do not appear in URLs**:
   `app/(vendor)/app/qr/page.tsx` serves `/app/qr`.
 - `[slug]`, `[code]`, `[token]` and `[id]` are dynamic segments. A static folder beats a dynamic
-  sibling, so `/legal/*`, `/r/*` and the auth pages can never be captured by `/[slug]`; business slugs
-  are also checked against a reserved list (`packages/core/src/business/slug.ts`).
+  sibling, so `/legal/*`, `/r/*` and the auth pages are never captured by `/[slug]`. Business slugs
+  are also checked against a reserved list (`RESERVED_SLUGS` in `packages/core/src/business/slug.ts`)
+  so that a business cannot take a platform path and then find its public page hidden behind the
+  static route. Add every new top-level page folder to that list. It currently misses `invite`,
+  `forgot-password` and `reset-password` (see [known issues](../known-issues.md)).
 - `page.tsx` renders a page; `route.ts` is an HTTP handler; `layout.tsx` wraps every page below it.
   In the API tables, the methods listed are the ones the `route.ts` file exports.
 
@@ -87,18 +90,23 @@ flow is described in [customer review flow](../features/customer-review-flow.md)
 
 ## Vendor workspace — `app/(vendor)`
 
-Layouts redirect to `/login` without a session and send admin roles to `/admin`. Setup:
+Both layouts redirect to `/login` without a session. The `/app` layout sends any admin role to
+`/admin`; the onboarding layout sends only `SUPER_ADMIN` there. Setup:
 
-| URL                       | What it does                                           |
-| ------------------------- | ------------------------------------------------------ |
-| `/onboarding`             | Redirects to the first step still blocking publication |
-| `/onboarding/business`    | Step 1: business identity and page address (slug)      |
-| `/onboarding/review-link` | Step 2: Google review link                             |
-| `/onboarding/links`       | Step 3: optional contact links                         |
-| `/onboarding/ai`          | Step 4: optional Ai context, draft language, preview   |
-| `/onboarding/finish`      | Step 5: publish                                        |
+| URL                       | What it does                                         |
+| ------------------------- | ---------------------------------------------------- |
+| `/onboarding`             | Resumes setup at the right step (see below)          |
+| `/onboarding/business`    | Step 1: business identity and page address (slug)    |
+| `/onboarding/review-link` | Step 2: Google review link                           |
+| `/onboarding/links`       | Step 3: optional contact links                       |
+| `/onboarding/ai`          | Step 4: optional Ai context, draft language, preview |
+| `/onboarding/finish`      | Step 5: publish                                      |
 
-Dashboard (`app/(vendor)/app/…`):
+`/onboarding` redirects to the first step still blocking publication (business details, then the
+review link), or to the finish step when both are done or the business is past `DRAFT`
+(`resumeStep` in `apps/web/lib/onboarding/steps.ts`).
+
+Workspace screens (`app/(vendor)/app/…`; their components are in `components/dashboard/`):
 
 | URL                               | What it does                                                                |
 | --------------------------------- | --------------------------------------------------------------------------- |
@@ -144,7 +152,7 @@ Public:
 | Endpoint                         | Methods | What it does                                   |
 | -------------------------------- | ------- | ---------------------------------------------- |
 | `/api/v1/public/review/generate` | POST    | Generate a customer draft (quota, rate limits) |
-| `/api/v1/public/events`          | POST    | Record an allow-listed analytics event         |
+| `/api/v1/public/events`          | POST    | Record one taxonomy event                      |
 | `/api/v1/public/feedback`        | POST    | Submit private feedback                        |
 
 Authentication (`/api/v1/auth/*`, CSRF-checked, rate-limited where credentials are tried):
@@ -220,16 +228,17 @@ Webhooks: `POST /api/v1/webhooks/razorpay` — no session or CSRF; the body is v
 ## Scheduled jobs (Vercel Cron)
 
 Declared in `apps/web/vercel.json`, handled in `app/api/cron/*`, all `GET` and all requiring
-`Authorization: Bearer <CRON_SECRET>` (401 when wrong, 503 when the secret is unset).
+`Authorization: Bearer <CRON_SECRET>` (401 when wrong, 503 when the secret is unset). Each runs once
+a day; the schedule table is in
+[email and scheduled jobs](../operations/email-and-scheduled-jobs.md#vercel-cron-jobs).
 
-| Endpoint                  | Schedule (UTC) | IST   | What it does                                                                        |
-| ------------------------- | -------------- | ----- | ----------------------------------------------------------------------------------- |
-| `/api/cron/subscriptions` | 00:30 daily    | 06:00 | Expire lapsed Pro years, queue and send renewal reminders, purge old activity rows  |
-| `/api/cron/health`        | 02:30 daily    | 08:00 | Database/Redis reachability and provider-configuration check (no secrets returned)  |
-| `/api/cron/maintenance`   | 03:10 daily    | 08:40 | Ensure future analytics partitions, purge expired login sessions, analytics rollups |
+| Endpoint                  | What it does                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| `/api/cron/subscriptions` | Expire lapsed Pro years, queue and send renewal reminders, purge old activity rows  |
+| `/api/cron/health`        | Database/Redis reachability and provider-configuration check (no secrets returned)  |
+| `/api/cron/maintenance`   | Ensure future analytics partitions, purge expired login sessions, analytics rollups |
 
-Details: [data model](data-model.md#scheduled-maintenance) and
-[email and scheduled jobs](../operations/email-and-scheduled-jobs.md).
+Details: [data model](data-model.md#scheduled-maintenance).
 
 ## Where the code lives
 
@@ -244,5 +253,7 @@ Details: [data model](data-model.md#scheduled-maintenance) and
 | Reserved slugs            | `packages/core/src/business/slug.ts`                                                      |
 | Cron schedule and auth    | `apps/web/vercel.json`, `apps/web/lib/cron/auth.ts`                                       |
 | Vendor navigation         | `apps/web/components/dashboard/shell/nav-items.ts`                                        |
+| Vendor screen components  | `apps/web/components/dashboard/<screen>/`                                                 |
 | Admin navigation          | `apps/web/components/admin/shell/AdminNav.tsx`                                            |
+| Admin screen components   | `apps/web/components/admin/<screen>/` (`businesses`, `payments`, `team`, `activity`, …)   |
 | API contract              | `docs/openapi/v1.yaml`                                                                    |

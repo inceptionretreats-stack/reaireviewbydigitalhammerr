@@ -1,9 +1,21 @@
 # Deploying Ai Review to Vercel
 
-> **Status: partly historical.** This runbook dates from the Neon/Upstash setup of September 2026.
-> The database now runs on Supabase — see [database on Supabase](database-supabase.md). Its advice
-> to leave `NODE_ENV` unset so the seed and `create-admin` run against production is rejected; use
-> the [deployment checklist](deployment-checklist.md) for current rules.
+> **Historical record — do not follow as instructions.** This is the runbook from the first
+> deployment (12 September 2026), last revised on 17 September and moved here from
+> `docs/operations/deploy-vercel.md` on 24 September 2026. To deploy now, use the
+> [deployment checklist](../operations/deployment-checklist.md), which carries the CLI steps that
+> are still valid (deploy, promote, `--archive=tgz`, setting variables, `vercel inspect`, the
+> Razorpay webhook, checking a cron job by hand, the Hobby-plan note). For the database, use
+> [database on Supabase](../operations/database-supabase.md).
+>
+> Superseded or wrong here: the database is no longer Neon (it moved to Supabase on 23 September
+> 2026 and Neon is fenced), so never run the migrate, seed or `create-admin` steps below against
+> it. The advice to leave `NODE_ENV` unset so the seed and `create-admin` run against production
+> is rejected. Rotating `SESSION_SECRET` does not sign anyone out; it only signs short-lived Google
+> sign-in cookies. `vercel.json` now declares three cron jobs, and `/api/cron/maintenance` runs the
+> rollup, partition and session maintenance that the "Not running" section says is missing.
+> Outbound email uses Resend when `RESEND_API_KEY` is set. The repository now also has a Git
+> remote, although deployments are still made with the Vercel CLI.
 
 The web app (`apps/web`) runs on Vercel; Postgres and Redis come from the Vercel Marketplace
 (Neon and Upstash). Deploys are made from a developer machine with the Vercel CLI — nothing is

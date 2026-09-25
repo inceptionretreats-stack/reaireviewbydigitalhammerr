@@ -122,6 +122,14 @@ budget for the whole generation, not each attempt. Adapters: `packages/core/src/
 their output is validated by `packages/core/src/ai/structured-review.ts`. Provider failures are
 logged without keys and reach the customer as `AI_PROVIDER_UNAVAILABLE`.
 
+**Which provider production uses.** The code does not fix this; the keys set in the Vercel project
+do. The last written record, from the first deployment on 12 September 2026, is Google Gemini
+(`GEMINI_API_KEY`, model `gemini-3.5-flash-lite`) on its free tier, whose data-use terms are
+described in AMENDMENT-024 in [spec amendments](../decisions/spec-amendments.md). It has not been
+re-checked since. To confirm it, with the project owner's approval, look at which provider key
+names are set in the Vercel project and run `pnpm ai:model --show` (read-only) against the
+production database to see the active prompt version's model.
+
 ## Quality gates
 
 Every candidate customer draft is checked in `generator.ts` (the owner preview makes one provider
@@ -139,18 +147,40 @@ A failed attempt is retried with the rejection reasons named in the prompt, up t
 only while at least 1.5 s of the budget remains. If none passes, the reservation is released and the
 customer gets `AI_OUTPUT_REJECTED`.
 
+## Adding a draft language
+
+The list of draft languages is declared in three packages, which a test keeps identical, and a few
+more places depend on it. Change all of them together:
+
+1. `packages/db/src/schema/enums.ts` — the `draft_language` enum, plus a new migration generated with
+   `pnpm db:generate` (never edit an applied one; check the snapshot problem in
+   [known issues](../known-issues.md) first).
+2. `packages/contracts/src/business.ts` — `DRAFT_LANGUAGES`, which browser code and request
+   validation use.
+3. `packages/core/src/ai/draft-language.ts` — `DRAFT_LANGUAGES` and the `readDraftLanguage`
+   pattern that reads the language back out of a built prompt.
+4. `apps/web/lib/ai/draft-language.ts` — `DRAFT_LANGUAGE_OPTIONS`, the labels the owner sees in
+   onboarding and on `/app/ai-review`.
+
+Then give the model its instructions: add the language's rules to `DEFAULT_GUIDANCE.language_rules`
+in `packages/core/src/ai/guidance.ts` and to a new prompt version (a file under
+`scripts/db/prompt-versions/` for fresh databases, and a draft activated in `/admin/ai` for a live
+one, because ACTIVE rows cannot change). The development stub in `packages/core/src/ai/provider.ts`
+only has English and Hinglish sample drafts. The test that pins the lists together is
+`apps/web/lib/ai/__tests__/draft-language.test.ts`.
+
 ## Where the code lives
 
-| What                                | Path                                                                                                              |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Public endpoint                     | `apps/web/app/api/v1/public/review/generate/route.ts`                                                             |
-| Context loading, provider choice    | `apps/web/lib/ai/generation-service.ts`                                                                           |
-| Draft-language options              | `apps/web/lib/ai/draft-language.ts`, `packages/core/src/ai/draft-language.ts`                                     |
-| Review modes                        | `apps/web/lib/ai/modes/`, `apps/web/app/api/v1/ai/modes/`                                                         |
-| Owner context and preview           | `apps/web/app/api/v1/ai/context/route.ts`, `apps/web/app/api/v1/ai/test-preview/`                                 |
-| Owner Ai screens                    | `apps/web/components/dashboard/ai-review/`, `apps/web/components/onboarding/AiContextStep.tsx`                    |
-| Generator, prompt builder, guidance | `packages/core/src/ai/generator.ts`, `packages/core/src/ai/prompt-builder.ts`, `packages/core/src/ai/guidance.ts` |
-| Prompt version lifecycle            | `packages/core/src/ai/prompt-version-service.ts`, `apps/web/components/admin/ai/PromptVersionEditor.tsx`          |
-| Quota                               | `packages/core/src/quota/`                                                                                        |
-| Seeded prompt versions              | `scripts/db/prompt-versions/`, `scripts/db/seed.ts`                                                               |
-| Model switch tool                   | `scripts/ops/set-ai-model.mjs`                                                                                    |
+| What                                | Path                                                                                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Public endpoint                     | `apps/web/app/api/v1/public/review/generate/route.ts`                                                                                                  |
+| Context loading, provider choice    | `apps/web/lib/ai/generation-service.ts`                                                                                                                |
+| Draft-language lists and labels     | `packages/db/src/schema/enums.ts`, `packages/contracts/src/business.ts`, `packages/core/src/ai/draft-language.ts`, `apps/web/lib/ai/draft-language.ts` |
+| Review modes                        | `apps/web/lib/ai/modes/`, `apps/web/app/api/v1/ai/modes/`                                                                                              |
+| Owner context and preview           | `apps/web/app/api/v1/ai/context/route.ts`, `apps/web/app/api/v1/ai/test-preview/`                                                                      |
+| Owner Ai screens                    | `apps/web/components/dashboard/ai-review/`, `apps/web/components/onboarding/AiContextStep.tsx`                                                         |
+| Generator, prompt builder, guidance | `packages/core/src/ai/generator.ts`, `packages/core/src/ai/prompt-builder.ts`, `packages/core/src/ai/guidance.ts`                                      |
+| Prompt version lifecycle            | `packages/core/src/ai/prompt-version-service.ts`, `apps/web/components/admin/ai/PromptVersionEditor.tsx`                                               |
+| Quota                               | `packages/core/src/quota/`                                                                                                                             |
+| Seeded prompt versions              | `scripts/db/prompt-versions/`, `scripts/db/seed.ts`                                                                                                    |
+| Model switch tool                   | `scripts/ops/set-ai-model.mjs`                                                                                                                         |

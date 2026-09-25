@@ -9,16 +9,18 @@ build/
 out/
 *.tsbuildinfo
 
-# Environment — never commit real secrets
+# Environment — never commit real secrets. Only .env.example is tracked; .env, .env.local,
+# .env.supabase.local and every other .env.* file stay on the machine that made them.
 .env
 .env.*
 !.env.example
 
-# Test / coverage
+# Test / coverage (test-results/ is Playwright's output folder)
 coverage/
 test-results/
 playwright-report/
 .playwright/
+e2e-results/
 
 # Logs
 *.log
@@ -32,23 +34,17 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Local scratch
+# Local scratch. Never committed; nothing in the repository depends on it.
 .cache/
 tmp/
 
 # Local development database cluster
 .pgdata/
 
-# Playwright
-e2e-results/
-playwright-report/
-test-results/
-
 # Local stack state and logs from `pnpm dev:up`.
 .dev/
 
-
-# Vercel CLI project link and pulled environment files.
+# Vercel CLI project link, plus any environment files `vercel pull` writes here (production secrets).
 .vercel/
 
 # Third-party AI-assistant skills (Resend) installed locally by the skills CLI; not part of the product.

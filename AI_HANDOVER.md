@@ -5,10 +5,12 @@ completes onboarding (business details, Google review link, optional contact lin
 publishes a public page and prints a dynamic QR code. A customer scans it, picks one or more of the
 business's services, explicitly asks for an editable Ai-drafted review, confirms it reflects their
 genuine experience, copies it, and decides whether to open Google and post it themselves; they can
-leave private feedback instead. Platform staff use an MFA-protected admin console. **The product
-never posts reviews, never verifies posting, never collects star ratings and never promises more
-reviews**; analytics describe observable actions only (scan, generate, copy, Google opened). Plans
-are Free and Pro (yearly, via Razorpay). The whole app, UI and API, is one Next.js app in `apps/web`.
+leave private feedback instead. Platform staff use an admin console that asks for an authenticator
+code (MFA) by default; `ADMIN_MFA_REQUIRED` can switch that off, so check the deployed value before
+claiming MFA is enforced. **The product never posts reviews, never verifies posting, never collects
+star ratings and never promises more reviews**; analytics describe observable actions only (scan,
+generate, copy, Google opened). Plans are Free and Pro (yearly, via Razorpay). The whole app, UI and
+API, is one Next.js app in `apps/web`.
 
 This file is the short brief and ground rules. Details live in `docs/`; everything dated
 (releases, deployments, test counts, the database cutover, the production data reset) is in the
@@ -16,104 +18,111 @@ This file is the short brief and ground rules. Details live in `docs/`; everythi
 
 ## Read these first
 
-1. [README.md](README.md) — what the project is, the repository map, how to run it.
-2. [CONTRIBUTING.md](CONTRIBUTING.md) — where code goes, conventions, tests, commits.
+1. [README.md](README.md) — what the project is, the repository map, local-only folders, how to run
+   it.
+2. [CONTRIBUTING.md](CONTRIBUTING.md) — where code goes, conventions, the checks CI runs, commits.
 3. [docs/README.md](docs/README.md) — index of every document by topic.
 4. [apps/web/AGENTS.md](apps/web/AGENTS.md) — this Next.js version differs from your training data.
-5. [docs/known-issues.md](docs/known-issues.md) — open defects and pending owner decisions.
+5. [Product decisions](docs/decisions/product-decisions.md) — the owner's approved decisions; do not
+   undo them.
+6. [Known issues](docs/known-issues.md) and [open decisions](docs/decisions/open-decisions.md) —
+   open defects, and questions only the owner can answer.
 
 Then read the doc for the area you are touching and the current source. Docs are snapshots; where
-they disagree with the code, the code wins.
+they disagree with the code, the code wins. Words such as tenant, slug or draft are defined in the
+[glossary](docs/glossary.md).
 
 ## 1. First instructions
 
 1. Run `git status --short` and read the relevant diffs before editing. Preserve existing work: do
-   not reset, clean, stash, blanket-stage or overwrite changes you did not make.
+   not reset, clean, stash, blanket-stage or overwrite changes you did not make. Two things are
+   noise, not someone's work: `apps/web/next-env.d.ts` flips between `.next/types` and
+   `.next/dev/types` whenever `next build` or `next dev` runs (never commit the dev version), and
+   `warning: ignoring broken ref refs/codex/…` lines come from an earlier Codex session on this
+   machine (harmless; do not delete them without approval).
 2. The owner asked to approve each proposed change and not to change the core idea. Treat an explicit
    request as approval for that named scope only, and ask before expanding it.
-3. Ask before any migration, deployment, paid action, message or email to real people, DNS or
-   Cloudflare change, provider or account change, production data change or destructive operation.
-   A recommendation or known issue in the docs is not authorisation.
+3. **Approvals.** Ask the owner before generating a new migration and before running any
+   migration, on any database. That includes `pnpm dev:up`, which runs migrations on every start
+   against `DIRECT_DATABASE_URL` when it is set and `DATABASE_URL` otherwise. Also ask before
+   running the seed, `pnpm test:integration` or `pnpm e2e` against the owner's own local database:
+   the owner has not confirmed it is disposable. And ask before any deployment, paid action, message
+   or email to real people, DNS or Cloudflare change, provider or account change, production data
+   change, or destructive operation. A recommendation or known issue in the docs is not
+   authorisation. Whether agents may migrate or seed a local database of their own without
+   asking is an
+   [open decision](docs/decisions/open-decisions.md#approval-for-local-migrations-and-seeding).
 4. Before changing web code, read the relevant guide in `apps/web/node_modules/next/dist/docs/` for
    the installed Next.js 16, not what you remember of older versions.
 5. Keep the approved architecture: Next.js route handlers and the app's own PostgreSQL-backed
    authentication on the existing Vercel project and account; PostgreSQL on the owner's Supabase Free
    project; the existing Redis and provider integrations. Do not move authentication to Supabase Auth
    or reopen the retired Neon database without a separately reviewed plan.
-6. Never copy `.env`, `.env.local`, `.vercel/` exports, credentials, production data or secret-bearing
-   logs into docs, chat, screenshots, commits or deployment uploads. Refer to variables by name.
+6. **Secrets.** Never copy any `.env*` file other than `.env.example` (including `.env`,
+   `.env.local` and `.env.supabase.local`), anything under `.vercel/`, credentials, production data
+   or secret-bearing logs into docs, chat, screenshots, commits or deployment uploads. Refer to
+   variables by name. Never overwrite, regenerate or delete the root `.env`: it holds `HASH_PEPPER`,
+   and replacing it makes every locally stored password fail to verify.
 7. Keep four states apart when reporting: **implemented locally**, **tested locally**, **documented
    historically** and **verified live**. They are not interchangeable (see
    [testing](docs/operations/testing.md#reporting-verification-honestly)).
+8. **Branches.** Branch from `main` and open pull requests against `main`; CI runs on pull requests
+   and on pushes to `main`. If the checked-out branch is ahead of `main`, ask the owner which to
+   build on. Do not push, merge or force-push without the owner's go-ahead.
 
-## 2. Decisions: do not accidentally undo these
+### Commands with side effects
 
-**Core product rules**
+Check [the full table](docs/operations/local-development.md#commands-with-side-effects) before
+running any `pnpm` script. The ones that surprise agents:
 
-- The customer flow is services first: pick services, then explicitly create a draft; a saved draft
-  is reachable through "Return to draft". No star-selection screen, rating gate or positive-only
-  routing. Private feedback stays available to everyone.
-- Never say a review was "submitted" or "posted" (lint rule AC-025 in `eslint.config.mjs`); the
-  product only knows Google was opened. No growth or results promises.
+- `pnpm dev:up` runs migrations (against `DIRECT_DATABASE_URL`, or `DATABASE_URL` when that is
+  blank), opens a **public** tunnel and rewrites `APP_BASE_URL` / `API_BASE_URL` in `.env`. Because
+  it migrates, ask before running it.
+- `pnpm dev:down` on Windows kills **every** `cloudflared.exe` and whatever listens on port 3000.
+- `pnpm dev` also starts `apps/worker`, which schedules maintenance jobs against the database. Use
+  `pnpm --filter @ai-review/web dev` for the web app alone.
+- The seed resets the demo owner's password and prints it; `pnpm test:integration` and `pnpm e2e`
+  write to the `DATABASE_URL` database. `pnpm db:migrate` and `pnpm seed` do not read `.env`, and
+  `node --env-file=.env --run …` does not pass it on either; use the canonical commands in
+  [local development](docs/operations/local-development.md#first-time-setup).
+- `pnpm format` rewrites every file Prettier covers; format only your own files.
+- `pnpm admin:create` and `pnpm ai:model` change real data in the database `.env` names. The payment
+  tools in `scripts/ops/` (`reconcile-payment.mjs`, `mark-payment-failed.mjs`) do not read `.env`:
+  they change data in whatever database their `DATABASE_URL` is given (usually production) and
+  call Razorpay.
 
-**Marketing site**
+### Local-only files
 
-- User-facing product casing is **Ai**, not AI. Keep technical identifiers such as
-  `AI_PROVIDER_UNAVAILABLE` and the vendor name OpenAI. The hero sentence was supplied by the owner
-  as `Review Likhna Ab Easy Hai — AI Hai Na.`
-  (`apps/web/components/marketing/home/HomeMarketingPage.tsx`); do not silently rewrite approved
-  copy during unrelated work.
-- Keep the Hinglish hero, readable spacing, strong typography, the blue/Google-colour theme and the
-  robot artwork. The owner asked for robots, not a girl, in illustrative website content.
-- Keep How it works in **three steps** with full phones visible, thin bezels and video explanations
-  (`apps/web/components/marketing/home/HowItWorksVideos.tsx`). Do not restore an eight-step grid or
-  replace real product screenshots with generic mockups.
-- The business-type strip above How it works is an infinite business-category marquee
-  (`apps/web/components/marketing/home/BusinessAudienceStrip.tsx`), not customer logos or
-  testimonials. Never present categories as real named customers.
-- Visible demo branding uses Digital Hammerr, a digital marketing company (app and website
-  development, SEO, graphic design), never a cafe. Some internal seeded identifiers still contain
-  `demo-south-cafe`; changing identifiers can break references and is not a cosmetic edit.
-- Unsupported claims such as `10X in 90 days` and timed-completion promises were removed. Do not
-  reintroduce them without evidence and approval.
-- The shopkeeper promotional story video is **not mounted** because its claims and dialogue were not
-  verified (`apps/web/components/marketing/parked/ReviewStoryVideo.tsx`, see
-  [marketing material](docs/marketing/README.md)). Its component and media are kept. This is separate
-  from permission to use the media.
+The working folder holds git-ignored items a clone does not have: `.env`, `.env.supabase.local`,
+`.vercel/`, `.pgdata/` (the local database), `.dev/` (dev-stack logs), `node_modules/`,
+`apps/web/.next/`, `.agents/` and `skills-lock.json`. The README explains each one in
+[local-only folders](README.md#local-only-folders-you-may-see). One-off Supabase cutover scripts,
+a portable PostgreSQL client and pulled production settings are kept in the owner's private backup
+folder outside the repository. Nothing in the repository depends on them; do not recreate them, and
+do not go looking for them without the owner's request.
 
-**Plans and pricing**
+## 2. Product decisions: do not undo these
 
-- Free is 10 Ai drafts in total per business profile. Standard Pro is INR 999 for 12 calendar months
-  with 2,000 Ai drafts per paid period. Public pages read these from `platform_settings`
-  (`apps/web/lib/marketing/commercial-terms.ts`). Do not restore unlimited Pro or describe the
-  allowance as verified posted reviews.
-- The original detailed billing block must **not** appear beneath the homepage cards, and the cards
-  must **not** expand inline.
-- Each pricing card's `Show more` link goes to `/legal/pricing`
-  (`apps/web/components/marketing/pricing/PricingDetailsLink.tsx`): one page explaining Free and Pro
-  together, a comparison table beneath the plan details, and a `Back to pricing` link to
-  `/#pricing`. Cards stay the same size. `/legal/pricing/free` and `/legal/pricing/pro` redirect to it.
-- Footer links expose Privacy, Terms, Cancellation / Refunds and Contact without login
-  (`apps/web/lib/marketing/public-information.ts`). The sign-up form's Terms and Privacy links open a
-  new tab so typed fields and the checkbox are kept (`apps/web/components/auth/SignupForm.tsx`).
+The full list, with the files each decision lives in, is
+[product decisions](docs/decisions/product-decisions.md). Read it before touching the customer flow,
+the marketing site, pricing, the vendor workspace or operations. The headline rules:
 
-**Vendor workspace**
-
-- Vendor screens use scoped navy-sidebar / light-workspace styling
-  (`apps/web/components/dashboard/shell/VendorWorkspace.module.css`); onboarding has its own scoped
-  module (`apps/web/components/onboarding/VendorOnboarding.module.css`). Keep equal dashboard card
-  pairs and aligned bottom actions. The landing page, customer review page and admin styles are not
-  targets of these vendor overrides.
-- Keep all 11 working vendor navigation links (`apps/web/components/dashboard/shell/nav-items.ts`);
-  unavailable placeholder entries stay hidden. Setup progress reflects all five real onboarding steps,
-  including truthful publication status. See [vendor UI redesign](docs/design/vendor-ui-redesign.md).
-
-**Operations**
-
-- Email sender-domain/DNS verification was paused by the owner. Do not resume Cloudflare or DNS
-  changes without permission.
-- Do not restore the accounts removed in the 23 September 2026 production reset, and do not run the
-  demo seed against production.
+- **Services first, customer in control.** The customer picks services, then explicitly asks for a
+  draft; a saved draft is reachable through "Return to draft". No star-selection screen, rating gate
+  or positive-only routing. Private feedback stays available to everyone.
+- **Never claim a review was submitted or posted.** The product only knows Google was opened. ESLint
+  (rule AC-025 in `eslint.config.mjs`) catches "review submitted" wording but not "posted", so check
+  your own text. No growth or results promises.
+- **Brand casing is "Ai".** User-facing text says "Ai Review" and "Ai drafts"; technical identifiers
+  such as `AI_PROVIDER_UNAVAILABLE` stay as they are. Do not silently rewrite owner-approved copy.
+- **Plans.** Free is 10 Ai drafts per business in total; standard Pro is INR 999 for 12 months with
+  2,000 drafts. Public pages read these from `platform_settings`. Do not restore unlimited Pro or
+  describe the allowance as verified posted reviews.
+- **Pricing cards stay compact.** Each card's `Show more` goes to the shared `/legal/pricing` page;
+  cards never expand inline and the detailed billing block never appears beneath them.
+- **Operations stay paused where the owner paused them.** Do not resume email DNS verification, do
+  not restore the accounts removed in the 23 September 2026 production reset, and never run the demo
+  seed against production.
 
 ## 3. Deploying: the essentials
 
@@ -140,6 +149,7 @@ Full list: [deployment checklist](docs/operations/deployment-checklist.md).
 | Run the app or a script                 | [Local development](docs/operations/local-development.md) (side-effect table included) |
 | Change routes, data, auth or tenancy    | [Architecture docs](docs/README.md#architecture)                                       |
 | Change a feature                        | [Feature docs](docs/README.md#features)                                                |
+| Change product behaviour or copy        | [Product decisions](docs/decisions/product-decisions.md)                               |
 | Add or rely on an environment variable  | [Environment](docs/operations/environment.md)                                          |
 | Touch email, cron or the worker         | [Email and scheduled jobs](docs/operations/email-and-scheduled-jobs.md)                |
 | Understand why the spec and code differ | [Spec amendments](docs/decisions/spec-amendments.md); `docs/spec/` is frozen           |
@@ -147,25 +157,32 @@ Full list: [deployment checklist](docs/operations/deployment-checklist.md).
 
 ## 5. Copy-paste brief for the next AI
 
-> Read AI_HANDOVER.md, apps/web/AGENTS.md, docs/known-issues.md and the relevant current source
-> before changing this project. First summarize the requested change and inspect git status and
-> diffs. Preserve the dirty worktree, the existing stack and the customer-controlled review idea. Ask
-> me before changes outside my explicit request, migrations, deployment, account/provider/DNS
-> changes, paid actions or destructive operations. Never reveal secrets or seed real user data. Keep
-> pricing cards compact: Show more navigates to the shared Free/Pro details and comparison page, not
-> inline expansion. Do not claim Google reviews were posted or promise guaranteed growth. Test the
-> actual affected flow on desktop and mobile where relevant, and clearly distinguish local completion
-> from live deployment. Report blockers and remaining risks honestly.
+> Read AI_HANDOVER.md and the files in its "Read these first" list, then the relevant current
+> source, before changing this project. First summarize the requested change and inspect git status
+> and diffs. Preserve any uncommitted changes you did not make, the existing stack and the
+> customer-controlled review idea. Ask me before changes outside my explicit request, before
+> generating or running any migration (`pnpm dev:up` runs them), before seeding or running database
+> tests against my local database, and before deployment, account/provider/DNS changes, paid
+> actions or destructive operations. Never reveal secrets or seed real user data. Keep pricing cards
+> compact: Show more navigates to the shared Free/Pro details and comparison page, not inline
+> expansion. Do not claim Google reviews were posted or promise guaranteed growth. Test the actual
+> affected flow on desktop and mobile where relevant, and clearly distinguish local completion from
+> live deployment. Report blockers and remaining risks honestly.
+
+The rules in sections 1 to 3 take precedence if this brief and those sections ever differ.
 
 Suggested continuation order, subject to the owner's approval:
 
 1. Confirm the next requested task; no known issue is automatically authorised.
-2. Resolve the refund and seller/tax decisions with the owner.
+2. Resolve the refund and seller/tax [open decisions](docs/decisions/open-decisions.md) with the
+   owner.
 3. Add failing tests, then fix the billing and quota lifecycle issues in
    [known issues](docs/known-issues.md) before calling billing launch-ready.
 4. Fix the authentication and public-request ownership issues, with regression tests.
 5. Resume email/DNS verification and maintenance deployment only when the owner says so.
 6. Deploy only the reviewed, approved change set to the verified account and project.
 
-To hand this project to another AI, share this file and access to the source. Provide secrets
-separately through a secure environment, never by pasting `.env` or a database into a conversation.
+To hand this project to another AI or person, share this file and access to the Git repository
+(`git clone`), never a zip or copy of the working folder, which contains local secret files. Provide
+secrets separately through a secure environment, never by pasting `.env` or a database into a
+conversation.

@@ -52,6 +52,8 @@ Dark mode is a token swap under `prefers-color-scheme` in `styles.css`; componen
 
 ## Tests
 
-`src/__tests__/` (field, focus trap, modal, table, tag input, tags) run under jsdom with
-`pnpm test`. `src/tsconfig.json` exists only so Vitest can transform `.tsx` here; see the comment
-inside it.
+`src/__tests__/` runs with `pnpm test`. The field, focus trap, modal, table and tag input tests
+start with `// @vitest-environment jsdom`, so they run in a browser-like DOM, and all but the
+focus-trap test render components with `@testing-library/react`. The `tags` test has no such line
+and runs in Node, the root config's default. `src/tsconfig.json` exists only so Vitest can
+transform `.tsx` here; see the comment inside it.
