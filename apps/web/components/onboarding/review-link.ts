@@ -1,5 +1,5 @@
 import type { ReviewDestinationKind, ReviewUrlRejection } from '@ai-review/core';
-import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import type { SubmitFailure } from '@/components/shared/forms/use-form-submit';
 
 /**
  * ONB-02 — the decisions behind the Google review destination screen, separated from its markup.

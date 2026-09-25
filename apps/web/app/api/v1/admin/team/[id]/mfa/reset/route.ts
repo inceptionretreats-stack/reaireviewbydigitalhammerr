@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { adminMfaReset } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { mfaService } from '@/lib/mfa';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { mfaService } from '@/lib/auth/mfa';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { teamService } from '@/lib/admin/team';
 
 export const runtime = 'nodejs';
@@ -25,12 +26,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     });
   }
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = adminMfaReset.safeParse(raw);
   if (!parsed.success) {
     return apiError('ADMIN_REASON_REQUIRED', 'Give a reason — it is written to the audit log.', {

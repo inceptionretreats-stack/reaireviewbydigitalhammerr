@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { requireTenant } from '@/lib/require-tenant';
-import { loadAnalyticsOverview } from '@/components/dashboard/analytics/queries';
-import type { FunnelStep, TrendDay } from '@/components/dashboard/analytics/metrics';
-import { analyticsRangeFor, serializeRange } from '../range-request';
+import { db } from '@/lib/infra/db';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { loadAnalyticsOverview } from '@/lib/analytics/queries';
+import type { FunnelStep, TrendDay } from '@/lib/analytics/metrics';
+import { analyticsRangeFor, serializeRange } from '@/lib/analytics/range-request';
 
 /**
  * GET /api/v1/analytics/overview — the KPI row, funnel and daily trend for AN-01 and DASH-01.
@@ -33,7 +33,7 @@ import { analyticsRangeFor, serializeRange } from '../range-request';
  * a spreadsheet and loses its caveat.
  *
  * The rollup/live split, and why `trend.pending_days` exists at all, is documented at the top of
- * `components/dashboard/analytics/queries.ts`. In short: no rollup ever covers the current local
+ * `lib/analytics/queries.ts`. In short: no rollup ever covers the current local
  * day, so it is counted live, and a completed day the nightly job has not reached is reported as
  * pending rather than as zero.
  */

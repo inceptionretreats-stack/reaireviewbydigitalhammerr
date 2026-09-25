@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { PromptVersionError, parseGuidance, type PromptVersionFields } from '@ai-review/core';
 import type { AiPromptVersion } from '@ai-review/db';
 import type { PromptVersionDraftInput } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
+import { apiError } from '@/lib/http/api-error';
 
 /** Wire shape for a prompt version — snake_case like the rest of the API, guidance parsed. */
 export function toWire(row: AiPromptVersion) {

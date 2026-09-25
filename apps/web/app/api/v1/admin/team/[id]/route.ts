@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { adminTeamAction } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { teamErrorResponse, teamService } from '@/lib/admin/team';
 
 export const runtime = 'nodejs';
@@ -18,12 +19,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   if (!UUID.test(id)) return apiError('RESOURCE_NOT_FOUND', 'No such team member.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = adminTeamAction.safeParse(raw);
   if (!parsed.success) {
     const fields = [...new Set(parsed.error.issues.map((i) => String(i.path[0] ?? 'body')))];

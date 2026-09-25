@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Button, Field, InlineError, Input } from '@ai-review/ui';
-import { useFormSubmit } from './use-form-submit';
+import { useFormSubmit } from '../shared/forms/use-form-submit';
 
 /**
  * AMENDMENT-027 — the other end of an admin invitation. One field: the password. The token
@@ -29,7 +29,7 @@ export function AcceptInviteForm({ token }: { token: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
         <h1 className="text-2xl font-bold tracking-tight text-ink">Join the admin team</h1>
         <p className="text-sm text-ink-muted">

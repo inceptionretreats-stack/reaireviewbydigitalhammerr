@@ -3,13 +3,14 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, type ReactNode } from 'react';
 import { Button } from '@ai-review/ui';
+import styles from './VendorOnboarding.module.css';
 import {
   ONBOARDING_STEPS,
   nextStep,
   previousStep,
   stepIndex,
   type OnboardingStepId,
-} from './steps';
+} from '@/lib/onboarding/steps';
 
 /**
  * Chrome shared by all five onboarding screens.
@@ -66,21 +67,53 @@ export function WizardShell({
   }, [onSaveAndExit, router]);
 
   return (
-    <div className="onboarding-panel">
+    <div className={`onboarding-panel ${styles.panel}`}>
       <ProgressRail currentIndex={index} />
 
-      <div className="onboarding-heading">
-        <p className="onboarding-step-count">
+      <div className={styles.heading}>
+        <p className={styles.stepCount}>
           Step {index + 1} of {ONBOARDING_STEPS.length}
         </p>
         <h1>{heading}</h1>
         {description ? <p>{description}</p> : null}
       </div>
 
-      <div className="onboarding-fields">{children}</div>
+      <div className={styles.fields}>{children}</div>
 
-      <div className="onboarding-actions">
-        <div className="onboarding-primary-action">
+      <div className={styles.actions}>
+        <div className={styles.secondaryActions}>
+          {back ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className={styles.backButton}
+              disabled={busy}
+              onClick={() => router.push(back.path)}
+            >
+              <Arrow direction="back" />
+              Back
+            </Button>
+          ) : (
+            <Button type="button" variant="secondary" className={styles.backButton} disabled>
+              <Arrow direction="back" />
+              Back
+            </Button>
+          )}
+
+          {onSaveAndExit && (
+            <Button
+              type="button"
+              variant="text"
+              className={styles.saveButton}
+              disabled={busy}
+              onClick={() => void handleSaveAndExit()}
+            >
+              Save &amp; exit
+            </Button>
+          )}
+        </div>
+
+        <div className={styles.primaryAction}>
           <Button
             type="button"
             size="lg"
@@ -90,37 +123,30 @@ export function WizardShell({
             onClick={() => void handleContinue()}
           >
             {continueLabel ?? 'Continue'}
-            <span aria-hidden="true">→</span>
+            <Arrow />
           </Button>
-        </div>
-
-        <div className="onboarding-secondary-actions">
-          {back ? (
-            <Button
-              type="button"
-              variant="text"
-              disabled={busy}
-              onClick={() => router.push(back.path)}
-            >
-              Back
-            </Button>
-          ) : (
-            <span />
-          )}
-
-          {onSaveAndExit && (
-            <Button
-              type="button"
-              variant="text"
-              disabled={busy}
-              onClick={() => void handleSaveAndExit()}
-            >
-              Save &amp; exit
-            </Button>
-          )}
         </div>
       </div>
     </div>
+  );
+}
+
+function Arrow({ direction = 'forward' }: { direction?: 'back' | 'forward' }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d={direction === 'back' ? 'M19 12H5m6-6-6 6 6 6' : 'M5 12h14m-6-6 6 6-6 6'} />
+    </svg>
   );
 }
 
@@ -134,7 +160,7 @@ export function WizardShell({
  */
 function ProgressRail({ currentIndex }: { currentIndex: number }) {
   return (
-    <nav className="onboarding-progress" aria-label="Setup progress">
+    <nav className={styles.progress} aria-label="Setup progress">
       <ol>
         {ONBOARDING_STEPS.map((step, index) => {
           const state = index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'todo';
@@ -142,15 +168,32 @@ function ProgressRail({ currentIndex }: { currentIndex: number }) {
             <li key={step.id} data-step-state={state}>
               <span
                 aria-current={state === 'current' ? 'step' : undefined}
-                className="onboarding-progress-marker"
+                className={styles.progressMarker}
               >
-                <span aria-hidden="true">{state === 'done' ? '✓' : index + 1}</span>
+                {state === 'done' ? (
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="m5 12 4 4L19 6" />
+                  </svg>
+                ) : (
+                  <span aria-hidden="true">{index + 1}</span>
+                )}
                 <span className="sr-only">
                   {step.title}
                   {state === 'done' ? ' — done' : state === 'current' ? ' — current step' : ''}
                 </span>
               </span>
-              <span className="onboarding-progress-title" aria-hidden="true">
+              <span className={styles.progressTitle} aria-hidden="true">
                 {step.title}
               </span>
             </li>

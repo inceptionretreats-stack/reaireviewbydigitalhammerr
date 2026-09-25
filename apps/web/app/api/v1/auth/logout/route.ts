@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { apiError } from '@/lib/api-error';
-import { verifyCsrf } from '@/lib/csrf';
-import { clearSessionCookie, getSession, sessionService } from '@/lib/session';
-import { recordActivity } from '@/lib/activity';
+import { apiError } from '@/lib/http/api-error';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { clearSessionCookie, getSession, sessionService } from '@/lib/auth/session';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * POST /api/v1/auth/logout — revokes the session row and clears the cookie.

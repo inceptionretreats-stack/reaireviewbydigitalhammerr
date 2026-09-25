@@ -1,11 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { businesses, payments, users } from '@ai-review/db';
 import { PaymentAdminService } from '@ai-review/core';
-import { env } from '@/lib/env';
-import { db } from '@/lib/db';
-import { mailConfigured, mailer } from '@/lib/mailer';
-import { receiptEmail } from '@/lib/email-templates';
-import { formatDate, formatMoney } from '@/components/dashboard/presentation';
+import { env } from '@/lib/infra/env';
+import { db } from '@/lib/infra/db';
+import { mailConfigured, mailer } from '@/lib/email/mailer';
+import { receiptEmail } from '@/lib/email/email-templates';
+import { formatDate, formatMoney } from '@/lib/dashboard/presentation';
 
 /**
  * The receipt email for a settled payment (AMENDMENT-029): the invoice number, the amount,

@@ -8,7 +8,7 @@ import {
   SECTION_PHONE_MAX,
   hasStoredTarget,
   isDefaultSectionType,
-} from './sections';
+} from '@/lib/profile/sections';
 import {
   currentOf,
   describePendingChange,

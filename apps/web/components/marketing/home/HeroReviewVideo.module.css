@@ -1,0 +1,51 @@
+.figure {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
+  margin: 0;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid #dce2ea;
+  border-radius: 14px;
+  background-color: #f5f7fa;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.figure[data-media-error='true'] .video,
+.figure[data-reduced-motion='true'] .video {
+  visibility: hidden;
+}
+
+.video:focus-visible {
+  outline: 3px solid #1967d2;
+  outline-offset: -4px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video {
+    visibility: hidden;
+  }
+}

@@ -1,4 +1,4 @@
-import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import type { SubmitFailure } from '@/components/shared/forms/use-form-submit';
 
 /**
  * The framework-free half of ONB-04 — everything the AI-context step decides, separated from what
@@ -174,7 +174,7 @@ export type JsonResult =
  *
  * `useFormSubmit` is not reused: it is POST-only and binds one endpoint per instance, and this
  * screen needs a PUT to /ai/context and a POST to /ai/test-preview. Its `SubmitFailure` type is
- * imported so the two cannot drift in what they surface to a person. `components/dashboard/ai`
+ * imported so the two cannot drift in what they surface to a person. `components/dashboard/ai-review`
  * carries a near-identical copy of this for AI-01/AI-02; both files say so, and the shared home in
  * `lib/` is still owed.
  *

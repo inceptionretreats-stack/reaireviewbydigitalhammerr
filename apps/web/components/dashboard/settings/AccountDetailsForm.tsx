@@ -3,14 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { Button, Card, Field, InlineError, Input } from '@ai-review/ui';
-import {
-  EMAIL_MAX,
-  MOBILE_MAX,
-  NAME_MAX,
-  NAME_MIN,
-  emailChanged,
-} from '@/app/api/v1/account/schema';
-import { fieldError } from '../../auth/use-form-submit';
+import { EMAIL_MAX, MOBILE_MAX, NAME_MAX, NAME_MIN, emailChanged } from '@/lib/account/schema';
+import { fieldError } from '@/components/shared/forms/use-form-submit';
 import { readBoolean, unattachedFailure, useSettingsSubmit } from './use-settings-submit';
 
 /**
@@ -26,12 +20,12 @@ import { readBoolean, unattachedFailure, useSettingsSubmit } from './use-setting
  * capitals does not demand a password. Asking only when it is needed matters: a screen that asks
  * for a password on every save teaches an owner to type it whenever something asks.
  *
- * The maxima come from the wire contract in `app/api/v1/account/schema.ts` rather than being
+ * The maxima come from the wire contract in `lib/account/schema.ts` rather than being
  * restated, so a field cannot let someone type past what the endpoint will accept.
  */
 
 export interface AccountDetailsFormProps {
-  initial: { fullName: string; email: string; mobile: string };
+  initial: { fullName: string; email: string; mobile: string; hasPassword: boolean };
 }
 
 type FieldKey = 'full_name' | 'email' | 'mobile' | 'current_password';
@@ -70,7 +64,8 @@ export function AccountDetailsForm({ initial }: AccountDetailsFormProps) {
    */
   const [passwordDemanded, setPasswordDemanded] = useState(false);
 
-  const needsPassword = emailChanged(email, savedEmail) || passwordDemanded;
+  const needsPassword =
+    initial.hasPassword && (emailChanged(email, savedEmail) || passwordDemanded);
   const busy = state.status === 'submitting';
 
   /** Clears a stale message so a correction is never made underneath one. */
@@ -221,7 +216,11 @@ export function AccountDetailsForm({ initial }: AccountDetailsFormProps) {
           label="Email"
           required
           error={errorFor('email')}
-          hint="You sign in with this address."
+          hint={
+            initial.hasPassword
+              ? 'You sign in with this address.'
+              : 'This is the email on your connected Google account. It cannot be changed here.'
+          }
         >
           {(control) => (
             <Input
@@ -238,7 +237,7 @@ export function AccountDetailsForm({ initial }: AccountDetailsFormProps) {
               autoCapitalize="none"
               spellCheck={false}
               maxLength={EMAIL_MAX}
-              disabled={busy}
+              disabled={busy || !initial.hasPassword}
             />
           )}
         </Field>

@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildPrompt, checkOutputCompliance } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { isDenied, rateLimiter } from '@/lib/rate-limit';
-import { loadGenerationContext, providerKeys, selectProvider } from '@/lib/generation-service';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { loadGenerationContext, providerKeys, selectProvider } from '@/lib/ai/generation-service';
 import { previewCheck } from './preview-limit';
-import { recordActivity } from '@/lib/activity';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * POST /api/v1/ai/test-preview — ONB-04 "Generate preview" and AI-01 "Test preview".

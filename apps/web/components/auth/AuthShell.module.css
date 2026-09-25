@@ -23,9 +23,12 @@
 
 .authShell {
   display: grid;
+  width: 100%;
+  max-width: 1600px;
   min-height: 100dvh;
+  margin-inline: auto;
   grid-template-areas: 'media form';
-  grid-template-columns: minmax(0, 1.08fr) minmax(32rem, 0.92fr);
+  grid-template-columns: minmax(0, 44%) minmax(0, 56%);
 }
 
 .formPanel {
@@ -267,9 +270,9 @@
   inset: 0;
   background: linear-gradient(
     90deg,
-    rgb(255 255 255 / 68%) 0,
-    rgb(255 255 255 / 30%) 36%,
-    transparent 68%
+    rgb(255 255 255 / 72%) 0,
+    rgb(255 255 255 / 28%) 30%,
+    transparent 56%
   );
   pointer-events: none;
   content: '';
@@ -309,14 +312,14 @@
   z-index: 3;
   top: clamp(50px, 8vh, 90px);
   left: clamp(28px, 3vw, 48px);
-  width: min(230px, 27%);
+  width: min(300px, 47%);
   color: #0b1f33;
   text-shadow: 0 2px 24px rgb(255 255 255 / 95%);
 }
 
 .mediaCopy h2 {
   margin: 0;
-  font-size: clamp(30px, 3.2vw, 44px);
+  font-size: clamp(30px, 2.9vw, 40px);
   font-weight: 650;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -446,15 +449,14 @@
 
 @media (max-width: 1050px) {
   .authShell {
-    min-height: auto;
-    grid-template-areas:
-      'form'
-      'media';
+    grid-template-areas: 'form';
     grid-template-columns: 1fr;
   }
 
   .formPanel {
-    min-height: min(100dvh, 880px);
+    width: min(100%, 760px);
+    min-height: 100dvh;
+    margin-inline: auto;
     padding: 28px clamp(20px, 7vw, 64px) 34px;
   }
 
@@ -463,27 +465,21 @@
   }
 
   .mediaPanel {
-    min-height: 520px;
+    display: none;
   }
+}
 
-  .mediaSticky {
+@media (max-width: 768px) {
+  .formPanel {
     position: relative;
-    height: 520px;
   }
 
-  .mediaCanvas::before {
-    bottom: auto;
-    height: 154px;
-    background: #f3f6f4;
-  }
-
-  .mediaCanvas::after {
+  .formPanel::before {
+    position: absolute;
     top: 0;
     right: 0;
-    bottom: auto;
     left: 0;
-    width: auto;
-    height: 5px;
+    height: 4px;
     background: linear-gradient(
       90deg,
       #4285f4 0 25%,
@@ -491,61 +487,11 @@
       #fbbc05 50% 75%,
       #34a853 75% 100%
     );
+    content: '';
   }
 
-  .mediaArtwork {
-    top: 154px;
-    right: auto;
-    left: 50%;
-    width: min(560px, 100%);
-    translate: -50% 0;
-  }
-
-  .mediaImage {
-    object-fit: contain;
-    object-position: 50% 50%;
-    animation: none;
-  }
-
-  .mediaCopy {
-    top: 28px;
-    left: 50%;
-    width: min(480px, calc(100% - 56px));
-    translate: -50% 0;
-    text-shadow: none;
-  }
-
-  .mediaCopy h2 {
-    font-size: clamp(30px, 4.6vw, 36px);
-    text-wrap: balance;
-  }
-
-  .mediaCopy p {
+  .mediaPanel {
     display: none;
-  }
-
-  .mediaCard {
-    right: auto;
-    bottom: 18px;
-    left: 50%;
-    width: min(315px, calc(100% - 40px));
-    padding: 13px;
-    translate: -50% 0;
-  }
-
-  .tickBlue {
-    top: 38%;
-    left: 20%;
-  }
-
-  .tickRed {
-    top: 56%;
-    left: 16%;
-  }
-
-  .tickGreen {
-    top: 48%;
-    right: 16%;
   }
 }
 
@@ -595,7 +541,7 @@
 
   .homeLink {
     padding-inline: 10px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .formContent {
@@ -640,6 +586,12 @@
 
   .mediaCard small {
     display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .formContent :global(h1) {
+    font-size: 32px;
   }
 }
 

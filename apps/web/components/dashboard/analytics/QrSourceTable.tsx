@@ -1,6 +1,6 @@
 import { Badge, Card, EmptyState, StatusBadge, Table, type TableColumn } from '@ai-review/ui';
 import { formatCount } from './format';
-import type { QrSourceMetrics } from './queries';
+import type { QrSourceMetrics } from '@/lib/analytics/queries';
 
 /**
  * AN-01's `QR source table`.
@@ -11,7 +11,7 @@ import type { QrSourceMetrics } from './queries';
  * two months can be compared row by row.
  *
  * AN-01 also lists an `Open QR detail` action. There is no link here, because QR-01's detail screen
- * does not exist yet and `components/dashboard/nav-items.ts` sets the precedent for the whole
+ * does not exist yet and `components/dashboard/shell/nav-items.ts` sets the precedent for the whole
  * dashboard: a link that 404s teaches an owner the product is broken. The id is in the API response
  * ready for it. Wiring it in is a one-line change once that route lands.
  *

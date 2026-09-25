@@ -85,6 +85,20 @@ export interface RateLimitConfig {
   readonly feedbackSessionWindowMs: number;
   readonly feedbackPerIpPrefix: number;
   readonly feedbackIpPrefixWindowMs: number;
+
+  /**
+   * Account creation, per IP prefix (AUTH-01).
+   *
+   * This endpoint had no limit at all: 25 rejections came back in 1.5 seconds, each one
+   * confirming whether an address already has an account, and six real tenants — each with a
+   * fresh free draft allowance — were created in 428 ms. Both harms are bounded by the same
+   * dimension, because both are driven from one host.
+   *
+   * Keyed by prefix only. A per-address dimension would measure nothing: an enumerator varies
+   * the address on every request, which is the whole point of the attack.
+   */
+  readonly signupsPerIpPrefix: number;
+  readonly signupIpPrefixWindowMs: number;
 }
 
 export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
@@ -127,6 +141,11 @@ export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   // Sized for a shared venue connection, per the same NAT reasoning as the generation prefix.
   feedbackPerIpPrefix: 20,
   feedbackIpPrefixWindowMs: HOUR_MS,
+
+  // Ten an hour from one /24 is far above genuine use — staff of one venue signing up together
+  // is a handful, once — and far below what an enumeration script needs to be worth running.
+  signupsPerIpPrefix: 10,
+  signupIpPrefixWindowMs: HOUR_MS,
 };
 
 export interface RateLimitRuleSet {
@@ -141,6 +160,7 @@ export interface RateLimitRuleSet {
   readonly mfaUserDaily: RateLimitRule;
   readonly feedbackSession: RateLimitRule;
   readonly feedbackIpPrefix: RateLimitRule;
+  readonly signupIpPrefix: RateLimitRule;
 }
 
 export function rules(config: RateLimitConfig): RateLimitRuleSet {
@@ -192,6 +212,13 @@ export function rules(config: RateLimitConfig): RateLimitRuleSet {
       limit: config.feedbackPerIpPrefix,
       windowMs: config.feedbackIpPrefixWindowMs,
       code: 'PUBLIC_RATE_LIMITED',
+      enforcement: 'ENFORCE',
+    },
+    signupIpPrefix: {
+      name: 'auth.signup_ip_prefix',
+      limit: config.signupsPerIpPrefix,
+      windowMs: config.signupIpPrefixWindowMs,
+      code: 'AUTH_RATE_LIMITED',
       enforcement: 'ENFORCE',
     },
     loginIdentityDaily: {
@@ -292,8 +319,15 @@ export function rateLimitKey(ruleName: string, ...parts: readonly string[]): str
 
 export interface PublicGenerationSubject {
   readonly businessId: string;
-  /** The anonymous session identifier from the public flow. Hashed before it becomes a key. */
-  readonly anonymousSessionId: string;
+  /**
+   * The anonymous session identifier from the public flow. Hashed before it becomes a key.
+   *
+   * Null for a caller that sent no `dh_anon` cookie — a direct API client rather than a
+   * browser. The session-keyed dimensions cannot be built for such a caller, but the
+   * prefix-keyed and business-keyed ones can, and must: skipping the whole check because
+   * one dimension is unavailable is how a cookieless script got past every limit at once.
+   */
+  readonly anonymousSessionId: string | null;
   /** Raw client IP. Truncated to a prefix and hashed here; never stored or keyed as-is. */
   readonly ip: string;
   /** HASH_PEPPER from packages/config. */
@@ -329,7 +363,9 @@ export function ipSessionSetKey(subject: PublicGenerationSubject): string {
   return rateLimitKey('public.ip_sessions', ipPrefixHash(subject.ip, subject.pepper));
 }
 
-export function sessionMember(subject: PublicGenerationSubject): string {
+/** Null for a cookieless caller: there is no session to track in the per-prefix set. */
+export function sessionMember(subject: PublicGenerationSubject): string | null {
+  if (subject.anonymousSessionId === null) return null;
   return privacyHash(subject.anonymousSessionId, subject.pepper);
 }
 
@@ -348,20 +384,30 @@ export function publicGenerationCheck(
   const session = sessionMember(subject);
   const prefix = ipPrefixHash(subject.ip, subject.pepper);
 
-  const dimensions: RateLimitDimension[] = [
-    // Burst first so that a loop is reported against the dimension that actually describes
-    // it. The store returns the first tripped dimension, and "you are going too fast" is a
-    // more actionable message than "you have used your hourly allowance".
-    { rule: rule.sessionBurst, key: rateLimitKey(rule.sessionBurst.name, session) },
-    {
-      rule: rule.sessionHourly,
-      key: rateLimitKey(rule.sessionHourly.name, session, subject.businessId),
-    },
-    {
-      rule: ipPrefixRule(distinctSessions, config),
-      key: rateLimitKey('public.ip_prefix', prefix),
-    },
-  ];
+  const dimensions: RateLimitDimension[] = [];
+
+  // Burst first so that a loop is reported against the dimension that actually describes
+  // it. The store returns the first tripped dimension, and "you are going too fast" is a
+  // more actionable message than "you have used your hourly allowance".
+  //
+  // Both are keyed by the anonymous session, so a cookieless caller has neither. That is not
+  // a reason to wave the request through: the prefix dimension below is keyed by address and
+  // applies to everyone, and it is the dimension that actually bounds abuse, since a caller
+  // who rotates cookies defeats the session dimensions anyway.
+  if (session !== null) {
+    dimensions.push(
+      { rule: rule.sessionBurst, key: rateLimitKey(rule.sessionBurst.name, session) },
+      {
+        rule: rule.sessionHourly,
+        key: rateLimitKey(rule.sessionHourly.name, session, subject.businessId),
+      },
+    );
+  }
+
+  dimensions.push({
+    rule: ipPrefixRule(distinctSessions, config),
+    key: rateLimitKey('public.ip_prefix', prefix),
+  });
 
   if (subject.plan === 'PRO') {
     dimensions.push({
@@ -429,6 +475,37 @@ export function loginFailureCheck(
       { rule: rule.loginIpPrefix, key: rateLimitKey(rule.loginIpPrefix.name, prefix) },
     ],
     // Fails closed. Justified in service.ts against the ALLOW above.
+    onStoreUnavailable: 'DENY',
+  };
+}
+
+/**
+ * Account creation (AUTH-01).
+ *
+ * Consumed on every attempt, not only on failure, because both harms this bounds — learning
+ * which addresses have accounts, and minting tenants with free draft allowances — are done
+ * through attempts that succeed at what they ask for.
+ *
+ * Its own key namespace rather than the login one: a signup burst must not spend the budget
+ * that stops password spraying from the same office NAT, and vice versa.
+ *
+ * Fails closed, like the login check. An endpoint that creates accounts is not one to leave
+ * unguarded while the limiter store is unreachable.
+ */
+export function signupCheck(
+  subject: { readonly ip: string; readonly pepper: string },
+  config: RateLimitConfig = DEFAULT_RATE_LIMIT_CONFIG,
+): RateLimitCheck {
+  const rule = rules(config);
+
+  return {
+    name: 'auth_signup',
+    dimensions: [
+      {
+        rule: rule.signupIpPrefix,
+        key: rateLimitKey(rule.signupIpPrefix.name, ipPrefixHash(subject.ip, subject.pepper)),
+      },
+    ],
     onStoreUnavailable: 'DENY',
   };
 }
@@ -517,7 +594,8 @@ function mfaOwnDimensions(subject: MfaSubject, config: RateLimitConfig): RateLim
 
 export interface PublicFeedbackSubject {
   readonly businessId: string;
-  readonly anonymousSessionId: string;
+  /** Null for a caller that sent no `dh_anon` cookie; the prefix dimension still applies. */
+  readonly anonymousSessionId: string | null;
   /** Raw client IP. Truncated to a prefix and hashed here; never stored or keyed as-is. */
   readonly ip: string;
   /** HASH_PEPPER from packages/config. */
@@ -540,21 +618,23 @@ export function publicFeedbackCheck(
   config: RateLimitConfig = DEFAULT_RATE_LIMIT_CONFIG,
 ): RateLimitCheck {
   const rule = rules(config);
-  const session = privacyHash(subject.anonymousSessionId, subject.pepper);
   const prefix = ipPrefixHash(subject.ip, subject.pepper);
+  const dimensions: RateLimitDimension[] = [];
 
-  return {
-    name: 'public_feedback',
-    dimensions: [
-      {
-        rule: rule.feedbackSession,
-        key: rateLimitKey(rule.feedbackSession.name, session, subject.businessId),
-      },
-      {
-        rule: rule.feedbackIpPrefix,
-        key: rateLimitKey(rule.feedbackIpPrefix.name, prefix),
-      },
-    ],
-    onStoreUnavailable: 'ALLOW',
-  };
+  // A cookieless caller has no session key. The prefix dimension still applies, and it is the
+  // one that matters: it is the only dimension a client cycling cookies cannot shed.
+  if (subject.anonymousSessionId !== null) {
+    const session = privacyHash(subject.anonymousSessionId, subject.pepper);
+    dimensions.push({
+      rule: rule.feedbackSession,
+      key: rateLimitKey(rule.feedbackSession.name, session, subject.businessId),
+    });
+  }
+
+  dimensions.push({
+    rule: rule.feedbackIpPrefix,
+    key: rateLimitKey(rule.feedbackIpPrefix.name, prefix),
+  });
+
+  return { name: 'public_feedback', dimensions, onStoreUnavailable: 'ALLOW' };
 }

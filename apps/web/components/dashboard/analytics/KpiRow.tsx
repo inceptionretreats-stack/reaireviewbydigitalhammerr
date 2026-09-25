@@ -1,6 +1,6 @@
 import { KpiCard } from '@ai-review/ui';
 import { formatCount } from './format';
-import { totalOf, type EventTotals, type ReportedEvent } from './metrics';
+import { totalOf, type EventTotals, type ReportedEvent } from '@/lib/analytics/metrics';
 
 /**
  * The KPI cards AN-01 and DASH-01 both ask for.

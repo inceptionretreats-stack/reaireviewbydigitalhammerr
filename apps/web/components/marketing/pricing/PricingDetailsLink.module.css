@@ -1,0 +1,46 @@
+.cardMore {
+  margin-top: 14px;
+  color: #334155;
+}
+
+.cardLink {
+  display: inline-flex;
+  min-height: 44px;
+  padding-top: 6px;
+  align-items: center;
+  gap: 8px;
+  color: #174ea6;
+  font-size: 20px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.cardLink:hover {
+  color: #10418d;
+}
+
+.cardLink:focus-visible {
+  outline: 2px solid #1967d2;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.cardLink svg {
+  flex: none;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .cardLink {
+    font-size: 16px;
+  }
+}

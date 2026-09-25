@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { adminPaymentAction } from '@ai-review/contracts';
 import { AuditReasonRequiredError } from '@ai-review/core';
-import { apiError } from '@/lib/api-error';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { paymentAdmin, paymentErrorResponse } from '@/lib/admin/payments';
 import { sendReceipt } from '@/lib/billing/receipt-mail';
-import { razorpayClient, razorpayConfig } from '@/lib/subscription';
+import { razorpayClient, razorpayConfig } from '@/lib/billing/subscription';
 
 export const runtime = 'nodejs';
 
@@ -22,12 +23,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   if (!UUID.test(id)) return apiError('RESOURCE_NOT_FOUND', 'No such payment.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = adminPaymentAction.safeParse(raw);
   if (!parsed.success) {
     const fields = [...new Set(parsed.error.issues.map((i) => String(i.path[0] ?? 'body')))];

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { desc, eq, lt } from 'drizzle-orm';
 import { adminAuditLogs, businesses, users } from '@ai-review/db';
-import { db } from '@/lib/db';
-import { requireAdmin } from '@/lib/require-admin';
+import { db } from '@/lib/infra/db';
+import { requireAdmin } from '@/lib/auth/require-admin';
 
 export const runtime = 'nodejs';
 

@@ -21,6 +21,8 @@ export const generateReviewRequest = z.object({
   slug: z.string().min(3).max(48).optional(),
   qr_code: z.string().min(6).max(32).optional(),
   previous_generation_id: z.uuid().optional(),
+  /** Required by the route when that business has services; exact membership is server-checked. */
+  selected_services: z.array(z.string().min(1).max(80)).max(30).optional(),
 });
 export type GenerateReviewRequest = z.infer<typeof generateReviewRequest>;
 
@@ -36,6 +38,8 @@ export const generateReviewResponse = z.object({
   review_text: z.string().min(20).max(1200),
   prompt_version: z.string(),
   requires_experience_confirmation: z.literal(true),
+  /** Canonical, deduplicated service choices used for this generation. */
+  selected_services: z.array(z.string().min(1).max(80)).max(30).optional(),
 });
 export type GenerateReviewResponse = z.infer<typeof generateReviewResponse>;
 
@@ -93,13 +97,3 @@ export const publicBusinessResponse = z.object({
   ),
 });
 export type PublicBusinessResponse = z.infer<typeof publicBusinessResponse>;
-
-export const apiErrorResponse = z.object({
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-    request_id: z.string(),
-    details: z.record(z.string(), z.unknown()).optional(),
-  }),
-});
-export type ApiErrorResponse = z.infer<typeof apiErrorResponse>;

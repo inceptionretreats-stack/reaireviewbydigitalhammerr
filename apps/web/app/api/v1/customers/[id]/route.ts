@@ -1,16 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { readCustomerBody } from '../body';
-import { isUuid } from '../query';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { readCustomerBody } from '@/lib/crm/customers/body';
+import { isUuid } from '@/lib/crm/customers/list-params';
 import {
   softDeleteCustomer,
   toCustomerDto,
   updateCustomer,
   type UpdateOutcome,
-} from '../repository';
-import { recordActivity } from '@/lib/activity';
+} from '@/lib/crm/customers/repository';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * PATCH/DELETE /api/v1/customers/{id} — the `Edit` and `Delete` actions of CRM-01.
@@ -37,12 +38,9 @@ export async function PATCH(
   // which would surface as a 500 for what is plainly a request for something that does not exist.
   if (!isUuid(id)) return notFound();
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = readCustomerBody(raw, 'update');
   if (!parsed.ok) {

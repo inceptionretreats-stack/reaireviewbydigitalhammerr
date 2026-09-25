@@ -1,4 +1,4 @@
-import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import type { SubmitFailure } from '@/components/shared/forms/use-form-submit';
 
 /**
  * One JSON mutation, with the error envelope of 23_API_Error_Codes.md unpacked.
@@ -6,9 +6,8 @@ import type { SubmitFailure } from '@/components/auth/use-form-submit';
  * The same helper the onboarding steps carry, widened to the methods this screen needs: PROFILE-01
  * saves with PATCH, reorders with POST and removes with DELETE, while `useFormSubmit` is POST-only
  * and `LinksStep`'s copy is POST/PUT. That is now a fourth copy of this function in `apps/web`, and
- * the real fix is still one helper in `apps/web/lib` that every screen imports — a path outside this
- * module. Keeping the body identical apart from the method union is what makes that extraction a
- * delete rather than a merge. See concerns.
+ * the real fix is still one shared helper that every screen imports. Keeping the body identical
+ * apart from the method union is what makes that extraction a delete rather than a merge.
  *
  * The API returns a safe, user-facing `message` for every failure, so it is displayed verbatim
  * rather than remapped here; `details.fields` names the input to mark. AC-030 keeps provider detail

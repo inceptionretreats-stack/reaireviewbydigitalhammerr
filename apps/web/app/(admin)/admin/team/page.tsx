@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { TeamScreen } from '@/components/admin/TeamScreen';
+import { TeamScreen } from '@/components/admin/team/TeamScreen';
 import { adminDateTime } from '@/lib/admin/format';
 import { teamService } from '@/lib/admin/team';
-import { getSession } from '@/lib/session';
+import { getSession } from '@/lib/auth/session';
 
 export const metadata: Metadata = { title: 'Team | Ai Review admin' };
 export const dynamic = 'force-dynamic';

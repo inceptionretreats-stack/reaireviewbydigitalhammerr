@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { Button, Card, Field, InlineError, Input, Textarea } from '@ai-review/ui';
-import { fieldError } from '../../auth/use-form-submit';
+import { fieldError } from '@/components/shared/forms/use-form-submit';
 import { unattachedFailure, useSettingsSubmit } from './use-settings-submit';
 
 /**

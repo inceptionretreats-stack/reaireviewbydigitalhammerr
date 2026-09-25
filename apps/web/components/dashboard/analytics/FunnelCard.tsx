@@ -1,6 +1,6 @@
 import { Card, EmptyState, Table, type TableColumn } from '@ai-review/ui';
 import { formatCount, formatPercent } from './format';
-import type { FunnelStep, FunnelSummary } from './metrics';
+import type { FunnelStep, FunnelSummary } from '@/lib/analytics/metrics';
 
 /**
  * AN-01's funnel.

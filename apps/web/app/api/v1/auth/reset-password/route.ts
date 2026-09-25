@@ -3,19 +3,20 @@ import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { passwordResetTokens, users } from '@ai-review/db';
 import { hashToken, SessionService, validatePasswordStrength } from '@ai-review/core';
 import { resetPasswordRequest } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { verifyCsrf } from '@/lib/csrf';
-import { passwordHasher } from '@/lib/auth-helpers';
-import { clearSessionCookie } from '@/lib/session';
-import { recordActivity } from '@/lib/activity';
-import { safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { passwordHasher } from '@/lib/auth/password-hasher';
+import { clearSessionCookie } from '@/lib/auth/session';
+import { recordActivity } from '@/lib/activity/recorder';
+import { safeError } from '@/lib/infra/safe-error';
 
 /**
  * POST /api/v1/auth/reset-password — AUTH-03-02.
  *
  * This endpoint is absent from 08_OpenAPI_v1.yaml, which defines /auth/forgot-password with no
- * counterpart to consume the token it issues. Recorded as OPEN-03 in docs/SPEC_AMENDMENTS.md;
+ * counterpart to consume the token it issues. Recorded as OPEN-03 in docs/decisions/spec-amendments.md;
  * AUTH-03-02 requires the token be single-use and expiring, which is unimplementable without it.
  *
  * "Single-use" is enforced by an atomic conditional UPDATE, not by a read followed by a write.
@@ -31,12 +32,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrf = verifyCsrf(request);
   if (!csrf.ok) return apiError('FORBIDDEN', 'Request rejected.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = resetPasswordRequest.safeParse(raw);
   if (!parsed.success) {

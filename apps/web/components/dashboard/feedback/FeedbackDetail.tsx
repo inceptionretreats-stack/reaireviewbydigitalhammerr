@@ -1,8 +1,8 @@
 'use client';
 
 import { Button, Drawer, StatusBadge } from '@ai-review/ui';
-import type { AssignableFeedbackStatus } from './filters';
-import type { FeedbackRow } from './row';
+import type { AssignableFeedbackStatus } from '@/lib/feedback/filters';
+import type { FeedbackRow } from '@/lib/feedback/row';
 
 /**
  * FB-02's `detail` state.

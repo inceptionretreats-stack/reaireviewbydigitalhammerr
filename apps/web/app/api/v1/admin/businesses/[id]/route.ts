@@ -9,9 +9,10 @@ import {
   SubscriptionService,
 } from '@ai-review/core';
 import { analyticsEvents } from '@ai-review/db';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireAdmin } from '@/lib/require-admin';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { getBusinessDetail } from '@/lib/admin/businesses';
 import { sendOwnerPasswordReset, warnOwner } from '@/lib/admin/owner-actions';
 
@@ -43,12 +44,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   if (!UUID.test(id)) return apiError('RESOURCE_NOT_FOUND', 'No such business.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = adminBusinessAction.safeParse(raw);
   if (!parsed.success) {
     const fields = [...new Set(parsed.error.issues.map((i) => String(i.path[0] ?? 'body')))];

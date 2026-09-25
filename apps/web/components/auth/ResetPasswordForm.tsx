@@ -3,13 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Field, InlineError, Input } from '@ai-review/ui';
-import { fieldError, useFormSubmit } from './use-form-submit';
+import { fieldError, useFormSubmit } from '../shared/forms/use-form-submit';
 
 /**
  * The reset screen, which 03_Screen_Field_Button_Spec.md never defines.
  *
  * AUTH-03 issues a single-use expiring token but the pack specifies no screen to spend it on,
- * and no endpoint either — both recorded as OPEN-03 in docs/SPEC_AMENDMENTS.md. The states below
+ * and no endpoint either — both recorded as OPEN-03 in docs/decisions/spec-amendments.md. The states below
  * are therefore designed rather than transcribed: no token, invalid or expired token, validation
  * error, and success.
  *
@@ -60,7 +60,7 @@ export function ResetPasswordForm({ token }: { token: string | undefined }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
         <h1 className="text-2xl font-bold tracking-tight text-ink">Choose a new password</h1>
         <p className="text-sm text-ink-muted">

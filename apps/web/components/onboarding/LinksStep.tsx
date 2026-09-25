@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Badge, Card, Field, FOCUS_RING, InlineError, Input, type BadgeTone } from '@ai-review/ui';
-import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import type { SubmitFailure } from '@/components/shared/forms/use-form-submit';
 import { WizardShell } from './WizardShell';
 import {
   canonicalValue,
@@ -37,7 +37,7 @@ import {
  * Every row of that summary is a claim about the owner's public page, so each row is derived from
  * something this screen actually knows. The Review Us row reads `hasReviewDestination`, resolved
  * on the server, because this route has no step-order guard: an owner can arrive with
- * review_destinations still empty, and `resolveTarget` in app/[slug]/page.tsx then renders no
+ * review_destinations still empty, and `resolveTarget` in app/(customer)/[slug]/page.tsx then renders no
  * Review Us button at all (a GOOGLE_REVIEW row with no destination behind it resolves to null).
  * Asserting "Always shows" in that state would invent a fact about their page.
  */

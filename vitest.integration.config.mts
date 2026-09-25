@@ -1,15 +1,6 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
-/**
- * Integration suite — everything that needs a real PostgreSQL.
- *
- * Kept in its own config, selected by PATH rather than by test-name pattern. The previous CI
- * job used `--testNamePattern integration`, which matched none of the six unit-test files: it
- * started Postgres, ran the migration, selected zero tests and reported success. A green
- * pipeline that asserts nothing is worse than no pipeline, because it is trusted.
- *
- * passWithNoTests is explicitly false so an empty selection fails loudly.
- */
 /**
  * These suites connect to a real database and every one of them fails loudly without
  * DATABASE_URL. Vitest does not read .env into process.env on its own, so `pnpm test:integration`
@@ -26,7 +17,21 @@ try {
   // variable themselves, and more clearly than this would.
 }
 
+/**
+ * Integration suite — everything that needs a real PostgreSQL.
+ *
+ * Kept in its own config, selected by PATH rather than by test-name pattern. The previous CI
+ * job used `--testNamePattern integration`, which matched none of the six unit-test files: it
+ * started Postgres, ran the migration, selected zero tests and reported success. A green
+ * pipeline that asserts nothing is worse than no pipeline, because it is trusted.
+ *
+ * passWithNoTests is explicitly false so an empty selection fails loudly.
+ */
 export default defineConfig({
+  // Same `@/` mapping as apps/web/tsconfig.json; see vitest.config.mts.
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./apps/web', import.meta.url)) },
+  },
   test: {
     include: ['**/__tests__/integration/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/.next/**'],

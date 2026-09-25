@@ -2,17 +2,18 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '@ai-review/db';
 import { privacyHash, validatePasswordStrength } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { passwordHasher } from '@/lib/auth-helpers';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { sessionService, setSessionCookie } from '@/lib/session';
-import { parsePasswordChange } from '../schema';
-import { countOtherLiveSessions, reportableRevoked } from '../session-count';
-import { recordActivity } from '@/lib/activity';
-import { safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { passwordHasher } from '@/lib/auth/password-hasher';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { sessionService, setSessionCookie } from '@/lib/auth/session';
+import { parsePasswordChange } from '@/lib/account/schema';
+import { countOtherLiveSessions, reportableRevoked } from '@/lib/account/session-count';
+import { recordActivity } from '@/lib/activity/recorder';
+import { safeError } from '@/lib/infra/safe-error';
 
 /**
  * POST /api/v1/account/password — "Change password" on SET-01.
@@ -37,12 +38,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = parsePasswordChange(raw);
   if (!parsed.ok) {
@@ -62,6 +60,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .limit(1);
 
   if (!account) return apiError('AUTH_REQUIRED', 'Please sign in and try again.');
+  if (!account.passwordHash) {
+    return apiError(
+      'VALIDATION_FAILED',
+      'This Google account has no password to change. Use password reset to set one first.',
+      { details: { fields: ['current_password'] } },
+    );
+  }
 
   /*
    * The limiter, on the same windows as POST /auth/login.

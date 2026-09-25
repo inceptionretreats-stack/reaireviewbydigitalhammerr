@@ -4,8 +4,8 @@ import { eq } from 'drizzle-orm';
 import { users } from '@ai-review/db';
 import { isAdminRole } from '@ai-review/core';
 import { MfaChallengeForm } from '@/components/auth/MfaChallengeForm';
-import { db } from '@/lib/db';
-import { getSession } from '@/lib/session';
+import { db } from '@/lib/infra/db';
+import { getSession } from '@/lib/auth/session';
 
 export const metadata: Metadata = { title: 'Confirm it is you | Ai Review' };
 export const dynamic = 'force-dynamic';

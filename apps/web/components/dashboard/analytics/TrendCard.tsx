@@ -1,6 +1,12 @@
 import { Card, EmptyState, Table, type TableColumn } from '@ai-review/ui';
 import { formatCount, formatDayLabel } from './format';
-import { toSeries, totalOf, type ReportedEvent, type TrendDay, type TrendSeries } from './metrics';
+import {
+  toSeries,
+  totalOf,
+  type ReportedEvent,
+  type TrendDay,
+  type TrendSeries,
+} from '@/lib/analytics/metrics';
 
 /**
  * AN-01's `Daily trend`, as inline SVG with a table equivalent.

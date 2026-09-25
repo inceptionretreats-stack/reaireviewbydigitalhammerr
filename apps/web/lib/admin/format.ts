@@ -1,4 +1,4 @@
-import { env } from '@/lib/env';
+import { env } from '@/lib/infra/env';
 
 /**
  * Dates on the admin screens, in the platform's own timezone.

@@ -2,9 +2,9 @@ import { NextResponse, type NextRequest, after } from 'next/server';
 import { analyticsEvents } from '@ai-review/db';
 import { CheckoutService } from '@ai-review/core';
 import type { EventPayload } from '@ai-review/analytics';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { razorpayConfig } from '@/lib/subscription';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { razorpayConfig } from '@/lib/billing/subscription';
 import { sendReceipt } from '@/lib/billing/receipt-mail';
 
 export const runtime = 'nodejs';

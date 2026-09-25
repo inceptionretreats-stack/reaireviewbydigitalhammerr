@@ -1,18 +1,18 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { reviewRequests } from '@ai-review/db';
 import { issueToken } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
-import { readComposeBody } from './compose-request';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { requireActiveTenant, requireTenant } from '@/lib/tenant/require-tenant';
+import { readComposeBody } from '@/lib/crm/review-requests/compose-request';
 import {
   DEFAULT_TEMPLATE_TEXT,
   RENDERED_MESSAGE_MAX,
   buildTrackedRequestUrl,
   renderTemplate,
   unknownVariables,
-} from './template';
+} from '@/lib/crm/review-requests/template';
 import {
   advanceCustomerStatus,
   ensureDefaultTemplate,
@@ -20,8 +20,8 @@ import {
   loadTenantMessagingContext,
   recordPreparedEvent,
   whatsAppLinkFor,
-} from './service';
-import { recordActivity } from '@/lib/activity';
+} from '@/lib/crm/review-requests/repository';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * POST /api/v1/review-requests — Flow F step 5's "Message Prepared", and the only place a tracked

@@ -7,7 +7,9 @@ import {
   looksLikeIpAddress,
   loginFailureCheck,
   loginIdentityHash,
+  publicFeedbackCheck,
   publicGenerationCheck,
+  sessionMember,
   rateLimitKey,
   RateLimitKeyError,
   type PublicGenerationSubject,
@@ -173,5 +175,63 @@ describe('composed public check', () => {
 
     expect(hourly?.rule.limit).toBe(10);
     expect(hourly?.rule.windowMs).toBe(60 * 60 * 1000);
+  });
+});
+
+/**
+ * A caller that sends no `dh_anon` cookie used to skip rate limiting entirely, because both
+ * public routes wrapped the limiter in `if (session)` and `resolveAnonymousSession` returns
+ * null without the cookie. Thirty feedback posts from one shell loop were all accepted.
+ *
+ * The session-keyed dimensions genuinely cannot be built for such a caller. The prefix-keyed
+ * ones can, and they are the dimensions that actually bound abuse — a client cycling cookies
+ * defeats the session dimensions in any case.
+ */
+describe('a caller with no anonymous session', () => {
+  const cookieless: PublicGenerationSubject = { ...subject, anonymousSessionId: null };
+
+  it('is still judged on the IP prefix when generating', () => {
+    const keys = keysOf(publicGenerationCheck(cookieless, 1));
+
+    expect(keys.some((key) => key.includes('public.ip_prefix'))).toBe(true);
+    expect(keys).not.toHaveLength(0);
+  });
+
+  it('drops only the two session-keyed dimensions', () => {
+    const withSession = keysOf(publicGenerationCheck(subject, 1));
+    const without = keysOf(publicGenerationCheck(cookieless, 1));
+
+    expect(withSession.some((key) => key.includes('public.session_burst'))).toBe(true);
+    expect(without.some((key) => key.includes('public.session_burst'))).toBe(false);
+    expect(without.some((key) => key.includes('public.session_hourly'))).toBe(false);
+    expect(without).toHaveLength(withSession.length - 2);
+  });
+
+  it('still carries the per-business ceiling an admin has set', () => {
+    const throttled = publicGenerationCheck(
+      { ...cookieless, adminThrottle: { perHour: 2, untilMs: 1_700_000_000_000 } },
+      1,
+    );
+
+    expect(keysOf(throttled).some((key) => key.includes('business_admin_throttle'))).toBe(true);
+  });
+
+  it('is still judged on the IP prefix when sending private feedback', () => {
+    const keys = keysOf(
+      publicFeedbackCheck({
+        businessId: subject.businessId,
+        anonymousSessionId: null,
+        ip: subject.ip,
+        pepper: PEPPER,
+      }),
+    );
+
+    expect(keys.some((key) => key.includes('feedback_ip_prefix'))).toBe(true);
+    expect(keys.some((key) => key.includes('feedback_session'))).toBe(false);
+  });
+
+  it('does not join the distinct-session set, which would inflate its own allowance', () => {
+    expect(sessionMember(cookieless)).toBeNull();
+    expect(sessionMember(subject)).not.toBeNull();
   });
 });

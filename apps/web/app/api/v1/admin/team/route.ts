@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { adminTeamInvite } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { env } from '@/lib/env';
-import { adminInviteEmail } from '@/lib/email-templates';
-import { mailer } from '@/lib/mailer';
-import { requireAdmin } from '@/lib/require-admin';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { env } from '@/lib/infra/env';
+import { adminInviteEmail } from '@/lib/email/email-templates';
+import { mailer } from '@/lib/email/mailer';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { inviteUrl, teamErrorResponse, teamService } from '@/lib/admin/team';
 
 export const runtime = 'nodejs';
@@ -45,12 +46,9 @@ export async function POST(request: Request) {
   const auth = await requireAdmin(request, { stepUp: true });
   if (!auth.ok) return auth.response;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = adminTeamInvite.safeParse(raw);
   if (!parsed.success) {
     const fields = [...new Set(parsed.error.issues.map((i) => String(i.path[0] ?? 'body')))];

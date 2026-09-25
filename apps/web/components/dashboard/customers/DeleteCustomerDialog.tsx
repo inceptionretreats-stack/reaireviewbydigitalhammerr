@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Button, InlineError, Modal } from '@ai-review/ui';
-import type { CustomerDto } from '@/app/api/v1/customers/repository';
+import type { CustomerDto } from '@/lib/crm/customers/repository';
 import { deleteCustomer } from './customer-api';
 import { formatMobile } from './presentation';
 

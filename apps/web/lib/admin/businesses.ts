@@ -129,7 +129,16 @@ export async function listBusinesses(
       businessSlugs,
       and(eq(businessSlugs.businessId, businesses.id), eq(businessSlugs.isPrimary, true)),
     )
-    .leftJoin(customDomains, eq(customDomains.businessId, businesses.id))
+    // Only the live hostname. custom_domains guarantees one ACTIVE row per business
+    // (uq_one_active_domain_per_business), but PENDING_DNS, ERROR and REMOVED rows accumulate,
+    // so an unfiltered join fanned the business out once per row: the list showed the same
+    // tenant several times, the Domain column could show a hostname the tenant had already
+    // removed, and the totals query — which deliberately omits this join — disagreed with the
+    // rows, so offset pagination skipped real tenants.
+    .leftJoin(
+      customDomains,
+      and(eq(customDomains.businessId, businesses.id), eq(customDomains.status, 'ACTIVE')),
+    )
     .where(where);
 
   const [totals] = await db
@@ -238,7 +247,16 @@ export async function getBusinessDetail(
       businessSlugs,
       and(eq(businessSlugs.businessId, businesses.id), eq(businessSlugs.isPrimary, true)),
     )
-    .leftJoin(customDomains, eq(customDomains.businessId, businesses.id))
+    // Only the live hostname. custom_domains guarantees one ACTIVE row per business
+    // (uq_one_active_domain_per_business), but PENDING_DNS, ERROR and REMOVED rows accumulate,
+    // so an unfiltered join fanned the business out once per row: the list showed the same
+    // tenant several times, the Domain column could show a hostname the tenant had already
+    // removed, and the totals query — which deliberately omits this join — disagreed with the
+    // rows, so offset pagination skipped real tenants.
+    .leftJoin(
+      customDomains,
+      and(eq(customDomains.businessId, businesses.id), eq(customDomains.status, 'ACTIVE')),
+    )
     .where(and(eq(businesses.id, businessId), isNull(businesses.deletedAt)))
     .limit(1);
   if (!row) return null;

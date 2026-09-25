@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { readCustomerBody } from './body';
-import { parseListQuery } from './query';
-import { createCustomer, loadCustomerPage, toCustomerDto } from './repository';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { readCustomerBody } from '@/lib/crm/customers/body';
+import { parseListQuery } from '@/lib/crm/customers/list-params';
+import { createCustomer, loadCustomerPage, toCustomerDto } from '@/lib/crm/customers/repository';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * GET/POST /api/v1/customers — the `list`, `empty` and `form` states of CRM-01.
@@ -43,12 +44,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = readCustomerBody(raw, 'create');
   if (!parsed.ok) {

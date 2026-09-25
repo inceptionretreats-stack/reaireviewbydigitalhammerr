@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { analyticsEvents } from '@ai-review/db';
 import { CheckoutService, PlatformSettingsService, RazorpayError } from '@ai-review/core';
 import type { EventPayload } from '@ai-review/analytics';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireActiveTenant, requireTenant } from '@/lib/require-tenant';
-import { loadSubscriptionView, razorpayClient, razorpayConfig } from '@/lib/subscription';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { requireActiveTenant, requireTenant } from '@/lib/tenant/require-tenant';
+import { loadSubscriptionView, razorpayClient, razorpayConfig } from '@/lib/billing/subscription';
+import { recordActivity } from '@/lib/activity/recorder';
 
 export const runtime = 'nodejs';
 

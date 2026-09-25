@@ -1,0 +1,181 @@
+.strip {
+  --audience-gap: 48px;
+
+  width: 100%;
+  min-width: 0;
+  padding: 29px 0;
+  overflow: hidden;
+  border-block: 1px solid #dce2ea;
+  background: #ffffff;
+}
+
+.viewport:focus-visible {
+  outline: 2px solid #1967d2;
+  outline-offset: -2px;
+}
+
+.viewport {
+  width: 100%;
+  min-width: 0;
+  padding-block: 5px;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000000 5%, #000000 95%, transparent);
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  animation: businessScroll 180s linear infinite;
+}
+
+.list {
+  display: flex;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+  padding-inline-end: var(--audience-gap);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--audience-gap);
+  list-style: none;
+}
+
+.businessName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--audience-gap);
+  color: #536174;
+  font-size: 19px;
+  font-weight: 550;
+  letter-spacing: 0;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.businessLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.businessIcon {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  color: #4285f4;
+}
+
+.businessIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.businessName:nth-child(4n + 2) .businessIcon {
+  color: #ea4335;
+}
+
+.businessName:nth-child(4n + 3) .businessIcon {
+  color: #ae7900;
+}
+
+.businessName:nth-child(4n) .businessIcon {
+  color: #299855;
+}
+
+.businessName::after {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #4285f4;
+  content: '';
+}
+
+.businessName:nth-child(4n + 2)::after {
+  background: #ea4335;
+}
+
+.businessName:nth-child(4n + 3)::after {
+  background: #fbbc05;
+}
+
+.businessName:nth-child(4n)::after {
+  background: #34a853;
+}
+
+.viewport:hover .track,
+.viewport:focus-within .track {
+  animation-play-state: paused;
+}
+
+@keyframes businessScroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 600px) {
+  .strip {
+    --audience-gap: 36px;
+
+    padding: 23px 0;
+  }
+
+  .businessName {
+    font-size: 17px;
+  }
+
+  .businessLabel {
+    gap: 10px;
+  }
+
+  .businessIcon {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list[aria-hidden='true'] {
+    display: none;
+  }
+
+  .viewport {
+    overflow-x: auto;
+    mask-image: none;
+  }
+
+  .track {
+    animation: none;
+  }
+
+  .list {
+    padding-inline: 24px;
+  }
+}
+
+@media (forced-colors: active) {
+  .strip {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+
+  .businessName {
+    color: CanvasText;
+  }
+
+  .businessIcon {
+    color: CanvasText;
+  }
+
+  .viewport {
+    mask-image: none;
+  }
+
+  .businessName::after {
+    background: CanvasText;
+  }
+}

@@ -1,14 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import { submitFeedbackRequest } from '@ai-review/contracts';
 import { analyticsEvents, privateFeedback } from '@ai-review/db';
 import { normalizePhone } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { resolveAnonymousSession } from '@/lib/anonymous-session';
-import { resolvePublicRef } from '@/lib/resolve-public-ref';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { env } from '@/lib/env';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { resolveAnonymousSession } from '@/lib/customer/anonymous-session';
+import { resolvePublicRef } from '@/lib/customer/resolve-public-ref';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { env } from '@/lib/infra/env';
 
 /**
  * POST /api/v1/public/feedback — FB-01, private feedback.
@@ -39,16 +40,20 @@ import { env } from '@/lib/env';
  * fresh session — but it does stop the cheap case, a single browser posting in a loop.
  */
 const MAX_SUBMISSIONS_PER_SESSION = 5;
+
+/**
+ * The same cap for callers with no session at all, shared across all of them for one
+ * business. Nothing in the customer flow lands here — proxy.ts mints dh_anon on the page
+ * render — so this bucket holds only direct API clients, and a handful an hour is generous
+ * for any legitimate one.
+ */
+const MAX_SESSIONLESS_SUBMISSIONS = 5;
 const THROTTLE_WINDOW_MS = 60 * 60 * 1000;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  let body: Record<string, unknown>;
-
-  try {
-    body = (await request.json()) as Record<string, unknown>;
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const bodyResult = await readJsonObject(request);
+  if (!bodyResult.ok) return bodyResult.response;
+  const body = bodyResult.body as Record<string, unknown>;
 
   // Trim before validating. Whitespace satisfies a bare min-length check without being a
   // message, and an empty optional field must become absent rather than an empty string, so
@@ -89,24 +94,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Two layers, deliberately. Redis is primary and is the only one that sees the IP prefix,
   // so it is what catches a client cycling cookies. The database check below survives a Redis
   // outage, when the limiter degrades to per-process counting.
-  if (session) {
-    const decision = await rateLimiter().publicFeedback({
-      businessId,
-      anonymousSessionId: session.sessionId,
-      ip: clientIp(request),
-      pepper: env().HASH_PEPPER,
-    });
+  //
+  // Both run for a caller with no session too. They used to sit behind `if (session)`, which
+  // meant that simply not sending the dh_anon cookie skipped every control on this endpoint:
+  // 30 posts from one shell loop were all accepted. A real customer always has the cookie —
+  // proxy.ts mints it on the page render — so a cookieless caller is a direct API client, and
+  // the prefix-keyed dimension is exactly the one that should be judging it.
+  const decision = await rateLimiter().publicFeedback({
+    businessId,
+    anonymousSessionId: session?.sessionId ?? null,
+    ip: clientIp(request),
+    pepper: env().HASH_PEPPER,
+  });
 
-    if (isDenied(decision)) {
-      return apiError(
-        'PUBLIC_RATE_LIMITED',
-        'You have sent several messages already. Please try again a little later.',
-        { retryAfterSeconds: decision.retryAfterSeconds },
-      );
-    }
+  if (isDenied(decision)) {
+    return apiError(
+      'PUBLIC_RATE_LIMITED',
+      'You have sent several messages already. Please try again a little later.',
+      { retryAfterSeconds: decision.retryAfterSeconds },
+    );
   }
 
-  if (session && (await isThrottled(database, businessId, session.sessionId))) {
+  if (await isThrottled(database, businessId, session?.sessionId ?? null)) {
     return apiError(
       'PUBLIC_RATE_LIMITED',
       'You have sent several messages already. Please try again a little later.',
@@ -163,9 +172,14 @@ function normalizeMobile(mobile: string | undefined): string | null {
 async function isThrottled(
   database: ReturnType<typeof db>,
   businessId: string,
-  sessionId: string,
+  sessionId: string | null,
 ): Promise<boolean> {
   const since = new Date(Date.now() - THROTTLE_WINDOW_MS);
+  // A cookieless caller is counted against every other cookieless caller for this business.
+  // That is intentional: no customer reaches this endpoint without the cookie, so the bucket
+  // holds only direct API clients, and it is the layer that still stands if Redis is down —
+  // which on production it currently is.
+  const cap = sessionId === null ? MAX_SESSIONLESS_SUBMISSIONS : MAX_SUBMISSIONS_PER_SESSION;
 
   const recent = await database
     .select({ id: privateFeedback.id })
@@ -173,13 +187,15 @@ async function isThrottled(
     .where(
       and(
         eq(privateFeedback.businessId, businessId),
-        eq(privateFeedback.anonymousSessionId, sessionId),
+        sessionId === null
+          ? isNull(privateFeedback.anonymousSessionId)
+          : eq(privateFeedback.anonymousSessionId, sessionId),
         gt(privateFeedback.createdAt, since),
       ),
     )
-    .limit(MAX_SUBMISSIONS_PER_SESSION);
+    .limit(cap);
 
-  return recent.length >= MAX_SUBMISSIONS_PER_SESSION;
+  return recent.length >= cap;
 }
 
 /**

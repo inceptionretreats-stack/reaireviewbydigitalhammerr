@@ -7,15 +7,17 @@ import {
   validatePasswordStrength,
 } from '@ai-review/core';
 import { signupRequest } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { verifyCsrf } from '@/lib/csrf';
-import { passwordHasher, SHELL_CATEGORY, shellBusinessName } from '@/lib/auth-helpers';
-import { landingPathFor, sessionService, setSessionCookie } from '@/lib/session';
-import { clientIp } from '@/lib/rate-limit';
-import { recordActivity } from '@/lib/activity';
-import { isUniqueViolation, safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { passwordHasher } from '@/lib/auth/password-hasher';
+import { SHELL_CATEGORY, shellBusinessName } from '@/lib/tenant/tenant-shell';
+import { landingPathFor, sessionService, setSessionCookie } from '@/lib/auth/session';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { recordActivity } from '@/lib/activity/recorder';
+import { isUniqueViolation, safeError } from '@/lib/infra/safe-error';
 
 /**
  * POST /api/v1/auth/signup — AUTH-01.
@@ -33,12 +35,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrf = verifyCsrf(request);
   if (!csrf.ok) return apiError('FORBIDDEN', 'Request rejected.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
+  // AUTH-01, before the body is even read. This endpoint had no limit at all: 25 rejections
+  // came back in 1.5 s, each confirming whether an address already has an account — an
+  // enumeration oracle that works against the platform's own admin addresses — and six real
+  // tenants, each with a fresh free draft allowance, were created in 428 ms. The "that email
+  // already exists" answer is required by AUTH-01 and cannot be made neutral, so the rate of
+  // asking is what has to be bounded.
+  const gate = await rateLimiter().signup({ ip: clientIp(request), pepper: env().HASH_PEPPER });
+  if (isDenied(gate)) {
+    return apiError('AUTH_RATE_LIMITED', 'Too many sign-up attempts. Please try again later.', {
+      retryAfterSeconds: gate.retryAfterSeconds,
+    });
   }
+
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = signupRequest.safeParse(raw);
   if (!parsed.success) {

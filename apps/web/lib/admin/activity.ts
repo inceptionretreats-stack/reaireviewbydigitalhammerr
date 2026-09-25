@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { users } from '@ai-review/db';
 import { listActivity, type ActivityFilter } from '@ai-review/core';
 import type { AdminActivityQuery } from '@ai-review/contracts';
-import { db } from '@/lib/db';
+import { db } from '@/lib/infra/db';
 
 /**
  * AMENDMENT-028 — the explorer's query, resolved: an email typed into the filter becomes a

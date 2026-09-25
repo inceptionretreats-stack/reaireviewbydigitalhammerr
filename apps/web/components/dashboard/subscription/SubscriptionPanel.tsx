@@ -3,8 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Card, InlineError, StatusBadge } from '@ai-review/ui';
-import { sendJson } from '@/components/dashboard/ai/send-json';
-import { describePlan } from '@/components/dashboard/presentation';
+import { sendJson } from '@/components/shared/forms/send-json';
+import { describePlan } from '@/lib/dashboard/presentation';
 
 /**
  * SUB-01's plan card and the purchase flow (Flow E steps 5–7).

@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Field, InlineError, Input } from '@ai-review/ui';
-import { useFormSubmit } from './use-form-submit';
+import { useFormSubmit } from '../shared/forms/use-form-submit';
 
 /**
  * AUTH-03. States from the screen spec: default, sent, rate limited.
@@ -48,7 +48,7 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
         <h1 className="text-2xl font-bold tracking-tight text-ink">Reset your password</h1>
         <p className="text-sm text-ink-muted">

@@ -1,5 +1,10 @@
 import type { BadgeTone } from '@ai-review/ui';
-import { hasStoredTarget, rendersPublicly, sectionTarget, type SectionType } from './sections';
+import {
+  hasStoredTarget,
+  rendersPublicly,
+  sectionTarget,
+  type SectionType,
+} from '@/lib/profile/sections';
 
 /**
  * How one section describes itself on PROFILE-01.

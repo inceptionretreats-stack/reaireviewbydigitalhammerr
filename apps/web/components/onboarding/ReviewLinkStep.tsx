@@ -487,8 +487,8 @@ function ReviewLinkHelp({
  * One JSON mutation, with the error envelope unpacked.
  *
  * Deliberately the same shape as the helper in `AiContextStep.tsx`. Both wizard steps need a PUT
- * and `useFormSubmit` is POST-only; the honest fix is one shared helper in `apps/web/lib`, which
- * is outside this module's paths.
+ * and `useFormSubmit` is POST-only; the honest fix is one shared helper (see
+ * `components/shared/forms/send-json.ts`).
  */
 async function sendJson(
   endpoint: string,

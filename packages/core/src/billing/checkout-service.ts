@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Executor } from '../db-executor';
 import { and, desc, eq } from 'drizzle-orm';
 import {
   businesses,
@@ -354,11 +355,20 @@ export class CheckoutService {
     expectedBusinessId: string | null;
     amountPaise: number | null;
     reference: Record<string, unknown>;
+    /**
+     * An open transaction to settle inside, instead of opening one.
+     *
+     * Only `payment.reconcile` passes this. It has to write its audit row in the same
+     * transaction as the settlement it describes — otherwise a crash between the two commits
+     * leaves a manually reconciled payment CAPTURED and a Pro year granted with no record of
+     * which admin did it or why, which is the case where the audit trail matters most.
+     */
+    tx?: Executor;
   }): Promise<{ payment: Payment; activated: boolean }> {
     // Read before the transaction: the seller's details do not change mid-settle, and the
     // settings service reads through the pool.
     const seller = await new PlatformSettingsService(this.db).values();
-    return this.db.transaction(async (tx) => {
+    const run = async (tx: Executor) => {
       const [payment] = await tx
         .select()
         .from(payments)
@@ -418,11 +428,13 @@ export class CheckoutService {
         .where(eq(payments.id, payment.id))
         .returning();
       return { payment: receipted!, activated: true };
-    });
+    };
+
+    return input.tx ? run(input.tx) : this.db.transaction(run);
   }
 
   private async issueInvoice(
-    tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+    tx: Executor,
     input: {
       businessId: string;
       grossPaise: number;

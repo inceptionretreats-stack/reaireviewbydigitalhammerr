@@ -6,8 +6,8 @@ import { adminAuditLogs, users } from '@ai-review/db';
 import { Badge, Card, Table } from '@ai-review/ui';
 import { adminDateTime } from '@/lib/admin/format';
 import { teamService } from '@/lib/admin/team';
-import { db } from '@/lib/db';
-import { getSession } from '@/lib/session';
+import { db } from '@/lib/infra/db';
+import { getSession } from '@/lib/auth/session';
 
 export const metadata: Metadata = { title: 'Team member | Ai Review admin' };
 export const dynamic = 'force-dynamic';

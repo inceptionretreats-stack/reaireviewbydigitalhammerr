@@ -3,8 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { Button, Card, Field, InlineError, Input } from '@ai-review/ui';
-import { PASSWORD_MAX, PASSWORD_MIN } from '@/app/api/v1/account/schema';
-import { fieldError } from '../../auth/use-form-submit';
+import { PASSWORD_MAX, PASSWORD_MIN } from '@/lib/account/schema';
+import { fieldError } from '@/components/shared/forms/use-form-submit';
 import { describePasswordChangeSessions } from './copy';
 import {
   readBoolean,

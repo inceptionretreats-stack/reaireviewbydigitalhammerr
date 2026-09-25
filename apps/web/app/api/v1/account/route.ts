@@ -2,15 +2,16 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '@ai-review/db';
 import { normalizePhone } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { passwordHasher } from '@/lib/auth-helpers';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { emailChanged, parseAccountDetails } from './schema';
-import { recordActivity } from '@/lib/activity';
-import { isUniqueViolation, safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { passwordHasher } from '@/lib/auth/password-hasher';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { emailChanged, parseAccountDetails } from '@/lib/account/schema';
+import { recordActivity } from '@/lib/activity/recorder';
+import { isUniqueViolation, safeError } from '@/lib/infra/safe-error';
 
 /**
  * PATCH /api/v1/account — the account half of SET-01.
@@ -36,12 +37,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = parseAccountDetails(raw);
   if (!parsed.ok) {
@@ -69,6 +67,13 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const changingEmail = emailChanged(details.email, account.email);
 
   if (changingEmail) {
+    if (!account.passwordHash) {
+      return apiError(
+        'VALIDATION_FAILED',
+        'Set an account password through password reset before changing your email.',
+        { details: { fields: ['current_password'] } },
+      );
+    }
     if (details.currentPassword === null) {
       return apiError('VALIDATION_FAILED', 'Enter your current password to change your email.', {
         details: { fields: ['current_password'] },
@@ -100,7 +105,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
    * recovery check) would then trust it. Nothing in V1 reads the column and no flow re-verifies an
    * address, so for the accounts that have it set — seeded and admin-created users — this is a
    * one-way downgrade. That is the honest state rather than the comfortable one, and it is not
-   * silent: the response says so and the screen turns it into a sentence. See concerns.
+   * silent: the response says so and the screen turns it into a sentence.
    */
   try {
     await database

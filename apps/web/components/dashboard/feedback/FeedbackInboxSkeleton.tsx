@@ -8,7 +8,7 @@
  * The blocks are `aria-hidden` behind a single live region — announcing a dozen placeholder
  * rectangles tells a screen reader user nothing except that something is happening a dozen times.
  * `motion-reduce:animate-none` because a pulsing page is what `prefers-reduced-motion` exists to
- * switch off. Both decisions mirror `components/dashboard/DashboardSkeleton.tsx`.
+ * switch off. Both decisions mirror `components/dashboard/overview/DashboardSkeleton.tsx`.
  */
 
 const BLOCK = 'animate-pulse rounded-card bg-surface motion-reduce:animate-none';

@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { loadSubscriptionView, subscriptionToWire } from '@/lib/subscription';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { loadSubscriptionView, subscriptionToWire } from '@/lib/billing/subscription';
 
 export const runtime = 'nodejs';
 

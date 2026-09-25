@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { promptVersionDraftInput } from '@ai-review/contracts';
 import { PromptVersionService } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireAdmin } from '@/lib/require-admin';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { promptVersionErrorResponse, toFields, toWire } from '@/lib/admin/prompt-versions';
 
 export const runtime = 'nodejs';
@@ -27,12 +28,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   if (!UUID.test(id)) return apiError('RESOURCE_NOT_FOUND', 'No such prompt version.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = promptVersionDraftInput.safeParse(raw);
   if (!parsed.success) {
     return apiError(

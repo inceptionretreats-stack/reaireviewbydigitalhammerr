@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { promptVersionCreate } from '@ai-review/contracts';
 import { PromptVersionService, parseGuidance } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireAdmin } from '@/lib/require-admin';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { promptVersionErrorResponse, toWire } from '@/lib/admin/prompt-versions';
 
 export const runtime = 'nodejs';
@@ -25,12 +26,9 @@ export async function POST(request: Request) {
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = promptVersionCreate.safeParse(raw);
   if (!parsed.success) {
     return apiError(

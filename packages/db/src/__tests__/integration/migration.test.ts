@@ -35,6 +35,25 @@ describe('migration 0000', () => {
     expect(rows[0].n).toBeGreaterThanOrEqual(30);
   });
 
+  it('supports passwordless Google vendors without weakening the identity table', async () => {
+    const columns = await pool.query(
+      `SELECT is_nullable FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'password_hash'`,
+    );
+    expect(columns.rows[0]?.is_nullable).toBe('YES');
+
+    const identity = await pool.query(
+      `SELECT relrowsecurity FROM pg_class WHERE oid = 'public.google_identities'::regclass`,
+    );
+    expect(identity.rows[0]?.relrowsecurity).toBe(true);
+
+    const access = await pool.query(
+      `SELECT rolname, has_table_privilege(rolname, 'public.google_identities', 'SELECT') AS can_read
+       FROM pg_roles WHERE rolname IN ('anon', 'authenticated')`,
+    );
+    expect(access.rows.every((row) => row.can_read === false)).toBe(true);
+  });
+
   /** AMENDMENT-012. Without this the 13-month retention policy is a DELETE over ~300M rows. */
   it('declares analytics_events as range-partitioned on occurred_at', async () => {
     const { rows } = await pool.query(

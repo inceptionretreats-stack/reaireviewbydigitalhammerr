@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import {
   adminAuditLogs,
   businesses,
@@ -15,12 +15,8 @@ import { AuditWriter } from '../audit/writer';
 import type { Executor } from '../db-executor';
 import { CheckoutService } from './checkout-service';
 import { RazorpayError, type RazorpayClient } from './razorpay';
-import {
-  auditActorType,
-  SubscriptionService,
-  SYSTEM_ACTOR,
-  type AdminActor,
-} from './subscription-service';
+import { auditActorType, SYSTEM_ACTOR, type AdminActor } from '../audit/actor';
+import { SubscriptionService } from './subscription-service';
 
 /**
  * Payment control for the platform admin (AMENDMENT-029): the cross-tenant list, the webhook
@@ -421,8 +417,31 @@ export class PaymentAdminService {
       .where(eq(paymentRefunds.providerRefundId, input.providerRefundId))
       .limit(1);
 
-    if (known && (known.status === 'PROCESSED' || known.status === 'FAILED')) {
-      return { paymentId: payment.id, applied: false };
+    if (known) {
+      const target = statusFrom(input.providerStatus);
+
+      // FAILED is terminal, and a repeat of what we already recorded is a redelivery.
+      if (known.status === 'FAILED' || known.status === target) {
+        return { paymentId: payment.id, applied: false };
+      }
+
+      // Razorpay reversing a refund it had already reported as processed. Rare, but it is the
+      // one case where money comes back to us after we have acted on it having left — so it
+      // has to be applied rather than dropped as a duplicate, or the payment stays REFUNDED
+      // and the tenant stays without the year they paid for.
+      if (known.status === 'PROCESSED') {
+        if (target !== 'FAILED') return { paymentId: payment.id, applied: false };
+        await this.db
+          .update(paymentRefunds)
+          .set({
+            status: 'FAILED',
+            processedAt: new Date(),
+            rawReference: sql`${paymentRefunds.rawReference} || ${JSON.stringify({ webhook_event_id: input.eventId, provider_status: input.providerStatus })}::jsonb`,
+          })
+          .where(eq(paymentRefunds.id, known.id));
+        await this.reverseRefund(payment.id, known.id, known.amountPaise);
+        return { paymentId: payment.id, applied: true };
+      }
     }
     if (known) {
       // Ours, still pending: only its status moves; the money was counted when we requested it.
@@ -442,20 +461,48 @@ export class PaymentAdminService {
       return { paymentId: payment.id, applied: false };
     }
     // One of ours between phases 2 and 3 — Razorpay answered the API call and fired the webhook
-    // before the row was stamped with its id. Phase 3 will finish it; counting it here too would
-    // deduct the amount twice.
+    // before the row was stamped with its id.
+    //
+    // This used to return `applied: false` and leave the row for phase 3 to finish. But phase 3
+    // lives in the process that made the call, so if that process died the row stayed REQUESTED
+    // for ever: money had left the merchant account while the ledger still read refunded_paise
+    // = 0, the payment stayed CAPTURED, and the pending-refund guard in refund() refused every
+    // admin attempt to retry. Nothing swept REQUESTED rows, so the only recovery was hand-written
+    // SQL. The webhook is the one thing that definitely still arrives, so it adopts the row.
+    //
+    // applyRefund claims it conditionally on status = 'REQUESTED', so a phase 3 that is merely
+    // slow rather than dead still finishes safely: whichever arrives first applies the refund
+    // and the other no-ops instead of counting the amount twice.
     const [inFlight] = await this.db
-      .select({ id: paymentRefunds.id })
+      .select({ id: paymentRefunds.id, reason: paymentRefunds.reason })
       .from(paymentRefunds)
       .where(
         and(
           eq(paymentRefunds.paymentId, payment.id),
           eq(paymentRefunds.status, 'REQUESTED'),
+          isNull(paymentRefunds.providerRefundId),
           eq(paymentRefunds.amountPaise, input.amountPaise),
         ),
       )
       .limit(1);
-    if (inFlight) return { paymentId: payment.id, applied: false };
+
+    if (inFlight) {
+      await this.applyRefund({
+        paymentId: payment.id,
+        refundId: inFlight.id,
+        providerRefundId: input.providerRefundId,
+        amountPaise: input.amountPaise,
+        providerStatus: input.providerStatus,
+        actor: SYSTEM_ACTOR,
+        reason: inFlight.reason ?? `Recovered from Razorpay webhook ${input.eventId}`,
+        raw: {
+          source: 'webhook_recovery',
+          webhook_event_id: input.eventId,
+          provider_status: input.providerStatus,
+        },
+      });
+      return { paymentId: payment.id, applied: true };
+    }
 
     const [row] = await this.db
       .insert(paymentRefunds)
@@ -524,14 +571,19 @@ export class PaymentAdminService {
       const last = attempts[attempts.length - 1];
       return { payment, activated: false, providerStatus: last?.status ?? 'no attempts' };
     }
-    const settled = await new CheckoutService(this.db).settleOrder({
-      orderId: payment.providerOrderId,
-      providerPaymentId: captured.id,
-      expectedBusinessId: payment.businessId,
-      amountPaise: captured.amountPaise,
-      reference: { source: 'admin_reconcile', razorpay_payment_status: captured.status },
-    });
-    await this.db.transaction(async (tx) => {
+    // One transaction for the settlement and the row that says who reconciled it. They used to
+    // be two commits, so a process death in between could grant a Pro year with no record of
+    // which admin did it or why — and reconcile exists precisely for payments whose normal path
+    // already failed once, which makes it the worst place to lose the trail.
+    const settled = await this.db.transaction(async (tx) => {
+      const result = await new CheckoutService(this.db).settleOrder({
+        orderId: payment.providerOrderId!,
+        providerPaymentId: captured.id,
+        expectedBusinessId: payment.businessId,
+        amountPaise: captured.amountPaise,
+        reference: { source: 'admin_reconcile', razorpay_payment_status: captured.status },
+        tx,
+      });
       await new AuditWriter(tx).record({
         actorUserId: input.actor.userId,
         actorType: auditActorType(input.actor),
@@ -543,11 +595,12 @@ export class PaymentAdminService {
         reason: input.reason,
         before: { status: payment.status },
         after: {
-          status: settled.payment.status,
+          status: result.payment.status,
           provider_payment_id: captured.id,
-          activated: settled.activated,
+          activated: result.activated,
         },
       });
+      return result;
     });
     return { payment: settled.payment, activated: settled.activated, providerStatus: 'captured' };
   }
@@ -611,6 +664,9 @@ export class PaymentAdminService {
     return this.db.transaction(async (tx) => {
       const payment = await lockPayment(tx, input.paymentId);
       const status = statusFrom(input.providerStatus);
+      // Conditional on the row still being REQUESTED, so that whoever arrives first applies
+      // the refund and the other becomes a no-op. Phase 3 and a recovery webhook can both be
+      // holding the same refund row, and counting its amount twice would corrupt the ledger.
       const [refund] = await tx
         .update(paymentRefunds)
         .set({
@@ -619,24 +675,41 @@ export class PaymentAdminService {
           processedAt: status === 'PENDING' ? null : new Date(),
           rawReference: input.raw,
         })
-        .where(eq(paymentRefunds.id, input.refundId))
+        .where(and(eq(paymentRefunds.id, input.refundId), eq(paymentRefunds.status, 'REQUESTED')))
         .returning();
+
+      if (!refund) {
+        const [current] = await tx
+          .select()
+          .from(paymentRefunds)
+          .where(eq(paymentRefunds.id, input.refundId))
+          .limit(1);
+        return { refund: current!, payment, revoked: false };
+      }
 
       const refundedPaise = payment.refundedPaise + input.amountPaise;
       const full = refundedPaise >= payment.amountPaise;
+
+      // `refundedPaise` counts a merely requested refund so that a second request cannot
+      // over-refund the payment. The *consequences* of a refund wait for Razorpay to settle
+      // it: netbanking refunds sit at `pending` for minutes to days, and stamping refunded_at,
+      // flipping the payment to REFUNDED and taking the paid year away all assert that money
+      // has moved when it has not. If the refund then fails, the money comes back but the year
+      // did not — the tenant silently lost the Pro they paid for while the platform kept the fee.
+      const settled = status === 'PROCESSED';
       const [after] = await tx
         .update(payments)
         .set({
           refundedPaise,
-          refundedAt: new Date(),
-          status: full ? 'REFUNDED' : payment.status,
+          ...(settled ? { refundedAt: new Date() } : {}),
+          status: full && settled ? 'REFUNDED' : payment.status,
           updatedAt: new Date(),
         })
         .where(eq(payments.id, payment.id))
         .returning();
 
       let revoked = false;
-      if (full) {
+      if (full && settled) {
         const [subscription] = await tx
           .select({ entitlementNote: subscriptions.entitlementNote, status: subscriptions.status })
           .from(subscriptions)
@@ -678,18 +751,70 @@ export class PaymentAdminService {
   }
 
   /** A refund Razorpay later failed: the money never left, so the running total comes back. */
+  /**
+   * A refund Razorpay later failed: the money never left, so the running total comes back —
+   * and so does the entitlement, if this payment's full refund had already taken it away.
+   *
+   * Restoring the year matters because the alternative is silent and unrecoverable: the
+   * revocation clears `entitlement_note`, so once it is gone nothing links the subscription
+   * back to the payment that funded it, and only a manual admin grant — under a different
+   * `entitlement_source` — can put the tenant back where they were. Reversing the money
+   * without reversing its consequence leaves the customer paying for a year they cannot use.
+   */
   private async reverseRefund(paymentId: string, refundId: string, amountPaise: number) {
     await this.db.transaction(async (tx) => {
       const payment = await lockPayment(tx, paymentId);
       const refundedPaise = Math.max(0, payment.refundedPaise - amountPaise);
+      const wasFullyRefunded = payment.status === 'REFUNDED';
       await tx
         .update(payments)
         .set({
           refundedPaise,
-          status: payment.status === 'REFUNDED' ? 'CAPTURED' : payment.status,
+          ...(refundedPaise === 0 ? { refundedAt: null } : {}),
+          status: wasFullyRefunded ? 'CAPTURED' : payment.status,
           updatedAt: new Date(),
         })
         .where(eq(payments.id, paymentId));
+
+      // Only when this payment's own full refund revoked the year. A subscription that has
+      // since been changed by an admin, or funded by a later payment, is left alone: its
+      // entitlement no longer belongs to this refund to give back.
+      // revokePro leaves starts_at and expires_at untouched — it only clears the status and the
+      // entitlement fields — so the period this payment bought is still on the row and the
+      // restore is exactly that clearing, undone.
+      let restored = false;
+      if (wasFullyRefunded) {
+        const [subscription] = await tx
+          .select({
+            status: subscriptions.status,
+            entitlementSource: subscriptions.entitlementSource,
+            expiresAt: subscriptions.expiresAt,
+          })
+          .from(subscriptions)
+          .where(eq(subscriptions.businessId, payment.businessId))
+          .limit(1);
+
+        // Only a subscription still in the state the revocation left it in. One an admin has
+        // since granted, or a later payment has funded, is no longer this refund's to give back.
+        if (
+          subscription?.status === 'CANCELLED' &&
+          subscription.entitlementSource === 'NONE' &&
+          subscription.expiresAt !== null
+        ) {
+          await tx
+            .update(subscriptions)
+            .set({
+              status: 'PRO_ACTIVE',
+              entitlementSource: 'PAYMENT',
+              entitlementGrantedBy: null,
+              entitlementNote: `payment:${paymentId}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(subscriptions.businessId, payment.businessId));
+          restored = true;
+        }
+      }
+
       await new AuditWriter(tx).record({
         actorUserId: null,
         actorType: 'SYSTEM',
@@ -700,7 +825,7 @@ export class PaymentAdminService {
         targetId: paymentId,
         reason: `Razorpay reported refund ${refundId} failed; amount restored`,
         before: { refunded_paise: payment.refundedPaise, status: payment.status },
-        after: { refunded_paise: refundedPaise },
+        after: { refunded_paise: refundedPaise, entitlement_restored: restored },
       });
     });
   }

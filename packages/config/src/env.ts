@@ -93,6 +93,11 @@ export const envSchema = z
     SESSION_SECRET: secret,
     APP_ENCRYPTION_KEY: secret.min(32, 'encryption key must be at least 32 bytes'),
     HASH_PEPPER: secret,
+    /** Google Identity Services web client ID. Optional until the Google sign-in feature is enabled. */
+    GOOGLE_CLIENT_ID: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().trim().min(1).optional(),
+    ),
 
     // Database
     DATABASE_URL: z.string().startsWith('postgres'),

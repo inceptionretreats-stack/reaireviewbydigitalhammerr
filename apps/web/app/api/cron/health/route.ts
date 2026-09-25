@@ -1,6 +1,6 @@
 import { cronAuthorised } from '@/lib/cron/auth';
-import { env } from '@/lib/env';
-import { checkBackendHealth } from '@/lib/backend-health';
+import { env } from '@/lib/infra/env';
+import { checkBackendHealth } from '@/lib/infra/backend-health';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

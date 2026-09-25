@@ -1,9 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { mfaEnrolConfirmRequest } from '@ai-review/contracts';
-import { apiError } from '@/lib/api-error';
-import { mfaService } from '@/lib/mfa';
-import { completeMfa, mfaRateGate, recordMfaFailure, requirePendingAdmin } from '@/lib/mfa-routes';
-import { recordActivity } from '@/lib/activity';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { mfaService } from '@/lib/auth/mfa';
+import {
+  completeMfa,
+  mfaRateGate,
+  recordMfaFailure,
+  requirePendingAdmin,
+} from '@/lib/auth/mfa-routes';
+import { recordActivity } from '@/lib/activity/recorder';
 
 export const runtime = 'nodejs';
 
@@ -18,12 +24,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const gate = await requirePendingAdmin(request);
   if (!gate.ok) return gate.response;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
   const parsed = mfaEnrolConfirmRequest.safeParse(raw);
   if (!parsed.success) {
     return apiError('VALIDATION_FAILED', parsed.error.issues[0]?.message ?? 'Enter the code.');

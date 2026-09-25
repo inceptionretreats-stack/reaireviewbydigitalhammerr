@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
 import { aiGenerations, analyticsEvents } from '@ai-review/db';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { resolveAnonymousSession } from '@/lib/anonymous-session';
-import { resolvePublicRef } from '@/lib/resolve-public-ref';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { resolveAnonymousSession } from '@/lib/customer/anonymous-session';
+import { resolvePublicRef } from '@/lib/customer/resolve-public-ref';
 import {
   buildGenerator,
   loadGenerationContext,
@@ -12,9 +14,19 @@ import {
   loadPlan,
   loadPreviousDrafts,
   providerKeys,
+  releaseQuota,
   selectProvider,
-} from '@/lib/generation-service';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
+} from '@/lib/ai/generation-service';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { validateSelectedServices } from '@/lib/customer/customer-services';
+import { safeError } from '@/lib/infra/safe-error';
+
+const requestSchema = z.object({
+  slug: z.string().min(1).max(160).optional(),
+  qr_code: z.string().min(1).max(160).optional(),
+  previous_generation_id: z.uuid().optional(),
+  selected_services: z.unknown().optional(),
+});
 
 /**
  * POST /api/v1/public/review/generate — REV-01 and Flow D.
@@ -38,13 +50,13 @@ import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  let body: { slug?: string; qr_code?: string; previous_generation_id?: string };
+  const rawBodyResult = await readJsonObject(request);
+  if (!rawBodyResult.ok) return rawBodyResult.response;
+  const rawBody = rawBodyResult.body;
 
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const parsedBody = requestSchema.safeParse(rawBody);
+  if (!parsedBody.success) return apiError('VALIDATION_FAILED', 'Malformed request body.');
+  const body = parsedBody.data;
 
   const resolved = await resolvePublicRef({ slug: body.slug, qrCode: body.qr_code });
   if (!resolved.ok) {
@@ -80,56 +92,49 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // AC-032, and before anything expensive: a denied request must not reach the provider, and
-  // must not consume the free quota either. Four dimensions in one atomic decision — session
-  // burst, session hourly, adaptive IP prefix, and paid abuse observation for Pro tenants.
-  if (session) {
-    const decision = await rateLimiter().publicGeneration({
-      businessId,
-      anonymousSessionId: session.sessionId,
-      ip: clientIp(request),
-      pepper: env().HASH_PEPPER,
-      plan: await loadPlan(database, businessId),
-      adminThrottle: controls.throttle,
-    });
-
-    if (isDenied(decision)) {
-      await recordEvent(database, {
-        businessId,
-        sessionId: session.sessionId,
-        qrCodeId,
-        name: 'ai_generate_failure',
-        properties: { error_class: decision.code, provider: 'rate_limit' },
-      });
-
-      return apiError(
-        decision.code,
-        'You have requested several drafts already. Please wait a moment and try again.',
-        { retryAfterSeconds: decision.retryAfterSeconds },
-      );
-    }
-  }
-
-  // AMENDMENT-030: the per-business ceiling holds for a caller with no anonymous session too
-  // (the check above is keyed by session and skipped without one).
-  if (!session && controls.throttle !== undefined) {
-    const decision = await rateLimiter().businessThrottle(businessId, controls.throttle);
-    if (isDenied(decision)) {
-      return apiError(
-        decision.code,
-        'You have requested several drafts already. Please wait a moment and try again.',
-        { retryAfterSeconds: decision.retryAfterSeconds },
-      );
-    }
-  }
-
   const context = await loadGenerationContext(database, businessId);
   if (!context) {
-    // No active prompt version, or the tenant vanished. Either way the customer sees the same
-    // safe message, and the direct review link on the page still works (AC-036).
     return apiError(
       'AI_PROVIDER_UNAVAILABLE',
       'The writing assistant is unavailable right now. You can still write your own review.',
+    );
+  }
+
+  // Check the customer choice before rate-limit consumption, quota reservation or model work.
+  // The business context comes from the resolved QR/slug, never from browser-supplied context.
+  const selection = validateSelectedServices(body.selected_services, context.business.services);
+  if (!selection.ok) return apiError('VALIDATION_FAILED', selection.message);
+
+  // AC-032, and before anything expensive: a denied request must not reach the provider, and
+  // must not consume the free quota either. Four dimensions in one atomic decision — session
+  // burst, session hourly, adaptive IP prefix, and paid abuse observation for Pro tenants.
+  // Runs for every caller, with or without a session. It used to sit behind `if (session)`,
+  // which meant a client that simply omitted the dh_anon cookie reached the AI provider with
+  // no burst, hourly, IP-prefix or paid-abuse check applied — leaving the tenant's draft quota
+  // as the only thing standing between a script and their year's allowance. The session-keyed
+  // dimensions drop out for such a caller; the prefix-keyed and business-keyed ones do not.
+  const decision = await rateLimiter().publicGeneration({
+    businessId,
+    anonymousSessionId: session?.sessionId ?? null,
+    ip: clientIp(request),
+    pepper: env().HASH_PEPPER,
+    plan: await loadPlan(database, businessId),
+    adminThrottle: controls.throttle,
+  });
+
+  if (isDenied(decision)) {
+    await recordEvent(database, {
+      businessId,
+      sessionId: session?.sessionId ?? null,
+      qrCodeId,
+      name: 'ai_generate_failure',
+      properties: { error_class: decision.code, provider: 'rate_limit' },
+    });
+
+    return apiError(
+      decision.code,
+      'You have requested several drafts already. Please wait a moment and try again.',
+      { retryAfterSeconds: decision.retryAfterSeconds },
     );
   }
 
@@ -145,6 +150,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       previousDrafts,
       generationNumber: previousDrafts.length + 1,
       draftLanguage: context.draftLanguage,
+      ...(selection.services.length > 0 ? { selectedServices: selection.services } : {}),
       // Stable across the retries inside this request, different between customers. A visitor
       // without the cookie gets a per-request id: still varied, just not repeatable.
       variationSeed: session?.sessionId ?? crypto.randomUUID(),
@@ -184,27 +190,41 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { draft } = outcome;
 
-  const [row] = await database
-    .insert(aiGenerations)
-    .values({
-      businessId,
-      anonymousSessionId: session?.sessionId ?? null,
-      qrCodeId,
-      reviewModeId: context.reviewModeId,
-      parentGenerationId: body.previous_generation_id ?? null,
-      promptVersionId: draft.promptVersionId,
-      model: draft.model,
-      generationNumber: previousDrafts.length + 1,
-      reviewText: draft.reviewText,
-      inputTokens: draft.inputTokens,
-      outputTokens: draft.outputTokens,
-      providerRequestId: draft.providerRequestId,
-      similarityScore: draft.similarityScore.toFixed(4),
-      countedTowardQuota: draft.countedTowardQuota,
-    })
-    .returning({ id: aiGenerations.id });
+  // AC-014: a customer who ends up with no usable draft must not lose a generation. The
+  // reservation was committed inside the generator, so if the draft cannot be persisted here
+  // it has to be handed back explicitly — otherwise a transient database error silently burns
+  // one of a Free tenant's ten lifetime drafts and shows the customer an error anyway. An
+  // uncaught throw here was also the one place a public endpoint answered a bare 500 instead
+  // of the documented error envelope.
+  let row: { id: string } | undefined;
+  try {
+    [row] = await database
+      .insert(aiGenerations)
+      .values({
+        businessId,
+        anonymousSessionId: session?.sessionId ?? null,
+        qrCodeId,
+        reviewModeId: context.reviewModeId,
+        parentGenerationId: body.previous_generation_id ?? null,
+        promptVersionId: draft.promptVersionId,
+        model: draft.model,
+        generationNumber: previousDrafts.length + 1,
+        reviewText: draft.reviewText,
+        inputTokens: draft.inputTokens,
+        outputTokens: draft.outputTokens,
+        providerRequestId: draft.providerRequestId,
+        similarityScore: draft.similarityScore.toFixed(4),
+        countedTowardQuota: draft.countedTowardQuota,
+      })
+      .returning({ id: aiGenerations.id });
+  } catch (error) {
+    console.error('[ai] could not persist a generated draft', safeError(error));
+  }
 
-  if (!row) return apiError('INTERNAL_ERROR', 'Could not save your draft. Please try again.');
+  if (!row) {
+    await releaseQuota(database, outcome.reservation);
+    return apiError('INTERNAL_ERROR', 'Could not save your draft. Please try again.');
+  }
 
   await recordEvent(database, {
     businessId,
@@ -216,6 +236,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       model: draft.model,
       latency_ms: draft.latencyMs,
       quota_type: draft.quotaType,
+      selected_services: selection.services,
     },
   });
 
@@ -223,6 +244,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     generation_id: row.id,
     review_text: draft.reviewText,
     prompt_version: context.promptVersion.version,
+    selected_services: selection.services,
     // The client must not enable Copy without this (AC-008, ADR-008).
     requires_experience_confirmation: true,
   });

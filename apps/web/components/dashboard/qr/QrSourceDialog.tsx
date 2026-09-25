@@ -10,7 +10,7 @@ import {
   noteError,
   type QrMutationOutcome,
   type QrSource,
-} from './qr-sources';
+} from './qr-screen-model';
 
 /**
  * QR-01's `create` state and its Rename action, which are the same two fields.

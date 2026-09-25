@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Card, KpiCard } from '@ai-review/ui';
 import { paymentOverview } from '@ai-review/core';
-import { db } from '@/lib/db';
+import { db } from '@/lib/infra/db';
 import { loadOverview } from '@/lib/admin/businesses';
 import { loadAbuseAlerts } from '@/lib/admin/abuse-alerts';
 

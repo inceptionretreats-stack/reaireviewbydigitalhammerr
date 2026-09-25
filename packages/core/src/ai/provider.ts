@@ -1,4 +1,5 @@
 import { readDraftLanguage, type BuiltPrompt } from './prompt-builder';
+import { checkVariation } from './similarity';
 
 /**
  * Provider adapter (E4-04, ADR-006, ADR-007).
@@ -112,19 +113,87 @@ export class StubAiProvider implements AiProvider {
     // The pool follows the language the prompt asks for, so a Hinglish business gets Hinglish
     // from the stub too. Without this the no-key demo would quietly show English for a setting
     // that claims otherwise, and no end-to-end test could tell the setting did anything.
-    const pool = readDraftLanguage(seen) === 'hinglish' ? STUB_DRAFTS_HINGLISH : STUB_DRAFTS;
+    const language = readDraftLanguage(seen);
+    const selected = stubSelectedServices(seen);
+    const pool =
+      selected.length > 0
+        ? stubServiceDrafts(selected, language === 'hinglish')
+        : language === 'hinglish'
+          ? STUB_DRAFTS_HINGLISH
+          : STUB_DRAFTS;
 
     // 'repetitive' must always return the same text: it exists so the variation gate can be
     // tested for real, and picking a fresh draft would defeat exactly that.
     if (this.behaviour === 'repetitive') return pool[0]!;
 
-    const unused = pool.find((draft) => !seen.includes(draft));
+    // A changed service name can make an old template look "unused" while it remains too
+    // similar to the prior draft. Match the real gate instead of retrying that template forever.
+    const previousDrafts = selected.length > 0 ? stubPreviousDrafts(seen) : [];
+    const unused = pool.find(
+      (draft) => !seen.includes(draft) && checkVariation(draft, previousDrafts).passed,
+    );
     if (unused) return unused;
 
     // Pool exhausted — more prior drafts than the pool holds. Fall back to a prompt-derived
     // index so the answer still varies with the request rather than with call order.
     return pool[hashToIndex(seen, pool.length)]!;
   }
+}
+
+/** Test/dev provider only: respect the same service-scoped prompt exercised in production. */
+function stubSelectedServices(prompt: string): string[] {
+  const raw = /^CUSTOMER_SELECTED_SERVICES=(.*)$/m.exec(prompt)?.[1];
+  if (!raw) return [];
+  try {
+    const values: unknown = JSON.parse(raw);
+    return Array.isArray(values)
+      ? values
+          .filter((value): value is string => typeof value === 'string' && value.length <= 80)
+          .slice(0, 30)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function stubPreviousDrafts(prompt: string): string[] {
+  const raw = /^PREVIOUS_DRAFTS=(.*)$/m.exec(prompt)?.[1];
+  if (!raw) return [];
+  try {
+    const values: unknown = JSON.parse(raw);
+    return Array.isArray(values)
+      ? values.filter((value): value is string => typeof value === 'string').slice(-3)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function stubServiceDrafts(services: string[], hinglish: boolean): string[] {
+  const names = services.join(', ');
+  // These neutral synthetic fixtures deliberately avoid making up satisfaction or outcomes.
+  // They are never a production fallback: production configuration requires a real provider.
+  return hinglish
+    ? [
+        `${names} ke liye mera yahan ka experience tha. Meri baat inhi services se judi hai; yahan ka anubhav mere liye isi kaam se sambandhit raha, kisi aur offering se nahi.`,
+        `Maine ${names} liya tha. Yahan likhi baat usi kaam tak seemit hai, kisi aur suvidha ke baare mein nahi. Mere experience ka sandarbh bhi wahi hai jo maine khud istemal kiya.`,
+        `Is business se ${names} lene ke baad apni baat likh raha hoon. Yahan se mera sambandh inhi services ka raha hai. Doosri offerings ki jagah apne istemal ki hui services ka zikr hai.`,
+        `${names} mere experience ka hissa tha. Apni zaroorat aur usse jude kaam ko lekar yeh review hai. Yahan jo maine liya, meri baat bhi usi se sambandhit hai.`,
+        `Mera sambandh yahan ${names} se raha hai. Kisi doosre kaam par tipanni nahi kar raha. Apna nazariya batane ke liye in services ko review ka vishay rakha hai.`,
+        `Yeh likhte waqt ${names} ko dhyan mein rakh raha hoon. Baat usi cheez ki hai jo maine khud li, baaki business ki offerings ki nahi. Is jagah se mera kaam isi tarah juda tha.`,
+        `${names} maine istemal kiya hai aur review ka sandarbh wahi hai. Yahan mere liye yahi services relevant thi. Poore business ki jagah meri baat apne liye liye gaye kaam par hai.`,
+        `Apna review ${names} ke sambandh mein likh raha hoon. In services ke zariye is business ke saath mera experience raha hai. Yahan mera zikr bhi isi istemal tak seemit hai.`,
+      ]
+    : [
+        `${names} are the services I used. My review relates to this part of my experience with the business, rather than any of the other services it may offer to its customers.`,
+        `I came to this business for ${names}. Those services are the subject of my feedback. My experience here concerns that work, so this account is specific to what I used.`,
+        `The reason for writing here is my use of ${names}. My connection with this business is through those services, and the comments relate to that part of its work.`,
+        `Having used ${names} through this business, that is the context of my review. This account concerns my own use of those services, rather than anyone else's experience.`,
+        `My connection with the business concerns ${names}. Any opinion I share should relate to what I actually used, without speaking for other customers or describing unrelated offerings.`,
+        `For this review, the focus is ${names}. Those are the services behind my experience here. I am referring to the work I used, not making an assessment of the business's other offerings.`,
+        `${names} form the background to my experience with this business. They are what brought me here as a customer, and the account I am sharing concerns those particular services.`,
+        `I am writing about ${names}, which I used through this business. My thoughts belong to that specific experience. These services are the basis of my own connection with the business.`,
+      ];
 }
 
 /**

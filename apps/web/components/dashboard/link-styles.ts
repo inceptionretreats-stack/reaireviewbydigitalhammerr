@@ -23,3 +23,14 @@ export const PRIMARY_LINK =
   SHARED + ' border-transparent bg-accent text-on-accent hover:bg-accent-hover';
 
 export const SECONDARY_LINK = SHARED + ' border-line-strong bg-bg text-ink hover:bg-surface';
+
+/**
+ * An ordinary inline link that navigates (used on the Ai screens).
+ *
+ * An `<a>` and not a `Button`, because it navigates: an anchor is announced as a link, opens in a
+ * new tab, and works with middle-click and copy-link, none of which a `button onClick={push}` does.
+ * Hijacking navigation into a button is one of the quiet ways AC-037 breaks.
+ */
+export const TEXT_LINK =
+  'rounded font-semibold text-accent underline underline-offset-4 ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';

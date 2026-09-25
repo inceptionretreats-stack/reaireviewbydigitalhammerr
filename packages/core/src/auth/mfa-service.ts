@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { mfaRecoveryCodes, sessions, users } from '@ai-review/db';
 import { AuditWriter } from '../audit/writer';
-import { auditActorType, type AdminAction } from '../billing/subscription-service';
+import { auditActorType, type AdminAction } from '../audit/actor';
 import type { Executor } from '../db-executor';
 import type { SecretBox } from '../crypto/secret-box';
 import { privacyHash } from './tokens';

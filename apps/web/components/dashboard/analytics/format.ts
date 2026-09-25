@@ -1,4 +1,4 @@
-import { parseLocalDate } from './range';
+import { parseLocalDate } from '@/lib/analytics/range';
 
 /**
  * Number and date formatting for AN-01.

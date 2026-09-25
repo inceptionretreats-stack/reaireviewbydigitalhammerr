@@ -8,21 +8,21 @@ import {
   isAdminRole,
   privacyHash,
 } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { verifyCsrf } from '@/lib/csrf';
-import { passwordHasher } from '@/lib/auth-helpers';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { passwordHasher } from '@/lib/auth/password-hasher';
 import {
   adminMfaRequired,
-  clearSessionCookie,
   getSession,
   nextPathAfterLogin,
   sessionService,
   setSessionCookie,
-} from '@/lib/session';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { recordActivity } from '@/lib/activity';
+} from '@/lib/auth/session';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * POST /api/v1/auth/login — AUTH-02.
@@ -49,12 +49,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrf = verifyCsrf(request);
   if (!csrf.ok) return apiError('FORBIDDEN', 'Request rejected.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = loginRequest.safeParse(raw);
   if (!parsed.success) {
@@ -182,11 +179,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           ? 'challenge'
           : 'enrol',
   });
-}
-
-export async function DELETE(): Promise<NextResponse> {
-  await clearSessionCookie();
-  return new NextResponse(null, { status: 204 });
 }
 
 /**

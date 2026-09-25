@@ -84,7 +84,7 @@ const DESCRIPTION_HINT =
  * because businesses.category is free text (varchar 100) that the prompt builder hands to the model
  * as-is (packages/core/src/ai/prompt-builder.ts), so the stored string has to read as natural
  * language rather than as a key. When platform_settings owns this list it should carry stable keys
- * plus display labels; see concerns.
+ * plus display labels.
  */
 const CATEGORY_LABELS: readonly string[] = [
   'Restaurant',
@@ -139,7 +139,7 @@ const CATEGORY_OPTIONS: readonly SelectOption[] = CATEGORY_LABELS.map((label) =>
  * Constants that live in @ai-review/core, passed in as props rather than imported.
  *
  * '@ai-review/core' exposes one root entry point that re-exports the whole domain, so importing
- * SLUG_MIN_LENGTH or normalizeSlug here would pull pg, ioredis and @node-rs/argon2 into the browser
+ * SLUG_MIN_LENGTH or normalizeSlug here would pull pg and @node-rs/argon2 into the browser
  * bundle. Slug rules therefore stay server-side entirely: these numbers arrive as data, and
  * normalization is done by the server (see the availability effect below).
  */

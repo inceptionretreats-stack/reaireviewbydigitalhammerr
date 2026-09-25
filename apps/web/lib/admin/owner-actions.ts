@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { businesses, passwordResetTokens, users } from '@ai-review/db';
-import { AbuseService, AuditWriter, issueToken, privacyHash } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { mailConfigured, mailer, passwordResetEmail } from '@/lib/mailer';
-import { abuseWarningEmail } from '@/lib/email-templates';
+import { AbuseService, AuditWriter, issueToken } from '@ai-review/core';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { mailConfigured, mailer, passwordResetEmail } from '@/lib/email/mailer';
+import { abuseWarningEmail } from '@/lib/email/email-templates';
 
 /**
  * Admin actions that end in an email to the owner (AMENDMENT-030 and the Owner & account tab).
@@ -104,9 +104,4 @@ export async function warnOwner(input: {
     });
     return { sent: false };
   }
-}
-
-/** The privacy hash of a request address, for the token row — never the address itself. */
-export function hashedIp(ip: string): string | null {
-  return ip ? privacyHash(ip, env().HASH_PEPPER) : null;
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { requireAdmin } from '@/lib/require-admin';
+import { db } from '@/lib/infra/db';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { loadOverview } from '@/lib/admin/businesses';
 
 export const runtime = 'nodejs';

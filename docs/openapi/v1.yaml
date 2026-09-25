@@ -7,7 +7,7 @@ info:
   description: |
     This is the **maintained** contract. `docs/spec/08_OpenAPI_v1.yaml` is the frozen delivered
     artefact and remains the contract of record for V1 *scope* — every path it lists is still in
-    scope. It is not usable as a validation contract: OPEN-04 in `docs/SPEC_AMENDMENTS.md` records
+    scope. It is not usable as a validation contract: OPEN-04 in `docs/decisions/spec-amendments.md` records
     that most of its operations declare a bare `200` with no schema, `/auth/login` has no request
     body at all, and only `SignupRequest`, `ReviewGeneration` and `Error` are defined. The pack's
     own required "Contract: OpenAPI response validation" suite cannot be written against it.
@@ -23,7 +23,7 @@ info:
       actually emit at that status. It is an extension rather than a narrowed schema because the
       envelope is a fixed shape and repeating a four-level-deep `enum` override on some sixty
       responses would bury the useful part. The codes and their statuses come from
-      `docs/spec/23_API_Error_Codes.md`, mirrored in `apps/web/lib/api-error.ts`.
+      `docs/spec/23_API_Error_Codes.md`, mirrored in `apps/web/lib/http/api-error.ts`.
     - **The delta from the skeleton** is in `x-skeleton-delta` at the bottom of this file: paths
       the skeleton lists that do not exist yet, paths that exist but the skeleton omits, and paths
       where the two disagree on shape. That delta is the point of this document.
@@ -1250,6 +1250,15 @@ paths:
         because it also carries source attribution, and its disabled state must win over the
         business merely being reachable (QR-01-02).
 
+        When the business has configured services, `selected_services` must contain at least
+        one of those exact public labels. Customers may choose several. Unknown labels,
+        malformed values and missing/empty choices return `422` before rate-limit consumption,
+        quota reservation or provider work. Duplicate labels are deduplicated in business-list
+        order. The joined labels may total no more than 600 characters. Businesses without a
+        configured service list accept an omitted field or `[]` for a general draft. Older
+        clients of a business with services must refresh and choose; the server never silently
+        assumes every service was used. Service choices are not a rating or proof of satisfaction.
+
         No star rating is accepted or returned at any point (D-009, AC-006), and no response ever
         suggests the review was posted — the platform only observes that Google was opened
         (D-028, AC-025).
@@ -1319,7 +1328,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '422':
-          description: The body was not JSON.
+          description: Malformed JSON/body fields or missing, invalid, unknown or overly long service choices.
           x-error-codes: [VALIDATION_FAILED]
           content:
             application/json:
@@ -1351,7 +1360,7 @@ paths:
             out. `AI_OUTPUT_REJECTED` — the quality or safety gate failed after its retry (AC-011,
             AC-012). Both keep the page usable: the customer can still write their own review and
             the direct Google link still works (AC-036). Per ADR-007 and the guardrail in
-            `docs/SPEC_AMENDMENTS.md`, this state is **not** a failover to a more expensive model;
+            `docs/decisions/spec-amendments.md`, this state is **not** a failover to a more expensive model;
             degrading to the retry state is both the specified and the correct commercial
             behaviour.
           x-error-codes: [AI_PROVIDER_UNAVAILABLE, AI_OUTPUT_REJECTED]
@@ -1508,7 +1517,7 @@ components:
       in: header
       required: true
       description: |
-        CSRF defence for cookie-authenticated mutations (`apps/web/lib/csrf.ts`). Every browser
+        CSRF defence for cookie-authenticated mutations (`apps/web/lib/http/csrf.ts`). Every browser
         sends `Origin` on a cross-origin mutation, so its **absence** on a state-changing request
         is itself rejected, and a value that is not `APP_BASE_URL` (plus localhost outside
         production) is rejected too. Custom tenant domains are deliberately not accepted: they
@@ -1532,7 +1541,7 @@ components:
 
         Optional at every endpoint. Absent, the request still succeeds — with no rate limiting, no
         regeneration history and no session attribution (AC-035). **Nothing in the current tree
-        mints this cookie**: `apps/web/lib/anonymous-session.ts` only reads it and names
+        mints this cookie**: `apps/web/lib/customer/anonymous-session.ts` only reads it and names
         `middleware.ts` as responsible, and no `middleware.ts` exists yet. See
         `docs/openapi/README.md`.
       schema: { type: string }
@@ -1541,7 +1550,7 @@ components:
     RetryAfter:
       description: |
         Seconds to wait, always at least 1. Set from the limiter's own interval by
-        `apps/web/lib/api-error.ts`.
+        `apps/web/lib/http/api-error.ts`.
       required: true
       schema: { type: integer, minimum: 1 }
     RetryAfterOptional:
@@ -1606,7 +1615,7 @@ components:
       type: object
       description: |
         The single error envelope from `docs/spec/23_API_Error_Codes.md`, produced by
-        `apps/web/lib/api-error.ts`. `request_id` is a fresh UUID on every error so a
+        `apps/web/lib/http/api-error.ts`. `request_id` is a fresh UUID on every error so a
         customer-facing message can be traced to a log line without the message itself carrying
         anything. Provider errors, stack traces and internal identifiers never appear in it
         (AC-030).
@@ -2000,7 +2009,7 @@ components:
     QrSource:
       type: object
       description: |
-        One QR source, produced by `toQrSourceWire` in `apps/web/app/api/v1/qr/qr-source.ts`. The
+        One QR source, produced by `toQrSourceWire` in `apps/web/lib/qr/qr-source-api.ts`. The
         list and both write endpoints answer with this same object, which is what lets QR-01 fold a
         created or renamed row straight into its list without learning a second shape.
       required:
@@ -2044,7 +2053,7 @@ components:
         preview_src:
           type: string
           description: |
-            The rendered symbol as an `image/svg+xml` data URI, encoded by `apps/web/lib/qr-image.ts`
+            The rendered symbol as an `image/svg+xml` data URI, encoded by `apps/web/lib/qr/qr-image.ts`
             — the same module the download endpoint uses, so a thumbnail and a printed file are
             always the same symbol.
 
@@ -2220,6 +2229,14 @@ components:
             Recorded as the parent of this draft, so a regeneration chain is traceable (AC-009).
             The similarity gate compares against the previous drafts for the anonymous session,
             not against this id.
+        selected_services:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 80 }
+          description: |
+            Exact labels from this business's public service list. Required and nonempty when
+            services exist; omitted or empty only when no services exist. Server validates
+            membership, deduplicates, and caps comma-separated labels at 600 characters.
 
     ReviewGeneration:
       type: object
@@ -2242,6 +2259,11 @@ components:
             A constant, not a flag. ADR-008 and AC-008 make the confirmation gate mandatory, so no
             valid response has it false and no client can be written against a shape where Copy is
             enabled without it.
+        selected_services:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 80 }
+          description: Canonical service choices used for this draft; empty for a general draft.
 
     PublicEventRequest:
       type: object
@@ -2317,7 +2339,7 @@ components:
     AccountDetailsRequest:
       type: object
       description: |
-        `parseAccountDetails` in `apps/web/app/api/v1/account/schema.ts`, which is the single
+        `parseAccountDetails` in `apps/web/lib/account/schema.ts`, which is the single
         definition of this shape — the handler and the settings screen both read it. Hand-written
         rather than Zod because `packages/contracts` carries no account DTO; an
         `accountDetailsRequest` belongs beside `signupRequest` there.
@@ -2365,7 +2387,7 @@ components:
 
     PasswordChangeRequest:
       type: object
-      description: '`parsePasswordChange` in `apps/web/app/api/v1/account/schema.ts`.'
+      description: '`parsePasswordChange` in `apps/web/lib/account/schema.ts`.'
       required: [current_password, new_password]
       properties:
         current_password:
@@ -2425,7 +2447,7 @@ components:
 # ---------------------------------------------------------------------------------------------
 x-skeleton-delta:
   frozen-document: docs/spec/08_OpenAPI_v1.yaml
-  recorded-in: docs/SPEC_AMENDMENTS.md — OPEN-03, OPEN-04
+  recorded-in: docs/decisions/spec-amendments.md — OPEN-03, OPEN-04
 
   absent-from-skeleton-but-implemented:
     - path: /auth/reset-password

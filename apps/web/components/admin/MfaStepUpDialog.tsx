@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button, Field, InlineError, Input, Modal } from '@ai-review/ui';
-import { sendJson, type JsonResult } from '@/components/dashboard/ai/send-json';
+import { sendJson, type JsonResult } from '@/components/shared/forms/send-json';
 
 /**
  * AMENDMENT-027 — step-up for a high-risk admin action.

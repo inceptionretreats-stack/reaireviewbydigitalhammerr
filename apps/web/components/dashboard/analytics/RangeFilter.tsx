@@ -6,7 +6,12 @@
 // rather than restructuring Field.
 import Link from 'next/link';
 import { Button, Card, Field, Input } from '@ai-review/ui';
-import { addDays, formatLocalDate, parseLocalDate, type AnalyticsRange } from './range';
+import {
+  addDays,
+  formatLocalDate,
+  parseLocalDate,
+  type AnalyticsRange,
+} from '@/lib/analytics/range';
 import { formatRangeLabel } from './format';
 
 /**
@@ -54,7 +59,7 @@ export function RangeFilter({ range, action, error = null }: RangeFilterProps) {
       description={formatRangeLabel(range.from, range.to, range.timeZone)}
     >
       <form method="get" action={action} className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-start gap-4">
+        <div className="vendor-date-fields flex flex-wrap items-start gap-4">
           <Field label="From" error={error} className="min-w-40 flex-1">
             {(control) => (
               <Input
@@ -80,7 +85,7 @@ export function RangeFilter({ range, action, error = null }: RangeFilterProps) {
         </div>
 
         {today && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+          <div className="vendor-date-presets flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <span className="text-ink-muted">Quick ranges:</span>
             {PRESETS.map((days) => {
               const from = formatLocalDate(addDays(today, -(days - 1)));

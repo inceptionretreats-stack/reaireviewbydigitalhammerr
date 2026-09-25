@@ -2,14 +2,14 @@
 
 import { useCallback, useState } from 'react';
 import { Button, Card, Field, InlineError, Select, TagInput, Textarea } from '@ai-review/ui';
-import type { SubmitFailure } from '@/components/auth/use-form-submit';
+import type { SubmitFailure } from '@/components/shared/forms/use-form-submit';
 import {
   DRAFT_LANGUAGE_HINT,
   DRAFT_LANGUAGE_LABEL,
   DRAFT_LANGUAGE_OPTIONS,
   isDraftLanguage,
   type DraftLanguage,
-} from '@/lib/draft-language';
+} from '@/lib/ai/draft-language';
 import {
   SUMMARY_MAX,
   contextSignature,
@@ -280,7 +280,7 @@ export function AiContextStep({
           it: the handler creates a Balanced mode itself on first save, and `aiContextRequest`
           would strip a name sent alongside. An editable input whose value is silently discarded is
           worse than no input, so the mode is reported rather than edited, and the owner is told
-          where renaming lives. AI-02 owns renaming; see the concern raised with this module.
+          where renaming lives. AI-02 owns renaming.
 
           What it reports comes from `defaultModeCopy`, which distinguishes "no modes at all" —
           the only case where saving creates Balanced — from "modes exist, none switched on". The

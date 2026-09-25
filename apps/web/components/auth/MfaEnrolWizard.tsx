@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button, Checkbox, Field, InlineError, Input } from '@ai-review/ui';
-import { useFormSubmit } from './use-form-submit';
+import { useFormSubmit } from '../shared/forms/use-form-submit';
 
 /**
  * AMENDMENT-027 — first-time enrolment, forced for every admin role.
@@ -130,7 +130,7 @@ export function MfaEnrolWizard() {
   }
 
   return (
-    <form onSubmit={onConfirm} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onConfirm} noValidate className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
         <h1 className="text-2xl font-bold tracking-tight text-ink">Set up your authenticator</h1>
         <p className="text-sm text-ink-muted">

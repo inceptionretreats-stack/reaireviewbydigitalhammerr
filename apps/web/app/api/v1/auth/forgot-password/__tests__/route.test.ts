@@ -8,28 +8,26 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
 }));
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/lib/infra/db', () => ({
   db: () => ({
     select: () => ({ from: () => ({ where: () => ({ limit: mocks.lookup }) }) }),
     insert: () => ({ values: mocks.insert }),
   }),
 }));
-vi.mock('@/lib/env', () => ({
+vi.mock('@/lib/infra/env', () => ({
   env: () => ({ HASH_PEPPER: 'test-pepper', APP_BASE_URL: 'https://app.example' }),
 }));
-vi.mock('@/lib/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/http/csrf', () => ({ verifyCsrf: () => ({ ok: true }) }));
+vi.mock('@/lib/http/rate-limit', () => ({
   clientIp: () => '',
   rateLimiter: () => ({ loginFailure: mocks.gate }),
   isDenied: (gate: { allowed: boolean }) => !gate.allowed,
 }));
-vi.mock('@/lib/mailer', () => ({
+vi.mock('@/lib/email/mailer', () => ({
   mailer: () => ({ send: mocks.send }),
   passwordResetEmail: () => ({ text: 'secret-reset-token' }),
 }));
-vi.mock('@/lib/activity', () => ({ recordActivity: vi.fn() }));
-vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
-vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
+vi.mock('@/lib/activity/recorder', () => ({ recordActivity: vi.fn() }));
 vi.mock('@ai-review/core', () => ({
   issueToken: () => ({ token: 'secret-reset-token', tokenHash: 'secret-token-hash' }),
   privacyHash: () => 'hashed-ip',
@@ -48,7 +46,7 @@ function request(): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.gate.mockResolvedValue({ allowed: true });
-  mocks.lookup.mockResolvedValue([{ id: 'owner-id' }]);
+  mocks.lookup.mockResolvedValue([{ id: 'owner-id', passwordHash: 'stored-password-hash' }]);
   mocks.insert.mockResolvedValue(undefined);
   mocks.send.mockResolvedValue(undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -60,7 +58,21 @@ describe('forgot-password neutral failures', () => {
   it('sends the reset for a known account and returns neutral success', async () => {
     const response = await POST(request());
     expect(response.status).toBe(202);
+    expect(mocks.insert).toHaveBeenCalledOnce();
     expect(mocks.send).toHaveBeenCalledOnce();
+  });
+
+  it('does not issue a reset for a Google-only account without a password', async () => {
+    mocks.lookup.mockResolvedValueOnce([{ id: 'google-owner-id', passwordHash: null }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({
+      message: 'If that email address has an account, a reset link is on its way.',
+    });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
   });
 
   it.each(['gate', 'lookup', 'insert', 'send'] as const)(

@@ -1,6 +1,6 @@
 import { Badge, Card, EmptyState, Table, type TableColumn } from '@ai-review/ui';
 import { formatCount, formatPercent } from './format';
-import type { LinkClickMetrics } from './queries';
+import type { LinkClickMetrics } from '@/lib/analytics/queries';
 
 /**
  * AN-01's `Link clicks` — which buttons on the public profile page people actually press.
@@ -24,7 +24,7 @@ import type { LinkClickMetrics } from './queries';
  *
  * The footer draws one boundary that is easy to get wrong, so it is stated rather than assumed. A
  * GOOGLE_REVIEW section on the public page resolves straight to the external review URL
- * (`app/[slug]/page.tsx`, AMENDMENT-003) and `PublicProfile` records only `profile_link_click` for
+ * (`app/(customer)/[slug]/page.tsx`, AMENDMENT-003) and `PublicProfile` records only `profile_link_click` for
  * it. The visitor never loads the review page, so no `review_page_view` and no `google_open` is
  * recorded — `google_open` is emitted in exactly one place, `ReviewFlow.tsx`. These clicks are
  * therefore NOT in the funnel, and telling an owner they were would let them read the funnel's last

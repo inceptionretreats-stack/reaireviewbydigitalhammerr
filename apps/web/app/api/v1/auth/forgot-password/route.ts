@@ -3,14 +3,15 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { passwordResetTokens, users } from '@ai-review/db';
 import { issueToken, privacyHash } from '@ai-review/core';
 import { forgotPasswordRequest } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { verifyCsrf } from '@/lib/csrf';
-import { mailer, passwordResetEmail } from '@/lib/mailer';
-import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { recordActivity } from '@/lib/activity';
-import { safeError } from '@/lib/safe-error';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { verifyCsrf } from '@/lib/http/csrf';
+import { mailer, passwordResetEmail } from '@/lib/email/mailer';
+import { clientIp, isDenied, rateLimiter } from '@/lib/http/rate-limit';
+import { recordActivity } from '@/lib/activity/recorder';
+import { safeError } from '@/lib/infra/safe-error';
 
 /** Short enough to limit the window a leaked link stays useful; long enough to reach an inbox. */
 const TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -30,14 +31,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrf = verifyCsrf(request);
   if (!csrf.ok) return apiError('FORBIDDEN', 'Request rejected.');
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return accepted();
-  }
+  // Every rejection here answers `accepted()`, never a validation error: a malformed body
+  // must be indistinguishable from an address that simply has no account.
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return accepted();
 
-  const parsed = forgotPasswordRequest.safeParse(raw);
+  const parsed = forgotPasswordRequest.safeParse(rawResult.body);
   if (!parsed.success) return accepted();
 
   const { email } = parsed.data;
@@ -58,12 +57,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const database = db();
     const [account] = await database
-      .select({ id: users.id })
+      .select({ id: users.id, passwordHash: users.passwordHash })
       .from(users)
       .where(and(eq(users.email, email), isNull(users.deletedAt)))
       .limit(1);
 
-    if (!account) return accepted();
+    // A Google-only account has no local password to reset. In particular, Google may not be
+    // authoritative for an external mailbox that has since changed hands. Keep the same neutral
+    // response as an unknown address, without creating a recovery path around the Google subject.
+    if (!account?.passwordHash) return accepted();
 
     const { token, tokenHash } = issueToken();
 

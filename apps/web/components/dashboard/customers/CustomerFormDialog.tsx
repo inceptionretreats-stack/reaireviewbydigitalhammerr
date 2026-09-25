@@ -7,8 +7,8 @@ import {
   isObservedStatus,
   isOwnerSettableStatusValue,
   type CustomerStatus,
-} from '@/app/api/v1/customers/customer-status';
-import type { CustomerDto } from '@/app/api/v1/customers/repository';
+} from '@/lib/crm/customers/customer-status';
+import type { CustomerDto } from '@/lib/crm/customers/repository';
 import { patchCustomer, postCustomer, type CustomerInput } from './customer-api';
 import {
   OWNER_STATUS_OPTIONS,
@@ -369,7 +369,7 @@ function isFieldKey(value: string): value is FieldKey {
  * The checks worth making before a round trip.
  *
  * Deliberately not a copy of the contract. The mobile number is only checked for presence, because
- * `normalizePhone` lives in `@ai-review/core`, whose single entry point would pull `pg`, `ioredis` and
+ * `normalizePhone` lives in `@ai-review/core`, whose single entry point would pull `pg` and
  * argon2 into the browser bundle — and because a second, looser implementation of "is this a valid
  * Indian mobile" is worse than none: it would refuse numbers the server accepts.
  */

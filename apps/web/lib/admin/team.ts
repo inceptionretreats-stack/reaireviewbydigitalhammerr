@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { TeamError, TeamService } from '@ai-review/core';
-import { apiError } from '@/lib/api-error';
-import { passwordHasher } from '@/lib/auth-helpers';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
+import { apiError } from '@/lib/http/api-error';
+import { passwordHasher } from '@/lib/auth/password-hasher';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
 
 /** AMENDMENT-027 — the team service composed for the web app, and its error mapping. */
 export function teamService(): TeamService {
@@ -38,6 +38,14 @@ export function teamErrorResponse(error: unknown): NextResponse | null {
       return apiError('VALIDATION_FAILED', 'Only admin roles can be invited here.', {
         details: { fields: ['role'] },
       });
+    case 'CREDENTIAL_REQUIRED':
+      return apiError(
+        'VALIDATION_FAILED',
+        'This account uses Google only and cannot use admin sign-in.',
+        {
+          details: { fields: ['role'] },
+        },
+      );
     case 'WEAK_PASSWORD':
       return apiError('VALIDATION_FAILED', error.message, { details: { fields: ['password'] } });
   }

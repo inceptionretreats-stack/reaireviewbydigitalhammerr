@@ -1,5 +1,5 @@
 import { Card } from '@ai-review/ui';
-import type { SectionType } from './sections';
+import type { SectionType } from '@/lib/profile/sections';
 import styles from './ProfilePreview.module.css';
 
 /**

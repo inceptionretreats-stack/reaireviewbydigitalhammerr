@@ -8,6 +8,7 @@ import {
   adminThrottleCheck,
   type AdminThrottle,
   publicFeedbackCheck,
+  signupCheck,
   publicGenerationCheck,
   sessionMember,
   type LoginSubject,
@@ -144,6 +145,14 @@ export class RateLimiter {
   /** Private-feedback submission (E8-02). Two dimensions, one atomic decision. */
   publicFeedback(subject: PublicFeedbackSubject): Promise<RateLimitDecision> {
     return this.consume(publicFeedbackCheck(subject, this.config));
+  }
+
+  /**
+   * AUTH-01: account creation, consumed on every attempt. Bounds both the enumeration oracle
+   * the "that email already exists" answer provides and the minting of free-allowance tenants.
+   */
+  signup(subject: { readonly ip: string; readonly pepper: string }): Promise<RateLimitDecision> {
+    return this.consume(signupCheck(subject, this.config));
   }
 
   /** AC-002: called *before* verifying the password, so a locked-out identity never gets to. */

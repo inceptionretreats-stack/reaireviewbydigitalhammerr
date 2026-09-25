@@ -3,10 +3,11 @@ import { eq } from 'drizzle-orm';
 import { businesses } from '@ai-review/db';
 import { SlugService } from '@ai-review/core';
 import { businessIdentityRequest } from '@ai-review/contracts';
-import { db } from '@/lib/db';
-import { apiError } from '@/lib/api-error';
-import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { apiError } from '@/lib/http/api-error';
+import { readJsonObject } from '@/lib/http/request-body';
+import { requireTenant, type AuthenticatedContext } from '@/lib/tenant/require-tenant';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /**
  * GET/PATCH /api/v1/business — ONB-01 and the identity half of PROFILE-01.
@@ -52,12 +53,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const frozen = refuseFrozenTenant(auth.context);
   if (frozen) return frozen;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return apiError('VALIDATION_FAILED', 'Malformed request body.');
-  }
+  const rawResult = await readJsonObject(request);
+  if (!rawResult.ok) return rawResult.response;
+  const raw = rawResult.body;
 
   const parsed = businessIdentityRequest.safeParse(raw);
   if (!parsed.success) {

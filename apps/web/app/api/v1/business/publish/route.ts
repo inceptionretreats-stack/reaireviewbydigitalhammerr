@@ -8,12 +8,12 @@ import {
   reviewDestinations,
 } from '@ai-review/db';
 import { buildQrUrl, generateQrCode } from '@ai-review/core';
-import { db } from '@/lib/db';
-import { env } from '@/lib/env';
-import { apiError } from '@/lib/api-error';
-import { requireTenant } from '@/lib/require-tenant';
-import { isShell } from '@/lib/auth-helpers';
-import { recordActivity } from '@/lib/activity';
+import { db } from '@/lib/infra/db';
+import { env } from '@/lib/infra/env';
+import { apiError } from '@/lib/http/api-error';
+import { requireTenant } from '@/lib/tenant/require-tenant';
+import { isShell } from '@/lib/tenant/tenant-shell';
+import { recordActivity } from '@/lib/activity/recorder';
 
 /** Flow A step 10 names it. It appears in analytics as the source label, so it must read well. */
 const DEFAULT_QR_LABEL = 'Main QR';

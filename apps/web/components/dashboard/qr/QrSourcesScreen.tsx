@@ -12,7 +12,7 @@ import {
   useToast,
   type TableColumn,
 } from '@ai-review/ui';
-import { QrStandeePreview } from '@/components/qr/QrStandeePreview';
+import { QrStandeePreview } from '@/components/shared/qr/QrStandeePreview';
 import { SECONDARY_LINK } from '../link-styles';
 import { DisableQrDialog } from './DisableQrDialog';
 import { QrSourceDialog } from './QrSourceDialog';
@@ -29,7 +29,7 @@ import {
   type QrMutationOutcome,
   type QrSource,
   type QrStatus,
-} from './qr-sources';
+} from './qr-screen-model';
 
 /**
  * QR-01 — the `list`, `create` and `disabled` states of `/app/qr`.
@@ -96,10 +96,9 @@ const STATUS_TOAST: Record<QrStatus, (label: string) => { title: string; descrip
 
 export function QrSourcesScreen(props: QrSourcesScreenProps) {
   /*
-   * The provider is mounted here rather than in the dashboard layout because that layout is shared
-   * chrome owned by another workstream. It renders its own viewport, so nesting it inside one
-   * screen is safe — but it does mean confirmations are scoped to this route. When the layout gains
-   * a provider, this wrapper should go (see concerns).
+   * The provider is mounted here rather than in the shared dashboard layout. It renders its own
+   * viewport, so nesting it inside one screen is safe — but it does mean confirmations are scoped
+   * to this route. When the layout gains a provider, this wrapper should go.
    */
   return (
     <ToastProvider>
@@ -407,15 +406,12 @@ function QrSources({
               <QrStandeePreview businessName={businessName} qrSrc={featuredSource.previewSrc} />
             </div>
             <div className="min-w-0">
-              <p className="m-0 text-xs font-bold tracking-[0.14em] text-accent uppercase">
-                Print-ready artwork
-              </p>
-              <h3 id="branded-card-title" className="m-0 mt-1 text-xl font-bold text-ink">
-                Your clean counter card
+              <h3 id="branded-card-title" className="m-0 text-xl font-bold text-ink">
+                Ready to print
               </h3>
               <p className="m-0 mt-2 max-w-xl text-sm leading-6 text-ink-muted">
-                The artwork keeps only your business name, the scannable code and “By Digital
-                Hammerr” at the bottom. Previewing {featuredSource.label}.
+                Download your QR card and place it where customers can scan it. Showing{' '}
+                {featuredSource.label}.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <a
