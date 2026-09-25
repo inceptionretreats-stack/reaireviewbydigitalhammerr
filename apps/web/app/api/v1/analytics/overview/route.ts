@@ -3,7 +3,7 @@ import { db } from '@/lib/infra/db';
 import { requireTenant } from '@/lib/tenant/require-tenant';
 import { loadAnalyticsOverview } from '@/lib/analytics/queries';
 import type { FunnelStep, TrendDay } from '@/lib/analytics/metrics';
-import { analyticsRangeFor, serializeRange } from '../../../../../lib/analytics/range-request';
+import { analyticsRangeFor, serializeRange } from '@/lib/analytics/range-request';
 
 /**
  * GET /api/v1/analytics/overview — the KPI row, funnel and daily trend for AN-01 and DASH-01.

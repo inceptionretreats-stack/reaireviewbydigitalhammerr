@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/infra/db';
 import { requireTenant } from '@/lib/tenant/require-tenant';
 import { loadLinkClickAnalytics } from '@/lib/analytics/queries';
-import { analyticsRangeFor, serializeRange } from '../../../../../lib/analytics/range-request';
+import { analyticsRangeFor, serializeRange } from '@/lib/analytics/range-request';
 
 /**
  * GET /api/v1/analytics/links — public profile link clicks for AN-01.
