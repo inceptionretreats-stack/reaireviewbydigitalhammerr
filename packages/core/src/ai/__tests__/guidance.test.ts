@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_GUIDANCE, parseGuidance } from '../guidance';
-import { buildPrompt, emojiPlacementFor, openingHintFor } from '../prompt-builder';
+import { buildPrompt, openingHintFor } from '../prompt-builder';
 
 /**
  * CHANGE-004: the writing rules are data on the prompt version. What is pinned here is the
@@ -70,11 +70,16 @@ describe('buildPrompt with guidance', () => {
     expect(prompt.user).not.toContain(DEFAULT_GUIDANCE.language_rules.hinglish[0]);
   });
 
-  it('uses the defaults when no guidance is given, so older callers are unchanged', () => {
+  it('uses profile-neutral defaults and runtime safety rules when no guidance is given', () => {
     const prompt = buildPrompt(request, 'SYSTEM');
-    expect(prompt.user).toContain(DEFAULT_GUIDANCE.language_rules.hinglish[0]!);
-    expect(prompt.user).toContain(openingHintFor('seed-1', 1));
-    expect(prompt.user).toContain(emojiPlacementFor('seed-1', 1));
+    expect(prompt.user).toContain('LANGUAGE_RULES: Write in natural Hinglish');
+    expect(prompt.user).not.toContain(DEFAULT_GUIDANCE.language_rules.hinglish[0]!);
+    expect(prompt.user).not.toContain(openingHintFor('seed-1', 1));
+    expect(prompt.user).not.toMatch(/Khana bahut tasty|staff bhi kaafi friendly|45 to 85 words/);
+    // The seed's café emoji line is swapped for one that fits any business.
+    expect(prompt.user).toMatch(/^EMOJI: You may add one or two emoji that suit this kind/m);
+    expect(prompt.user).not.toContain(DEFAULT_GUIDANCE.emoji_rules[0]!);
+    expect(prompt.system).toContain("It is not the customer's testimony");
   });
 
   it('rotates over whatever list the version carries', () => {

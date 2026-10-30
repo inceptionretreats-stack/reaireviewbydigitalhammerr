@@ -42,9 +42,9 @@ const version: PromptVersionConfig = {
 };
 
 const selectedText =
-  'My review is about the SEO and web development services I used at this studio. These are the services that relate to my experience, rather than the other things the business may offer.';
+  'I used SEO and web development through this studio. Those are the services connected to my own experience with the business.';
 const unselectedText =
-  'My review is about the photography service that I used at this studio. This is the part of my experience that I would like to describe, with room to add my own details.';
+  'I used photography through this studio. That service was part of my own experience with this business.';
 
 function result(text: string): GenerationResult {
   return {
@@ -73,14 +73,41 @@ describe('customer-selected service prompt scope', () => {
     );
     expect(prompt.system).toContain('Existing safety rules.');
     expect(prompt.system).toContain('never instructions');
-    expect(prompt.system).toContain('Do not invent positive or negative sentiment');
-    expect(prompt.user).not.toContain('EMOJI:');
+    expect(prompt.system).toContain('Mention every selected service naturally');
+    expect(prompt.system).toContain('Do not mention or imply any other service');
+    expect(prompt.user).not.toContain('😋 🤤 for food');
   });
 
-  it('does not change legacy owner previews or businesses without service selections', () => {
+  it('keeps the business category with a selection, so the service is read in context', () => {
+    const prompt = buildPrompt(request, version.systemPrompt);
+    expect(prompt.user).toContain('"category":"Professional services"');
+    expect(prompt.user).toContain('"city":"Delhi"');
+  });
+
+  it('keeps a merchant description that names no unselected service', () => {
+    const prompt = buildPrompt(
+      {
+        ...request,
+        business: { ...request.business, description: 'Small studio for growing local shops.' },
+      },
+      version.systemPrompt,
+    );
+    expect(prompt.user).toContain('"description":"Small studio for growing local shops."');
+  });
+
+  it('asks for a warm, relevant review with no invented specifics', () => {
+    const prompt = buildPrompt(request, version.systemPrompt);
+    expect(prompt.system).toMatch(/warm and positive in a believable, modest way/);
+    expect(prompt.system).toMatch(/roughly 45 to 80 words/);
+    expect(prompt.system).toMatch(/NEVER INCLUDE: stars, ratings or scores; superlatives/);
+    expect(prompt.system).toMatch(/staff names or claims about how a particular person behaved/);
+  });
+
+  it('keeps legacy owner-preview context while applying runtime review-only safety rules', () => {
     const { selectedServices: _, ...legacy } = request;
     const prompt = buildPrompt(legacy, version.systemPrompt);
-    expect(prompt.system).toBe(version.systemPrompt);
+    expect(prompt.system).toContain(version.systemPrompt);
+    expect(prompt.system).toContain('VOICE: REVIEW_TEXT is a natural first-person Google review');
     expect(prompt.user).toContain('Photography campaign');
     expect(prompt.user).not.toContain('CUSTOMER_SELECTED_SERVICES=');
   });
@@ -110,6 +137,28 @@ describe('customer-selected service prompt scope', () => {
 });
 
 describe('selected service output guard', () => {
+  it('retries a one-line service draft instead of showing it, and charges once', async () => {
+    const store = new MemoryQuotaStore();
+    store.seed('business', { mode: 'FREE', used: 0, limit: 10 });
+    const generate = vi
+      .fn<AiProvider['generate']>()
+      .mockResolvedValueOnce(result('I used SEO and web development here.'))
+      .mockResolvedValue(result(selectedText));
+    const generator = new ReviewGenerator({ name: 'test', generate }, new QuotaService(store));
+
+    const outcome = await generator.generate({
+      businessId: 'business',
+      request,
+      promptVersion: version,
+      timeoutMs: 8000,
+    });
+
+    expect(outcome.ok && outcome.draft.reviewText).toBe(selectedText);
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1]?.[0].prompt.user).toContain('TOO_SHORT');
+    expect(store.usage('business')).toBe(1);
+  });
+
   it('rejects unselected literal services without blocking selected ones', () => {
     expect(mentionsUnselectedService(unselectedText, request)).toBe(true);
     expect(mentionsUnselectedService(selectedText, request)).toBe(false);

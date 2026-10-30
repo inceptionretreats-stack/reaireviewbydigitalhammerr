@@ -96,7 +96,7 @@ Read this file before changing the project. Then inspect the relevant current so
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Brand                                        | Ai Review by Digital Hammerr                                                                                                                                                                |
 | Company                                      | Digital Hammerr is a digital marketing company offering app development, website development, SEO and graphic design. Do not describe it as a cafe.                                         |
-| Working directory on the current machine     | `C:/Users/digital hammerr/Downloads/reaireviewbydigitalhammerr`                                                                                                                             |
+| Working directory on the current machine     | `D:/reaireviewbydigitalhammerr`                                                                                                                                                             |
 | Local preview                                | `http://127.0.0.1:3000/`                                                                                                                                                                    |
 | Owner-specified public subdomain             | `aireview.digitalhammerr.com` — public HTTP checks passed after the Supabase-backed deployment was promoted on 23 September                                                                 |
 | Vercel project                               | `ai-review-dh` in the existing Inception account; verify actual linkage before any further deployment                                                                                       |
@@ -258,13 +258,13 @@ Private feedback is an optional path available to everyone throughout the journe
 
 - A customer does not need an Ai Review account or app. Google may require its own login to post.
 - No star-selection screen, rating gate, sentiment questionnaire or positive-only routing belongs in this flow.
-- `ReviewFlow.tsx` starts generation on arrival unless given an initial draft. `New review` regenerates and clears the previous genuine-experience confirmation.
+- `ReviewFlow.tsx` opens on service selection; generation requires an explicit customer choice. A saved draft is available through “Return to draft”. `New review` regenerates and clears the previous genuine-experience confirmation.
 - The editable text is browser state. The customer must confirm genuine experience, provide nonempty text and stay within the 1,200-character editor limit before the combined copy/Google action.
 - Clipboard writing starts during the user click; Google opens via ordinary new-tab navigation. Record `review_copy` only on clipboard success. On clipboard failure, select text and offer a manual-copy fallback.
 - A Google-open event is an attempt to open the destination, not evidence of publication. No code or UI should claim a review was submitted successfully to Google.
 - Editing, copying or opening Google does not consume another Ai draft. Requesting a new generated draft does.
 - The server stores the original generated wording. Customer edits are not persisted as the edited review text by edit/copy telemetry, and refreshing can lose unsaved edits.
-- The QR route restores the latest original draft; the slug route currently differs. See known issues before promising identical reload behaviour for all entry routes.
+- Both QR and slug review routes can restore the latest original draft for the anonymous session. A fresh scan or reload still starts on service selection; restoring a draft is an explicit choice.
 
 **Important route distinction:** the `Review Us` action on `/{slug}` currently opens the configured Google destination directly. The Ai experience is at `/{slug}/review` or `/r/{code}`. Do not confuse the profile with the editor when testing.
 
@@ -281,8 +281,8 @@ The main endpoint is `POST /api/v1/public/review/generate`.
 5. Select the provider from configured credentials: **Anthropic → OpenAI → Gemini → local deterministic stub** if none exists. The stub is for non-production development; production configuration requires a provider key.
 6. Reserve quota atomically before an expensive provider request.
 7. Build the prompt from the active version, business context, language and mode. Apply output/compliance/similarity checks. The generator currently allows up to **three internal attempts within a shared time budget**; older comments saying one retry are not the full current rule.
-8. A successful generation commits one quota reservation. Provider/quality rejection releases it. Internal attempts do not each consume a customer draft.
-9. The route persists generation text/metadata and records analytics. There is an unresolved gap between quota commit and database persistence; see known issues.
+8. A successful generation persists the draft before confirming the quota reservation. Provider, quality or draft-insert failure releases the reservation. Internal attempts do not each consume a customer draft.
+9. The route records generation analytics. A process crash between quota reservation and draft insertion can still consume allowance without a saved draft; see known issues.
 
 The browser also retries one 503 after approximately 1.5 seconds. Keep this distinct from the generator's internal attempts when reasoning about cost, quota and latency.
 
@@ -455,7 +455,7 @@ The migration gate in `apps/web/proxy.ts` covers pages, APIs, Server Actions, cr
 Use PowerShell from the repository root. Inspect current listeners before starting duplicates. The previous session started the local DB and web server, but do not assume they survive a restart or handover.
 
 ```powershell
-Set-Location 'C:\Users\digital hammerr\Downloads\reaireviewbydigitalhammerr'
+Set-Location 'D:\reaireviewbydigitalhammerr'
 git status --short
 Get-NetTCPConnection -LocalPort 3000,5432 -State Listen -ErrorAction SilentlyContinue
 ```
@@ -567,27 +567,20 @@ The footer's policy links are separate from the three primary marketing navigati
 
 ## 17. Known issues and unfinished work
 
-These are **source-level findings or explicitly unresolved operational decisions**, not proof of a live exploit and not fixes completed by this handover. Re-check current code, reproduce safely and obtain approval before changing behaviour.
+These are **source-level findings or explicitly unresolved operational decisions**, not proof of a live exploit. Re-check current code, reproduce safely and obtain approval before changing behaviour. The 25 September 2026 maintenance changes below are local only: they have not been deployed or verified against the owner’s database.
 
 ### Billing and quota — high priority before claiming launch readiness
 
-1. **Early renewal can interrupt Pro:** `SubscriptionService.activatePro` sets the new start to the current future expiry, while quota eligibility requires the start to be at/before now. The period change also resets usage immediately. Sources: `packages/core/src/billing/subscription-service.ts`, `packages/core/src/quota/postgres-store.ts`, `packages/db/drizzle/0003_pro_quota_period_reset.sql`.
-2. **Refunded-payment settlement replay:** settlement skips `CAPTURED`, not `REFUNDED`; a subsequently accepted capture/callback can mark the payment captured again and reactivate Pro. Source: `packages/core/src/billing/checkout-service.ts`, with refund state in `payment-admin-service.ts`.
-3. **Failed full refund can leave access cancelled:** full refund revokes entitlement, but later refund-failure reversal restores payment state without restoring the cancelled subscription. Source: `packages/core/src/billing/payment-admin-service.ts`.
-4. **Quota commit precedes persisted draft:** generation commits before the public route inserts the draft. A persistence/process failure can consume allowance without a saved/delivered draft. Sources: `packages/core/src/ai/generator.ts`, `apps/web/app/api/v1/public/review/generate/route.ts`.
+1. **Early renewal can interrupt Pro:** `SubscriptionService.activatePro` sets the new start to the current future expiry, while quota eligibility requires the start to be at/before now. The period change also resets usage immediately. The owner chose to carry remaining paid days forward and make the next 2,000 Ai drafts available only when the next paid year starts. A durable queued-period design is still needed; do not replace the active period at purchase time or reset its usage early. Sources: `packages/core/src/billing/subscription-service.ts`, `packages/core/src/quota/postgres-store.ts`, `packages/db/drizzle/0003_pro_quota_period_reset.sql`.
+2. **A process crash can strand a quota reservation:** the draft insert now precedes quota confirmation, but the reservation increment is already durable. A crash before insertion can still leave no draft to reconcile. Sources: `packages/core/src/ai/generator.ts`, `packages/core/src/quota/postgres-store.ts`.
+3. **Refund reconciliation still needs an operational fallback:** exact receipt/notes correlation can recover an interrupted refund request, but a provider webhook omitting both identifiers can leave a `REQUESTED` row needing operator review after webhook retries expire. Database timing tests are written but not yet run.
 
 ### Authentication and public-flow consistency
 
-5. Account password change commits the password before separate session revocation/rotation. On failure it can return `sessions_swept:false`, leaving prior sessions valid. Source: `apps/web/app/api/v1/account/password/route.ts`.
-6. Other unexpired reset tokens can survive credential changes: forgot-password can issue multiple tokens, reset consumes only the selected one, and password/email changes do not invalidate all outstanding tokens. Re-check all token lifecycle paths before fixing.
-7. Signup currently has no application rate-limiter call. The legacy `DELETE /api/v1/auth/login` only clears the cookie, unlike durable session revocation, and lacks its own CSRF check. Sources: the signup/login route handlers.
-8. `/{slug}/review` currently neither restores `loadLatestDraft` nor emits `review_page_view`, unlike `/r/{code}`. Tracked-link/slug visits can regenerate on reload and undercount that funnel step.
-9. Public generation currently casts JSON rather than schema-validating the complete request; `previous_generation_id` is stored as a parent reference without tenant/session ownership validation. Source: `apps/web/app/api/v1/public/review/generate/route.ts`.
-10. Ai context PUT has `requireTenant` but no frozen/ACTIVE mutation guard equivalent to profile/QR writes. Source: `apps/web/app/api/v1/ai/context/route.ts`.
-11. Later CRM statuses (`AI_GENERATED`, `REVIEW_COPIED`, `GOOGLE_OPENED`, `PRIVATE_FEEDBACK`) are defined, but no production status writers were found. Current automatic status updates cover preparation, manual sent marking and tracked-link clicking.
-12. Existing tracked request tokens have no expiry column; the public resolver does not check a linked contact's soft deletion. Do not promise deleting a contact immediately revokes every previously sent link.
+4. Later CRM statuses (`AI_GENERATED`, `REVIEW_COPIED`, `GOOGLE_OPENED`, `PRIVATE_FEEDBACK`) are defined, but no production status writers were found. Current automatic status updates cover preparation, manual sent marking and tracked-link clicking.
+5. Existing tracked request tokens have no expiry column; the public resolver does not check a linked contact's soft deletion. Do not promise deleting a contact immediately revokes every previously sent link.
 
-**Already fixed locally, do not list as still broken:** reset-password now claims the token, updates the password and revokes sessions within the same transaction using `SessionService(tx)`. This does not solve the separate outstanding-token issue above, and its deployment status still needs verification.
+**Locally addressed on 25 September, pending database/live verification:** settlement no longer reactivates a fully refunded payment; failed pending refunds restore the prior paid period only when the matching audit proves the refund caused cancellation; password changes sweep and rotate sessions in the credential transaction; credential/email changes invalidate outstanding reset tokens; signup has an application limiter; legacy login DELETE now delegates to durable CSRF-checked logout; slug review records `review_page_view` (it already restored drafts); public generation validates its request and parent ownership; Ai context writes lock and recheck business status; cookie-free generation is rate-limited. None of these local changes should be described as already live.
 
 ### Owner/operations decisions still pending
 

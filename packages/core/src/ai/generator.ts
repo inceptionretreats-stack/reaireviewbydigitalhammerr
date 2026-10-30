@@ -43,6 +43,8 @@ export interface GenerateOptions {
   promptVersion: PromptVersionConfig;
   timeoutMs: number;
   similarityThreshold?: number;
+  /** Save the accepted draft before the reservation is confirmed to the caller. */
+  persistDraft?: (draft: GeneratedDraft) => Promise<void>;
 }
 
 export interface GeneratedDraft {
@@ -71,7 +73,8 @@ export type GenerationFailure =
    * be indistinguishable from the provider being down, because nothing kept the reason.
    */
   | { code: 'AI_PROVIDER_UNAVAILABLE'; errorClass: string; message: string }
-  | { code: 'AI_OUTPUT_REJECTED'; rejections: string[] };
+  | { code: 'AI_OUTPUT_REJECTED'; rejections: string[] }
+  | { code: 'DRAFT_PERSISTENCE_FAILED' };
 
 export type GenerationOutcome =
   { ok: true; draft: GeneratedDraft } | { ok: false; failure: GenerationFailure };
@@ -111,16 +114,19 @@ export class ReviewGenerator {
     }
 
     try {
-      const draft = await this.produceAcceptableDraft(options);
-      await this.quota.commit(reservation.reservation);
-      return {
-        ok: true,
-        draft: {
-          ...draft,
-          countedTowardQuota: reservation.reservation.counted,
-          quotaType: reservation.reservation.mode,
-        },
+      const generated = await this.produceAcceptableDraft(options);
+      const draft: GeneratedDraft = {
+        ...generated,
+        countedTowardQuota: reservation.reservation.counted,
+        quotaType: reservation.reservation.mode,
       };
+      try {
+        await options.persistDraft?.(draft);
+      } catch (error) {
+        throw new DraftPersistenceError({ cause: error });
+      }
+      await this.quota.commit(reservation.reservation);
+      return { ok: true, draft };
     } catch (error) {
       // AC-014 and the AI_OUTPUT_REJECTED path both return the reservation: the customer got
       // no usable draft, so they must not lose a generation.
@@ -138,6 +144,9 @@ export class ReviewGenerator {
             message: error.message,
           },
         };
+      }
+      if (error instanceof DraftPersistenceError) {
+        return { ok: false, failure: { code: 'DRAFT_PERSISTENCE_FAILED' } };
       }
       throw error;
     }
@@ -197,6 +206,9 @@ export class ReviewGenerator {
       providerCalls += 1;
 
       const text = result.output.review_text.trim();
+      // One floor for every draft. Selected-service drafts used to pass at 35 characters, which
+      // let one flat sentence through ("I used SEO here.") as if it were a review. A retry is told
+      // why (TOO_SHORT) and how to fill it without inventing specifics.
       const compliance = checkOutputCompliance(text);
       const serviceScopePassed = !mentionsUnselectedService(text, options.request);
       // The same window the prompt disclosed, not the whole history. The two used to diverge:
@@ -232,6 +244,13 @@ export class ReviewGenerator {
     }
 
     throw new QualityGateExhausted(lastRejections);
+  }
+}
+
+class DraftPersistenceError extends Error {
+  constructor(options: ErrorOptions) {
+    super('Could not save generated draft', options);
+    this.name = 'DraftPersistenceError';
   }
 }
 

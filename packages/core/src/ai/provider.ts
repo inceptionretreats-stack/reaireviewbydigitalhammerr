@@ -115,12 +115,11 @@ export class StubAiProvider implements AiProvider {
     // that claims otherwise, and no end-to-end test could tell the setting did anything.
     const language = readDraftLanguage(seen);
     const selected = stubSelectedServices(seen);
+    const business = stubBusiness(seen);
     const pool =
       selected.length > 0
-        ? stubServiceDrafts(selected, language === 'hinglish')
-        : language === 'hinglish'
-          ? STUB_DRAFTS_HINGLISH
-          : STUB_DRAFTS;
+        ? stubServiceDrafts(selected, business.name, language === 'hinglish')
+        : stubGeneralDrafts(business, language === 'hinglish');
 
     // 'repetitive' must always return the same text: it exists so the variation gate can be
     // tested for real, and picking a fresh draft would defeat exactly that.
@@ -169,30 +168,62 @@ function stubPreviousDrafts(prompt: string): string[] {
   }
 }
 
-function stubServiceDrafts(services: string[], hinglish: boolean): string[] {
-  const names = services.join(', ');
-  // These neutral synthetic fixtures deliberately avoid making up satisfaction or outcomes.
+interface StubBusiness {
+  name: string;
+}
+
+const DEFAULT_STUB_BUSINESS: StubBusiness = {
+  name: 'Demo South Cafe',
+};
+
+/** The stub uses only the same business facts the real model sees, never invented outcomes. */
+function stubBusiness(prompt: string): StubBusiness {
+  const raw = /^BUSINESS=(.*)$/m.exec(prompt)?.[1];
+  if (!raw) return DEFAULT_STUB_BUSINESS;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (typeof value !== 'object' || value === null) return DEFAULT_STUB_BUSINESS;
+    const fields = value as Record<string, unknown>;
+    return {
+      name:
+        typeof fields['name'] === 'string' && fields['name'].trim()
+          ? fields['name'].trim()
+          : DEFAULT_STUB_BUSINESS.name,
+    };
+  } catch {
+    return DEFAULT_STUB_BUSINESS;
+  }
+}
+
+function stubServiceDrafts(services: string[], businessName: string, hinglish: boolean): string[] {
+  // "SEO aur Graphic design", not "SEO, Graphic design": a list read aloud, not a label.
+  const names =
+    services.length > 1
+      ? `${services.slice(0, -1).join(', ')} ${hinglish ? 'aur' : 'and'} ${services.at(-1)}`
+      : (services[0] ?? '');
+  // Synthetic fixtures in the voice the real prompt asks for: warm, about the selected work,
+  // and free of anything a customer did not supply (no figures, names, timings or results).
   // They are never a production fallback: production configuration requires a real provider.
   return hinglish
     ? [
-        `${names} ke liye mera yahan ka experience tha. Meri baat inhi services se judi hai; yahan ka anubhav mere liye isi kaam se sambandhit raha, kisi aur offering se nahi.`,
-        `Maine ${names} liya tha. Yahan likhi baat usi kaam tak seemit hai, kisi aur suvidha ke baare mein nahi. Mere experience ka sandarbh bhi wahi hai jo maine khud istemal kiya.`,
-        `Is business se ${names} lene ke baad apni baat likh raha hoon. Yahan se mera sambandh inhi services ka raha hai. Doosri offerings ki jagah apne istemal ki hui services ka zikr hai.`,
-        `${names} mere experience ka hissa tha. Apni zaroorat aur usse jude kaam ko lekar yeh review hai. Yahan jo maine liya, meri baat bhi usi se sambandhit hai.`,
-        `Mera sambandh yahan ${names} se raha hai. Kisi doosre kaam par tipanni nahi kar raha. Apna nazariya batane ke liye in services ko review ka vishay rakha hai.`,
-        `Yeh likhte waqt ${names} ko dhyan mein rakh raha hoon. Baat usi cheez ki hai jo maine khud li, baaki business ki offerings ki nahi. Is jagah se mera kaam isi tarah juda tha.`,
-        `${names} maine istemal kiya hai aur review ka sandarbh wahi hai. Yahan mere liye yahi services relevant thi. Poore business ki jagah meri baat apne liye liye gaye kaam par hai.`,
-        `Apna review ${names} ke sambandh mein likh raha hoon. In services ke zariye is business ke saath mera experience raha hai. Yahan mera zikr bhi isi istemal tak seemit hai.`,
+        `${businessName} se ${names} ka kaam karwaya aur experience kaafi accha raha. Kaam saaf-suthra aur dhyan se kiya gaya tha. Zaroorat padi to dobara inhi ke paas aaunga.`,
+        `${names} ke liye maine ${businessName} ko chuna tha, aur yeh decision sahi nikla. Kaam professional laga aur meri zaroorat ke hisaab se hua. Overall main khush hoon.`,
+        `Mujhe ${businessName} ka ${names} wala kaam bahut pasand aaya. Har cheez aaram se samjhayi gayi aur final kaam neat tha. Accha anubhav raha.`,
+        `Agar aapko ${names} karwana hai to ${businessName} ek accha option hai. Mera experience smooth raha aur kaam dekh kar tasalli hui.`,
+        `${names} ka kaam ${businessName} se liya, aur jaisa socha tha waisa hi laga. Kaam mein mehnat saaf dikhti hai. Aage bhi inhe hi try karunga 🙌`,
+        `${businessName} ke saath ${names} ka mera anubhav accha raha hai. Sab kuch tareeke se hua aur kaam ki quality pasand aayi. Inke paas phir se aana chahunga.`,
+        `Maine ${businessName} par ${names} karwaya tha aur kaafi satisfied hoon. Kaam polished laga, bilkul waisa jaisa mujhe chahiye tha 😊`,
+        `${names} ke liye ${businessName} gaya tha aur wahan ka kaam achha laga. Sab kuch dhang se samjha aur kiya gaya. Agli baar bhi inhi ko chununga.`,
       ]
     : [
-        `${names} are the services I used. My review relates to this part of my experience with the business, rather than any of the other services it may offer to its customers.`,
-        `I came to this business for ${names}. Those services are the subject of my feedback. My experience here concerns that work, so this account is specific to what I used.`,
-        `The reason for writing here is my use of ${names}. My connection with this business is through those services, and the comments relate to that part of its work.`,
-        `Having used ${names} through this business, that is the context of my review. This account concerns my own use of those services, rather than anyone else's experience.`,
-        `My connection with the business concerns ${names}. Any opinion I share should relate to what I actually used, without speaking for other customers or describing unrelated offerings.`,
-        `For this review, the focus is ${names}. Those are the services behind my experience here. I am referring to the work I used, not making an assessment of the business's other offerings.`,
-        `${names} form the background to my experience with this business. They are what brought me here as a customer, and the account I am sharing concerns those particular services.`,
-        `I am writing about ${names}, which I used through this business. My thoughts belong to that specific experience. These services are the basis of my own connection with the business.`,
+        `Got ${names} done through ${businessName} and came away happy with it. The work felt thoughtful and well put together, and it matched what I had in mind.`,
+        `${businessName} handled ${names} for me. Everything was clear along the way, and I liked how carefully the work was done. I would use them again.`,
+        `Pleased with the ${names} work from ${businessName}. It came out neat and professional and fit what I needed. Glad I picked them 👍`,
+        `If you need ${names}, ${businessName} is worth a look. My own experience with them was smooth, and the finished work looked good to me.`,
+        `My experience with ${businessName} for ${names} was a good one. The work was done with care and felt right for what I wanted. Happy to go back to them.`,
+        `Chose ${businessName} for ${names} and it turned out to be a good decision. The approach was easy to follow and the work looked polished. Satisfied overall 😊`,
+        `Really liked the ${names} I got from ${businessName}. It looked tidy, felt well thought out, and suited what I was after. Would return for more.`,
+        `${names} at ${businessName} left a good impression on me. Things were explained simply and the finished work looked solid. Glad I went with them.`,
       ];
 }
 
@@ -200,16 +231,32 @@ function stubServiceDrafts(services: string[], hinglish: boolean): string[] {
  * Eight, not four: the similarity gate compares against the last three drafts and the generator
  * makes up to three attempts, so a pool that small could be exhausted inside one session.
  */
-export const STUB_DRAFTS = [
-  'Visited recently and found the whole thing straightforward. Staff were helpful when I had a question, and I would happily come back another time.',
-  'Dropped by this week without an appointment. Everything moved along at a comfortable pace and I left satisfied with how the visit went overall.',
-  'Called in during the afternoon. The place was tidy, the people there answered what I asked, and nothing about the visit felt like a hassle.',
-  'Been meaning to write about my visit here. It was an easy experience from start to finish and I have no complaints worth mentioning at all.',
-  'Stopped in on a weekday morning and was seen without much of a wait. The people here were patient with my questions and I left knowing what I needed to.',
-  'Came here on a recommendation from a neighbour. Everything was explained clearly before anything went ahead, which I appreciated more than I expected to.',
-  'A straightforward visit with no surprises. I was told what to expect at the start and that is roughly how it went, which is all I really wanted.',
-  'Went in expecting to wait around and did not have to. Simple to deal with, easy to find, and I would not hesitate to come back if I need to.',
-];
+function stubGeneralDrafts(business: StubBusiness, hinglish: boolean): string[] {
+  const { name } = business;
+  return hinglish
+    ? [
+        `${name} ke saath mera experience kaafi accha raha. Sab kuch tareeke se hua aur kaam dhyan se kiya gaya. Dobara zaroor aaunga.`,
+        `${name} ne mujh par accha impression chhoda. Service samajhne mein aasaan thi aur final kaam neat laga. Inhe chunna sahi raha.`,
+        `Agar koi ${name} ke baare mein puchhe to main kahunga ki yahan ka kaam bharose layak hai. Mera anubhav smooth aur pleasant raha 😊`,
+        `Mujhe ${name} ki service bahut pasand aayi. Kaam professional tha aur mujhe kisi baat ki fikar nahi karni padi. Overall khush hoon.`,
+        `${name} par kaam karwa ke tasalli hui. Har cheez saaf-suthre dhang se hui aur zaroorat ke hisaab se kaam mila. Phir se inhi ke paas jaunga.`,
+        `Achhi service chahiye thi aur ${name} ne nirash nahi kiya. Kaam mein mehnat dikhi aur sab aaram se hua. Accha anubhav raha 🙌`,
+        `${name} ka mera anubhav positive raha hai. Kaam ki quality pasand aayi aur cheezein samjhaane ka tareeka bhi theek tha. Aage bhi yahin aaunga.`,
+        `${name} se jo service li, usse main satisfied hoon. Kaam polished laga aur poora process aaram se hua. Doston ko bhi inke baare mein bataunga.`,
+      ]
+    : [
+        `Had a good experience with ${name}. Everything felt well organised and the work was done with care. I would happily go back.`,
+        `${name} left a good impression on me. The service was easy to follow and the end result looked neat. Glad I chose them 👍`,
+        `If a friend asked about ${name}, I would say the work here is dependable. My experience was smooth and pleasant from start to end.`,
+        `Really liked the service at ${name}. It felt professional and I never had to worry about anything. Happy with how it went overall.`,
+        `Getting things done at ${name} was a relief. Everything was handled neatly and the work suited what I needed. I would return.`,
+        `I wanted reliable service and ${name} did not disappoint. You can see the effort in the work, and the process was relaxed 😊`,
+        `My experience with ${name} has been a positive one. I liked the quality of the work and how clearly things were explained. Will come back.`,
+        `Satisfied with the service I got from ${name}. The work looked polished and the whole process went comfortably. Worth considering.`,
+      ];
+}
+
+export const STUB_DRAFTS = stubGeneralDrafts(DEFAULT_STUB_BUSINESS, false);
 
 /**
  * The Hinglish pool (CHANGE-003) — the same eight-draft shape, in the register the owner asked
@@ -217,16 +264,7 @@ export const STUB_DRAFTS = [
  * carries no digit or "star", and every pair sits below the similarity threshold; the unit
  * suite pins all of that so an edit here cannot quietly break the stub-driven E2E flow.
  */
-export const STUB_DRAFTS_HINGLISH = [
-  'Pichhle hafte yahan gaya tha aur experience accha raha 😊. Staff ne meri baatein dhyan se suni aur jo pucha uska seedha jawab mila. Dobara aana chahunga 🙌',
-  'Bina appointment ke drop in kiya tha, phir bhi kaam aaram se ho gaya. Jagah saaf thi aur log bhi kaafi friendly the. Overall visit se main santusht hoon.',
-  'Dopahar mein visit kiya. Sab kuch pehle se samjha diya gaya tha, isliye koi confusion nahi hui ✨. Simple aur seedha experience raha, koi jhanjhat nahi.',
-  'Ek neighbour ki recommendation par yahan aaya tha. Jo bataya gaya tha waisa hi hua, aur staff ka behaviour bhi acha laga. Zaroorat padi to phir aaunga.',
-  'Weekday subah gaya tha aur zyada wait nahi karna pada. Meri queries patiently sun kar jawab diya gaya, aur main jo jaanna chahta tha wo clear ho gaya.',
-  'Kaafi time se yahan ke baare mein likhna tha. Shuru se aakhir tak sab smooth raha aur koi shikayat nahi hai. Aise hi kaam karte rahein ❤️',
-  'Yahan ka mahaul shaant aur saaf tha. Jo poocha, uska theek se jawab mila aur kisi cheez ke liye zor nahi diya gaya. Accha laga, phir kabhi aaunga.',
-  'Socha tha wait karna padega, par aisa hua nahi. Deal karna easy tha, jagah dhoondhna bhi aasaan, aur zaroorat par wapas aane mein koi hichkichahat nahi.',
-];
+export const STUB_DRAFTS_HINGLISH = stubGeneralDrafts(DEFAULT_STUB_BUSINESS, true);
 
 /**
  * Words that mark a draft as Hinglish rather than English. Used by tests — including E2E, which
