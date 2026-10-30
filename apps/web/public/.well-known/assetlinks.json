@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.digitalhammerr.ai_review",
+      "sha256_cert_fingerprints": [
+        "E4:9F:C1:B0:EF:12:F9:E0:00:A5:0C:95:30:35:5D:2A:8C:45:BD:50:6F:76:54:FF:CB:51:29:95:7C:3F:D8:5A"
+      ]
+    }
+  }
+]

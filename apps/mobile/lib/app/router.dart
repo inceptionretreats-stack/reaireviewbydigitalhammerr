@@ -38,6 +38,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: refresh,
     observers: [routeObserver],
     redirect: (context, state) {
+      // A website dashboard link opened in the app (App Links) arrives as its web path.
+      final fromWeb = screenForWebPath(state.uri.path);
+      if (fromWeb != null) return fromWeb;
+
       final auth = ref.read(authControllerProvider);
       final path = state.matchedLocation;
       return switch (auth) {
@@ -108,6 +112,25 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// The app screen for a website dashboard path (apps/web/app/(app)/app/**), or null when the path
+/// is not a dashboard link. Unknown dashboard pages land on Home.
+String? screenForWebPath(String path) {
+  if (path != '/app' && !path.startsWith('/app/')) return null;
+  final section = path.split('/').elementAtOrNull(2) ?? '';
+  return switch (section) {
+    'qr' => '/qr',
+    'customers' || 'review-requests' => '/customers',
+    'feedback' => '/feedback',
+    'analytics' => '/analytics',
+    'subscription' => '/subscription',
+    'settings' => '/account',
+    'profile' => '/business',
+    'ai-review' => '/ai',
+    'review-modes' => '/modes',
+    _ => '/home',
+  };
+}
 
 class _Splash extends StatelessWidget {
   const _Splash();

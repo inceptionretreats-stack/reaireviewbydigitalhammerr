@@ -26,6 +26,17 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- App Links: the owner dashboard (/app and /app/...) opens in the app when installed.
+                 Customer pages, QR links (/r/...) and business pages stay on the website. Verified
+                 by apps/web/public/.well-known/assetlinks.json. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="aireview.digitalhammerr.com"/>
+                <data android:path="/app"/>
+                <data android:pathPrefix="/app/"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

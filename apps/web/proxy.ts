@@ -50,9 +50,12 @@ export default function proxy(request: NextRequest): NextResponse {
 
   // Preserve the old matcher's anonymous-cookie scope now that the migration gate needs to
   // intercept every route. APIs, authenticated subroutes, and Next assets still pass unchanged
-  // when maintenance is off. This also avoids setting cookies on exempt static reads.
+  // when maintenance is off. This also avoids setting cookies on exempt static reads, including
+  // /.well-known/ (Android's App Links verifier is not a visitor).
   if (
-    /^\/(?:_next\/(?:static|image)|favicon\.ico|api\/|app\/|admin\/)/.test(request.nextUrl.pathname)
+    /^\/(?:_next\/(?:static|image)|favicon\.ico|\.well-known\/|api\/|app\/|admin\/)/.test(
+      request.nextUrl.pathname,
+    )
   ) {
     return NextResponse.next();
   }
