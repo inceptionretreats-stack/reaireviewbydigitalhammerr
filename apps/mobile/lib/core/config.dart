@@ -20,6 +20,14 @@ class AppConfig {
 
   static final String webBaseUrl = _resolveWebBaseUrl();
 
+  /// Whether Pro can be bought inside the app (Razorpay Checkout).
+  ///
+  /// Off by default in release builds: Google Play allows a non-Play payment system in India only
+  /// through its user choice billing programme, alongside Play Billing. Until the account is
+  /// enrolled, store builds show the plan and usage without a purchase button. Builds shared
+  /// directly (not through a store) can turn it on with `--dart-define=IN_APP_PAYMENTS=true`.
+  static const bool inAppPayments = bool.fromEnvironment('IN_APP_PAYMENTS', defaultValue: !kReleaseMode);
+
   static String get apiBaseUrl => '$webBaseUrl/api/v1';
 
   /// A page on the website, for the few flows that stay on the web (checkout, password reset).

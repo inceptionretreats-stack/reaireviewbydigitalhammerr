@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import '../../core/api/api_exception.dart';
+import '../../core/config.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
 import '../../core/providers.dart';
@@ -106,7 +107,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             children: [
               _PlanSummary(subscription: subscription),
               const SizedBox(height: 16),
-              if (subscription.renewalOffered) ...[
+              if (subscription.renewalOffered && AppConfig.inAppPayments) ...[
                 _UpgradeCard(
                   subscription: subscription,
                   busy: _busy,
@@ -117,6 +118,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       ? 'Payments are paused right now. Please try again later.'
                       : null,
                   onUpgrade: _upgrade,
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (!AppConfig.inAppPayments) ...[
+                const InlineNotice(
+                  tone: Tone.accent,
+                  message:
+                      "Changing your plan isn't available in the app. Your plan and usage are shown here.",
                 ),
                 const SizedBox(height: 16),
               ],

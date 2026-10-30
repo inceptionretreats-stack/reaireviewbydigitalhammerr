@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../core/config.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
 import '../../core/providers.dart';
@@ -269,7 +270,10 @@ class _PlanCard extends ConsumerWidget {
           : 'Ai drafts your customers can create',
       trailing: subscription.isPro
           ? const StatusChip('Pro', tone: Tone.accent)
-          : TextButton(onPressed: () => context.push('/subscription'), child: const Text('Upgrade')),
+          : TextButton(
+              onPressed: () => context.push('/subscription'),
+              child: Text(AppConfig.inAppPayments ? 'Upgrade' : 'View plan'),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
