@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_exception.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/config.dart';
 import '../../core/models.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/actions.dart';
 import '../../core/widgets/common.dart';
 
 /// The website's account settings: details, password and signed-in devices. One account works
@@ -36,6 +38,8 @@ class AccountScreen extends ConsumerWidget {
               ),
             const SizedBox(height: 16),
             _DevicesCard(account: account),
+            const SizedBox(height: 16),
+            _DeleteAccountCard(account: account),
           ],
         ),
       ),
@@ -271,6 +275,35 @@ class _DevicesCardState extends ConsumerState<_DevicesCard> {
         onPressed: _busy || others == 0 ? null : _signOutOthers,
         icon: const Icon(Icons.devices_other),
         label: const Text('Sign out other devices'),
+        style: OutlinedButton.styleFrom(foregroundColor: Brand.danger),
+      ),
+    );
+  }
+}
+
+/// Digital Hammerr deletes accounts on request (the website's privacy policy, "Retention and
+/// deletion"), so the app starts that request by email rather than deleting anything itself.
+class _DeleteAccountCard extends StatelessWidget {
+  const _DeleteAccountCard({required this.account});
+
+  final Account account;
+
+  @override
+  Widget build(BuildContext context) {
+    final subject = Uri.encodeComponent('Account deletion request');
+    final body = Uri.encodeComponent(
+      'Please delete my Ai Review account and its data.\n\nAccount email: ${account.email}',
+    );
+    return SectionCard(
+      title: 'Delete account',
+      subtitle:
+          'Ask us to delete your account, your business page and its data. We confirm by email. '
+          'Some payment records must be kept by law.',
+      child: OutlinedButton.icon(
+        onPressed: () =>
+            openExternal(context, 'mailto:${AppConfig.supportEmail}?subject=$subject&body=$body'),
+        icon: const Icon(Icons.delete_outline),
+        label: const Text('Request account deletion'),
         style: OutlinedButton.styleFrom(foregroundColor: Brand.danger),
       ),
     );

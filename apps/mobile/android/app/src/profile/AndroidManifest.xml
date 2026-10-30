@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Profile builds are compiled like release but only used locally, e.g. against the dev
+         server over http on a slow emulator where debug builds stall. Never shipped. -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>

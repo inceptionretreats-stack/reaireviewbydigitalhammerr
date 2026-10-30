@@ -111,12 +111,58 @@ flutter analyze
 flutter test
 ```
 
+## Release builds
+
+```powershell
+flutter build appbundle --release   # build/app/outputs/bundle/release/app-release.aab, for Google Play
+flutter build apk --release         # a single installable APK, for testing or direct sharing
+```
+
+Release builds talk to production (`https://aireview.digitalhammerr.com`).
+
+### Android signing
+
+Release builds are signed with the **upload key** when `android/key.properties` exists (git-ignored):
+
+```properties
+storePassword=…
+keyPassword=…
+keyAlias=upload
+storeFile=C:/Users/<you>/.android-keys/ai-review-upload.jks
+```
+
+The keystore lives outside the repository. **Back up the `.jks` file and `key.properties` somewhere
+safe.** Every Play Store update must be signed with this key; if it is lost, Google Play support can
+reset it, but only after a delay. Without `key.properties`, release builds fall back to the debug key
+and cannot be uploaded to Play.
+
+Upload key certificate SHA-256:
+`E4:9F:C1:B0:EF:12:F9:E0:00:A5:0C:95:30:35:5D:2A:8C:45:BD:50:6F:76:54:FF:CB:51:29:95:7C:3F:D8:5A`
+
+### Links that open in the app (App Links)
+
+Website dashboard links (`https://aireview.digitalhammerr.com/app` and `/app/…`) open the matching
+app screen when the app is installed (`app/router.dart`, `screenForWebPath`). Customer pages, QR links
+(`/r/…`) and business pages always stay on the website. Android verifies the link through
+`apps/web/public/.well-known/assetlinks.json`.
+
+**After the first Play Store upload**, Google re-signs the app with its own app signing key. Copy that
+key's SHA-256 from Play Console → Setup → App signing into `assetlinks.json` alongside the upload key,
+and deploy the website. Until then, App Links verify only for builds you sign yourself.
+
+### Buying Pro in the app
+
+Pro can be bought through Razorpay Checkout, verified by the same `/subscription/verify` endpoint as
+the website (`AppConfig.inAppPayments`). Google Play allows a non-Play payment system in India only
+through its user choice billing programme, alongside Play Billing, with transactions reported to
+Google. So in-app purchase is **off by default in release builds**: they show the plan, usage and
+payments without a purchase button. To turn it on, for a build shared outside the stores or after
+enrolling, pass `--dart-define=IN_APP_PAYMENTS=true`. Debug builds have it on.
+
 ## Before publishing to the stores
 
-- **Android signing:** `android/app/build.gradle.kts` still signs release builds with the debug key.
-  Create an upload keystore and configure `signingConfigs` before `flutter build appbundle`.
-- **iOS** needs a Mac with Xcode to build. Set the bundle identifier and team in Xcode.
-- **Payments:** Pro is bought in the app through Razorpay Checkout, verified by the same
-  `/subscription/verify` endpoint as the website. Check Google Play's and Apple's payment policies for
-  selling the Pro plan in-app before submitting. If needed, send owners to the website to upgrade.
+- **Store listing:** see `store/listing.md` for the text and `store/screenshots/` for phone
+  screenshots. The privacy policy URL is `https://aireview.digitalhammerr.com/legal/privacy`.
+- **iOS** needs a Mac with Xcode to build. Set the team and bundle identifier in Xcode, then
+  `flutter build ipa`.
 - **Icons** are generated from the website's `app/icon.svg`: `dart run flutter_launcher_icons`.

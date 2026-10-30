@@ -18,6 +18,9 @@ class AppConfig {
   static const String _override = String.fromEnvironment('WEB_BASE_URL');
   static const String productionOrigin = 'https://aireview.digitalhammerr.com';
 
+  /// Digital Hammerr's public contact (apps/web/lib/public-information.ts, PUBLIC_CONTACT).
+  static const String supportEmail = 'info@digitalhammerr.com';
+
   static final String webBaseUrl = _resolveWebBaseUrl();
 
   /// Whether Pro can be bought inside the app (Razorpay Checkout).
