@@ -33,7 +33,6 @@
     "admin:create": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/create-admin.mjs"
   },
   "devDependencies": {
-    "@ai-review/config": "workspace:*",
     "@ai-review/core": "workspace:*",
     "@ai-review/db": "workspace:*",
     "@eslint/js": "^10.0.1",
