@@ -35,3 +35,6 @@ e2e-results/
 .idea/
 .DS_Store
 Thumbs.db
+
+# The Flutter owner app is built separately, never by Vercel.
+apps/mobile/

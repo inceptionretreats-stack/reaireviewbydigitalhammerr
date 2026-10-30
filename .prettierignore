@@ -20,3 +20,6 @@ apps/web/next-env.d.ts
 
 # Runtime logs from `pnpm dev:up`.
 .dev/
+
+# The Flutter owner app has its own formatter (dart format) and analyzer.
+apps/mobile/

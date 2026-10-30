@@ -1,0 +1,10 @@
+include: package:flutter_lints/flutter.yaml
+
+formatter:
+  # Matches the web codebase's 100-ish column style better than Dart's default 80.
+  page_width: 110
+
+linter:
+  rules:
+    - prefer_single_quotes
+    - require_trailing_commas
