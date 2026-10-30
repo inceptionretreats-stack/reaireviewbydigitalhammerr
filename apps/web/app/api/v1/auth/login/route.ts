@@ -17,6 +17,7 @@ import { passwordHasher } from '@/lib/auth-helpers';
 import { adminMfaRequired, getSession, nextPathAfterLogin, setSessionCookie } from '@/lib/session';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { recordActivity } from '@/lib/activity';
+import { isMobileClient, mobileSessionBody } from '@/lib/mobile-client';
 import { POST as logout } from '../logout/route';
 
 /**
@@ -39,6 +40,9 @@ import { POST as logout } from '../logout/route';
  * AMENDMENT-027: an admin role gets a ten-minute *pending* session that can reach only the MFA
  * screens; the challenge (or first enrolment) is what turns it into a real admin session.
  * Remember-me is ignored for admins — twelve hours is the ceiling.
+ *
+ * The owner mobile app (lib/mobile-client.ts) receives the session token in the body instead of
+ * a cookie. It has no admin console and no MFA screens, so admin accounts are refused there.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrf = verifyCsrf(request);
@@ -125,6 +129,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // AC-002: a session already present on this browser must not survive authentication.
   const existing = await getSession();
+  const mobile = isMobileClient(request.headers);
   const mfaRequired = adminMfaRequired();
   const authenticated = await database.transaction(async (tx) => {
     // Password changes lock this user row before sweeping sessions. Holding the same lock while
@@ -154,6 +159,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return null;
     }
 
+    if (mobile && isAdminRole(current.role)) return 'ADMIN_ON_MOBILE' as const;
+
     const service = new SessionService(tx);
     if (existing) await service.revoke(existing.sessionId, 'REPLACED_BY_LOGIN');
 
@@ -180,9 +187,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!authenticated) {
     return apiError('AUTH_INVALID_CREDENTIALS', 'That email or password is not correct.');
   }
+  if (authenticated === 'ADMIN_ON_MOBILE') {
+    return apiError('FORBIDDEN', 'Admin accounts sign in on the website.');
+  }
 
   await limiter.loginSuccess(subject);
-  await setSessionCookie(authenticated.session.token, authenticated.session.expiresAt);
+  if (!mobile) {
+    await setSessionCookie(authenticated.session.token, authenticated.session.expiresAt);
+  }
 
   recordActivity(
     request,
@@ -204,6 +216,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         : authenticated.mfaEnabledAt
           ? 'challenge'
           : 'enrol',
+    ...(mobile ? { session: mobileSessionBody(authenticated.session) } : {}),
   });
 }
 

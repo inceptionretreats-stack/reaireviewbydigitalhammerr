@@ -37,6 +37,7 @@ vi.mock('@/lib/session', () => ({
   clearSessionCookie: mocks.clearSessionCookie,
 }));
 vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
+vi.mock('@/lib/mobile-client', async () => import('../../../../../../lib/mobile-client'));
 
 import { DELETE } from '../route';
 

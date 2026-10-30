@@ -1,4 +1,5 @@
 import { env } from './env';
+import { bearerToken, isMobileClient } from './mobile-client';
 
 /**
  * CSRF defence for cookie-authenticated mutations (13_Security_Privacy_Compliance.md).
@@ -26,6 +27,10 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export function verifyCsrf(request: Request): CsrfResult {
   if (SAFE_METHODS.has(request.method)) return { ok: true };
+
+  // The owner app sends no Origin. Its bearer token and X-Client marker are non-simple headers a
+  // cross-site page cannot attach without a CORS preflight, which this application never grants.
+  if (bearerToken(request.headers) || isMobileClient(request.headers)) return { ok: true };
 
   const origin = request.headers.get('origin');
 

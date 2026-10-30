@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   updateUser: vi.fn(),
   sweepTokens: vi.fn(),
   recordActivity: vi.fn(),
+  loadAccountSettings: vi.fn(),
   tx: { update: vi.fn() },
 }));
 
@@ -43,11 +44,14 @@ vi.mock('@/lib/rate-limit', () => ({
 vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
 vi.mock('@/lib/api-error', async () => import('../../../../../lib/api-error'));
 vi.mock('@/lib/safe-error', async () => import('../../../../../lib/safe-error'));
+vi.mock('@/components/dashboard/settings/account', () => ({
+  loadAccountSettings: mocks.loadAccountSettings,
+}));
 vi.mock('@ai-review/core', () => ({
   normalizePhone: () => ({ ok: true, e164: '+919000000000' }),
 }));
 
-import { PATCH } from '../route';
+import { GET, PATCH } from '../route';
 
 function request(email = 'new@example.com'): NextRequest {
   return new NextRequest('https://app.example/api/v1/account', {
@@ -131,5 +135,48 @@ describe('account email change and reset links', () => {
     expect((await PATCH(request())).status).toBe(500);
     expect(transactionRejected).toBe(true);
     expect(mocks.recordActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/account', () => {
+  const get = () => new NextRequest('https://app.example/api/v1/account');
+
+  it("returns the caller's own details without the password hash", async () => {
+    mocks.loadAccountSettings.mockResolvedValueOnce({
+      account: {
+        fullName: 'Test Owner',
+        email: 'owner@example.com',
+        mobile: '+919000000000',
+        hasPassword: true,
+      },
+      business: { name: 'Cafe', status: 'ACTIVE', publishedAt: null, timezone: 'Asia/Kolkata' },
+      billing: { billingLegalName: '', gstin: '', billingStateCode: '', billingAddress: '' },
+      otherLiveSessions: 2,
+    });
+
+    const response = await GET(get());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      full_name: 'Test Owner',
+      email: 'owner@example.com',
+      mobile: '+919000000000',
+      has_password: true,
+      other_live_sessions: 2,
+    });
+    expect(mocks.loadAccountSettings).toHaveBeenCalledWith(
+      expect.anything(),
+      'owner-id',
+      'current-session',
+      'business-id',
+    );
+  });
+
+  it('answers 404 when the account row is missing', async () => {
+    mocks.loadAccountSettings.mockResolvedValueOnce(null);
+
+    const response = await GET(get());
+
+    expect(response.status).toBe(404);
   });
 });

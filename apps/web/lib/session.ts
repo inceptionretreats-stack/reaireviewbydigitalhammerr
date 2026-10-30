@@ -1,7 +1,8 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { SessionService, isAdminRole, type SessionContext } from '@ai-review/core';
 import { db } from './db';
 import { env } from './env';
+import { bearerToken } from './mobile-client';
 
 /**
  * Session cookie plumbing (AUTH-02, SET-01, AC-002).
@@ -58,8 +59,9 @@ export async function clearSessionCookie(): Promise<void> {
  * the response cannot be used to probe whether a token was ever valid.
  */
 export async function getSession(): Promise<SessionContext | null> {
-  const jar = await cookies();
-  const token = jar.get(SESSION_COOKIE())?.value;
+  // The owner app (lib/mobile-client.ts) authenticates with a bearer header, never the cookie.
+  // A request carrying one is resolved by that token alone, so the two can never be mixed.
+  const token = bearerToken(await headers()) ?? (await cookies()).get(SESSION_COOKIE())?.value;
   if (!token) return null;
 
   return sessionService().resolve(token);

@@ -10,6 +10,7 @@ import {
   DEFAULT_TEMPLATE_TEXT,
   RENDERED_MESSAGE_MAX,
   buildTrackedRequestUrl,
+  findTrackedRequestUrl,
   renderTemplate,
   unknownVariables,
 } from './template';
@@ -17,11 +18,40 @@ import {
   advanceCustomerStatus,
   ensureDefaultTemplate,
   loadCustomer,
+  loadRecentRequests,
   loadTenantMessagingContext,
   recordPreparedEvent,
   whatsAppLinkFor,
 } from './service';
 import { recordActivity } from '@/lib/activity';
+
+/**
+ * GET /api/v1/review-requests — the recent requests the web review-requests screen lists.
+ *
+ * For the owner mobile app (lib/mobile-client.ts), which cannot read them any other way. It uses
+ * the same loader and derives the same two links as ReviewRequestsScreen: the tracked link exists
+ * only inside the stored message (the token itself is never stored), and the WhatsApp link is
+ * rebuilt from it. Contacts the owner deleted stay hidden, exactly as on the web.
+ */
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const auth = await requireTenant(request);
+  if (!auth.ok) return auth.response;
+
+  const rows = await loadRecentRequests(db(), auth.context.businessId);
+  return NextResponse.json({
+    requests: rows.map((row) => ({
+      id: row.id,
+      customer: { id: row.customerId, name: row.customerName, mobile: row.customerMobile },
+      rendered_message: row.renderedMessage,
+      review_link: findTrackedRequestUrl(row.renderedMessage),
+      whatsapp_url: whatsAppLinkFor(row.customerMobile, row.renderedMessage),
+      prepared_at: row.preparedAt.toISOString(),
+      marked_sent_at: row.markedSentAt?.toISOString() ?? null,
+      first_clicked_at: row.firstClickedAt?.toISOString() ?? null,
+      last_clicked_at: row.lastClickedAt?.toISOString() ?? null,
+    })),
+  });
+}
 
 /**
  * POST /api/v1/review-requests — Flow F step 5's "Message Prepared", and the only place a tracked

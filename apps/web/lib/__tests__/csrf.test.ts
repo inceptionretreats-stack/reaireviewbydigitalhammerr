@@ -120,4 +120,24 @@ describe('verifyCsrf', () => {
   it('rejects localhost in production', () => {
     expect(verifyCsrf(mutation({ origin: 'http://localhost:3000' })).ok).toBe(false);
   });
+
+  /**
+   * The owner mobile app sends no Origin. Its bearer token and X-Client marker are non-simple
+   * headers that a cross-site page cannot attach without a CORS preflight (lib/mobile-client.ts).
+   */
+  it('accepts a bearer-authenticated mutation with no Origin', () => {
+    expect(verifyCsrf(mutation({ authorization: 'Bearer abc123' })).ok).toBe(true);
+  });
+
+  it('accepts the mobile app marker with no Origin', () => {
+    expect(verifyCsrf(mutation({ 'x-client': 'ai-review-mobile' })).ok).toBe(true);
+  });
+
+  it.each<Record<string, string>>([
+    { 'x-client': 'some-other-app' },
+    { authorization: 'Basic dXNlcjpwYXNz' },
+    { authorization: 'Bearer' },
+  ])('still rejects a mutation with no Origin and %o', (headers) => {
+    expect(verifyCsrf(mutation(headers)).ok).toBe(false);
+  });
 });

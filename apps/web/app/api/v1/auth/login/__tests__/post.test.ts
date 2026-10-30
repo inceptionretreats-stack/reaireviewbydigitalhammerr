@@ -45,6 +45,7 @@ vi.mock('@/lib/rate-limit', () => ({
   }),
 }));
 vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
+vi.mock('@/lib/mobile-client', async () => import('../../../../../../lib/mobile-client'));
 vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
 vi.mock('@ai-review/core', () => ({
   ADMIN_SESSION_TTL_MS: 12 * 60 * 60 * 1000,
@@ -64,10 +65,10 @@ vi.mock('@ai-review/core', () => ({
 
 import { POST } from '../route';
 
-function request(): NextRequest {
+function request(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest('https://app.example/api/v1/auth/login', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify({
       email: 'owner@example.com',
       password: 'current-password',
@@ -237,5 +238,48 @@ describe('password login and concurrent credential changes', () => {
       mocks.tx,
       expect.objectContaining({ ttlMs: 12 * 60 * 60 * 1000 }),
     );
+  });
+});
+
+describe('owner mobile app sign-in', () => {
+  const app = { 'x-client': 'ai-review-mobile' };
+
+  it('returns the session token in the body and sets no cookie', async () => {
+    const response = await POST(request(app));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      next: '/app',
+      mfa: null,
+      session: { token: 'new-token', expires_at: '2030-01-01T00:00:00.000Z' },
+    });
+    expect(mocks.setCookie).not.toHaveBeenCalled();
+    expect(mocks.loginSuccess).toHaveBeenCalledOnce();
+  });
+
+  it('refuses an admin account before issuing any session', async () => {
+    mocks.lockedLookup.mockResolvedValueOnce([
+      {
+        id: 'owner-id',
+        role: 'SUPER_ADMIN',
+        passwordHash: 'old-hash',
+        lockedUntil: null,
+        disabledAt: null,
+        mfaEnabledAt: new Date('2026-01-01'),
+      },
+    ]);
+
+    const response = await POST(request(app));
+
+    expect(response.status).toBe(403);
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.setCookie).not.toHaveBeenCalled();
+  });
+
+  it('keeps the browser response free of the token', async () => {
+    const response = await POST(request());
+
+    expect(await response.json()).not.toHaveProperty('session');
+    expect(mocks.setCookie).toHaveBeenCalledWith('new-token', new Date('2030-01-01'));
   });
 });

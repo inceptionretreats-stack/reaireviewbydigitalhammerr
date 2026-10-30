@@ -16,6 +16,7 @@ import { landingPathFor, sessionService, setSessionCookie } from '@/lib/session'
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { recordActivity } from '@/lib/activity';
 import { isUniqueViolation, safeError } from '@/lib/safe-error';
+import { isMobileClient, mobileSessionBody } from '@/lib/mobile-client';
 
 /**
  * POST /api/v1/auth/signup — AUTH-01.
@@ -146,13 +147,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     { action: 'auth.signup', targetType: 'user', targetId: userId },
   );
 
+  // The owner app (lib/mobile-client.ts) receives the token in the body instead of a cookie.
+  const fromApp = isMobileClient(request.headers);
+  let mobileSession: ReturnType<typeof mobileSessionBody> | undefined;
   try {
     const session = await sessionService().create({
       userId,
       userAgent: request.headers.get('user-agent'),
       ipHash: signupIp ? privacyHash(signupIp, env().HASH_PEPPER) : null,
+      // A phone stays signed in the way a remembered browser does.
+      rememberMe: fromApp,
     });
-    await setSessionCookie(session.token, session.expiresAt);
+    if (fromApp) mobileSession = mobileSessionBody(session);
+    else await setSessionCookie(session.token, session.expiresAt);
   } catch (error) {
     // The user, business and subscription are already committed. Do not say creation failed or
     // delete them: the owner can sign in with the password they just chose once sessions recover.
@@ -164,7 +171,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
   return NextResponse.json(
-    { next: landingPathFor('BUSINESS_OWNER'), onboarding_required: true },
+    {
+      next: landingPathFor('BUSINESS_OWNER'),
+      onboarding_required: true,
+      ...(mobileSession ? { session: mobileSession } : {}),
+    },
     { status: 201 },
   );
 }

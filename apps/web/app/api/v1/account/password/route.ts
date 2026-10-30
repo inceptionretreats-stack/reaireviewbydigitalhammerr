@@ -9,6 +9,7 @@ import { requireTenant } from '@/lib/require-tenant';
 import { passwordHasher } from '@/lib/auth-helpers';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { setSessionCookie } from '@/lib/session';
+import { bearerToken, mobileSessionBody } from '@/lib/mobile-client';
 import { parsePasswordChange } from '../schema';
 import { countOtherLiveSessions, reportableRevoked } from '../session-count';
 import { recordActivity } from '@/lib/activity';
@@ -36,6 +37,7 @@ import { safeError } from '@/lib/safe-error';
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
+  const viaBearer = bearerToken(request.headers) !== null;
 
   let raw: unknown;
   try {
@@ -183,7 +185,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         userId,
         userAgent: request.headers.get('user-agent'),
         ipHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
-        // The old session row does not record remember-me; use the shorter default lifetime.
+        // The old session row does not record remember-me; use the shorter default lifetime for a
+        // browser. The owner app is always remembered, as it was at sign-in.
+        rememberMe: viaBearer,
       });
       return { rotated, signedOut: reportableRevoked(liveBefore, revoked) };
     });
@@ -200,12 +204,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // Only browser cookie delivery remains after commit. Its failure cannot restore the old
   // password or old sessions; tell the owner to sign in with the new password in that case.
+  // The owner app gets the rotated token in the body instead (lib/mobile-client.ts).
   let sessionRetained = true;
-  try {
-    await setSessionCookie(change.rotated.token, change.rotated.expiresAt);
-  } catch (error) {
-    sessionRetained = false;
-    console.error('[account] password change cookie update failed', safeError(error));
+  if (!viaBearer) {
+    try {
+      await setSessionCookie(change.rotated.token, change.rotated.expiresAt);
+    } catch (error) {
+      sessionRetained = false;
+      console.error('[account] password change cookie update failed', safeError(error));
+    }
   }
 
   recordActivity(
@@ -225,6 +232,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     other_sessions_signed_out: change.signedOut,
     sessions_swept: true,
     session_retained: sessionRetained,
+    ...(viaBearer ? { session: mobileSessionBody(change.rotated) } : {}),
   });
 }
 

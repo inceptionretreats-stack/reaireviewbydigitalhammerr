@@ -32,6 +32,7 @@ vi.mock('@/lib/rate-limit', () => ({
   rateLimiter: () => ({ signupAttempt: mocks.signupAttempt }),
 }));
 vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
+vi.mock('@/lib/mobile-client', async () => import('../../../../../../lib/mobile-client'));
 vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
 vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
 vi.mock('@ai-review/core', () => ({
@@ -45,10 +46,10 @@ vi.mock('@ai-review/core', () => ({
 
 import { POST } from '../route';
 
-function request(): NextRequest {
+function request(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest('https://app.example/api/v1/auth/signup', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify({
       full_name: 'Test Owner',
       email: 'owner@example.com',
@@ -140,4 +141,31 @@ describe('signup failure recovery', () => {
       );
     },
   );
+});
+
+describe('owner mobile app signup', () => {
+  it('returns a remembered session token in the body and sets no cookie', async () => {
+    mocks.createSession.mockResolvedValueOnce({
+      token: 'session-token',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+    });
+
+    const response = await POST(request({ 'x-client': 'ai-review-mobile' }));
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      next: '/onboarding/business',
+      onboarding_required: true,
+      session: { token: 'session-token', expires_at: '2030-01-01T00:00:00.000Z' },
+    });
+    expect(mocks.createSession).toHaveBeenCalledWith(expect.objectContaining({ rememberMe: true }));
+    expect(mocks.setCookie).not.toHaveBeenCalled();
+  });
+
+  it('keeps the browser response free of the token', async () => {
+    const response = await POST(request());
+
+    expect(await response.json()).not.toHaveProperty('session');
+    expect(mocks.setCookie).toHaveBeenCalledOnce();
+  });
 });

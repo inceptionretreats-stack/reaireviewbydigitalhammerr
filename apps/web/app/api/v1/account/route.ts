@@ -11,6 +11,34 @@ import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { emailChanged, parseAccountDetails } from './schema';
 import { recordActivity } from '@/lib/activity';
 import { isUniqueViolation, safeError } from '@/lib/safe-error';
+import { loadAccountSettings } from '@/components/dashboard/settings/account';
+
+/**
+ * GET /api/v1/account — the signed-in owner's own details, as the settings screen shows them.
+ *
+ * The web settings page reads these in its server component; the owner mobile app
+ * (lib/mobile-client.ts) has no other way to learn who is signed in. Same loader, so the two can
+ * never disagree. The password hash itself never leaves the server, only whether one exists:
+ * a Google-only account has none, and the app must not offer it a password change.
+ */
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const auth = await requireTenant(request);
+  if (!auth.ok) return auth.response;
+
+  const { session, businessId } = auth.context;
+  const settings = await loadAccountSettings(db(), session.userId, session.sessionId, businessId);
+  if (!settings) {
+    return apiError('RESOURCE_NOT_FOUND', 'We could not find your account.');
+  }
+
+  return NextResponse.json({
+    full_name: settings.account.fullName,
+    email: settings.account.email,
+    mobile: settings.account.mobile,
+    has_password: settings.account.hasPassword,
+    other_live_sessions: settings.otherLiveSessions,
+  });
+}
 
 /**
  * PATCH /api/v1/account — the account half of SET-01.

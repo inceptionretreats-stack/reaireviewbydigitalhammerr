@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { businesses, reviewDestinations } from '@ai-review/db';
-import { describeReviewUrlRejection, validateGoogleReviewUrl } from '@ai-review/core';
+import {
+  classifyReviewDestination,
+  describeReviewUrlRejection,
+  validateGoogleReviewUrl,
+} from '@ai-review/core';
 import { db } from '@/lib/db';
 import { apiError } from '@/lib/api-error';
 import { requireTenant, type AuthenticatedContext } from '@/lib/require-tenant';
@@ -26,7 +30,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!auth.ok) return auth.response;
 
   const [destination] = await db()
-    .select({ url: reviewDestinations.url, label: reviewDestinations.label })
+    .select({
+      url: reviewDestinations.url,
+      label: reviewDestinations.label,
+      isEnabled: reviewDestinations.isEnabled,
+    })
     .from(reviewDestinations)
     .where(
       and(
@@ -36,9 +44,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
     .limit(1);
 
+  // enabled and kind are what the profile screen shows beside the link; the owner mobile app
+  // (lib/mobile-client.ts) cannot read them any other way. kind is null when nothing is saved.
   return NextResponse.json({
     url: destination?.url ?? null,
     label: destination?.label ?? 'Google',
+    enabled: destination?.isEnabled ?? false,
+    kind: destination ? classifyReviewDestination(destination.url) : null,
   });
 }
 

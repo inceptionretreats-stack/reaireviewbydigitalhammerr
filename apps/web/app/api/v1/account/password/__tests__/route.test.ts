@@ -53,6 +53,7 @@ vi.mock('../../session-count', () => ({
   reportableRevoked: (live: number, revoked: number) => Math.min(live, revoked),
 }));
 vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
+vi.mock('@/lib/mobile-client', async () => import('../../../../../../lib/mobile-client'));
 vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
 vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
 vi.mock('@ai-review/core', () => ({
@@ -71,10 +72,10 @@ vi.mock('@ai-review/core', () => ({
 
 import { POST } from '../route';
 
-function request(): NextRequest {
+function request(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest('https://app.example/api/v1/account/password', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify({
       current_password: 'old-password-long-enough',
       new_password: 'new-password-long-enough',
@@ -184,5 +185,30 @@ describe('account password change security boundary', () => {
       message: expect.stringContaining('sign in again'),
     });
     expect(mocks.recordActivity).toHaveBeenCalledOnce();
+  });
+});
+
+describe('password change from the owner mobile app', () => {
+  it('hands the rotated, remembered token back in the body instead of a cookie', async () => {
+    const response = await POST(request({ authorization: 'Bearer old-token' }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      session_retained: true,
+      session: { token: 'new-token', expires_at: '2030-01-01T00:00:00.000Z' },
+    });
+    expect(mocks.rotate).toHaveBeenCalledWith(
+      mocks.tx,
+      'current-session',
+      expect.objectContaining({ rememberMe: true }),
+    );
+    expect(mocks.setCookie).not.toHaveBeenCalled();
+  });
+
+  it('keeps the browser response free of the token', async () => {
+    const response = await POST(request());
+
+    expect(await response.json()).not.toHaveProperty('session');
+    expect(mocks.setCookie).toHaveBeenCalledOnce();
   });
 });
