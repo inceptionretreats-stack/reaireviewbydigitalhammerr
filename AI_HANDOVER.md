@@ -120,16 +120,16 @@ Read this file before changing the project. Then inspect the relevant current so
 
 ### Project identity
 
-| Item                                         | Current context                                                                                                                                                                             |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Brand                                        | Ai Review by Digital Hammerr                                                                                                                                                                |
-| Company                                      | Digital Hammerr is a digital marketing company offering app development, website development, SEO and graphic design. Do not describe it as a cafe.                                         |
-| Working directory on the current machine     | `D:/reaireviewbydigitalhammerr`                                                                                                                                                             |
-| Local preview                                | `http://127.0.0.1:3000/`                                                                                                                                                                    |
-| Owner-specified public subdomain             | `aireview.digitalhammerr.com` — public HTTP checks passed after the Supabase-backed deployment was promoted on 23 September                                                                 |
-| Vercel project                               | `ai-review-dh` in the existing Inception account; verify actual linkage before any further deployment                                                                                       |
-| Deployment account preference                | The user explicitly requested the **Inception** account. Do not deploy to another account by default.                                                                                       |
-| Historical Git snapshot at original handover | Branch `main`; commit observed on 18 September: `4c370b8` — `Release latest website, review video, and dashboard updates`                                                                   |
+| Item                                         | Current context                                                                                                                                                                                                              |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Brand                                        | Ai Review by Digital Hammerr                                                                                                                                                                                                 |
+| Company                                      | Digital Hammerr is a digital marketing company offering app development, website development, SEO and graphic design. Do not describe it as a cafe.                                                                          |
+| Working directory on the current machine     | `D:/reaireviewbydigitalhammerr`                                                                                                                                                                                              |
+| Local preview                                | `http://127.0.0.1:3000/`                                                                                                                                                                                                     |
+| Owner-specified public subdomain             | `aireview.digitalhammerr.com` — public HTTP checks passed after the Supabase-backed deployment was promoted on 23 September                                                                                                  |
+| Vercel project                               | `ai-review-dh` in the existing Inception account; verify actual linkage before any further deployment                                                                                                                        |
+| Deployment account preference                | The user explicitly requested the **Inception** account. Do not deploy to another account by default.                                                                                                                        |
+| Historical Git snapshot at original handover | Branch `main`; commit observed on 18 September: `4c370b8` — `Release latest website, review video, and dashboard updates`                                                                                                    |
 | Important status                             | Work is committed on `codex/recover-2026-09-24-1312`. Latest production deployment is `dpl_GXPx3F8puPbG5brUbVvp4P4jJEXN`, promoted on 30 October 2026 (see the top of this file); it retains the completed Supabase cutover. |
 
 ### First instructions for the next Ai
@@ -609,6 +609,7 @@ These are **source-level findings or explicitly unresolved operational decisions
 5. Existing tracked request tokens have no expiry column; the public resolver does not check a linked contact's soft deletion. Do not promise deleting a contact immediately revokes every previously sent link.
 
 **Addressed on 25 September, live since 30 October 2026:** settlement no longer reactivates a fully refunded payment; failed pending refunds restore the prior paid period only when the matching audit proves the refund caused cancellation; password changes sweep and rotate sessions in the credential transaction; credential/email changes invalidate outstanding reset tokens; signup has an application limiter; legacy login DELETE now delegates to durable CSRF-checked logout; slug review records `review_page_view` (it already restored drafts); public generation validates its request and parent ownership; Ai context writes lock and recheck business status; cookie-free generation is rate-limited.
+
 ### Owner/operations decisions still pending
 
 - Exact Pro refund window, eligibility and processing deadline. The public page says these are unconfirmed; do not invent an automatic refund or blanket no-refund rule.
