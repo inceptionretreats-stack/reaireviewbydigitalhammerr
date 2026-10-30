@@ -114,6 +114,30 @@ describe('Razorpay signatures', () => {
     });
     expect(
       parseWebhookEvent(
+        JSON.stringify({
+          event: 'refund.processed',
+          payload: {
+            refund: {
+              entity: {
+                id: 'rfnd_2',
+                payment_id: 'pay_1',
+                amount: 10000,
+                status: 'processed',
+                receipt: 'request-from-receipt',
+                notes: { refund_id: 'request-from-notes' },
+              },
+            },
+          },
+        }),
+      ),
+    ).toMatchObject({ refundRequestId: 'request-from-notes' });
+    expect(
+      parseWebhookEvent(
+        '{"event":"refund.failed","payload":{"refund":{"entity":{"id":"rfnd_3","payment_id":"pay_1","receipt":"request-from-receipt","status":"failed"}}}}',
+      ),
+    ).toMatchObject({ refundRequestId: 'request-from-receipt' });
+    expect(
+      parseWebhookEvent(
         '{"event":"payment.failed","payload":{"payment":{"entity":{"id":"pay_9","order_id":"order_9","amount":99900,"status":"failed","error_code":"BAD_REQUEST_ERROR","error_description":"Card declined"}}}}',
       ),
     ).toMatchObject({ errorCode: 'BAD_REQUEST_ERROR', errorDescription: 'Card declined' });
@@ -160,7 +184,7 @@ describe('RazorpayClient.createOrder', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('maps a 4xx to REJECTED with only the error code, and a 5xx to UPSTREAM', async () => {
+  it('maps a definitive 400 to REJECTED with only the error code, and a 5xx to UPSTREAM', async () => {
     const reject = vi.fn(async () => ({
       ok: false,
       status: 400,
@@ -189,6 +213,18 @@ describe('RazorpayClient.createOrder', () => {
         amountPaise: 99900,
         receipt: 'r',
       }),
+    ).rejects.toMatchObject({ code: 'UPSTREAM' });
+  });
+
+  it.each([408, 429])('treats an HTTP %i refund response as uncertain', async (status) => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status,
+      text: async () => JSON.stringify({ error: { code: 'UNKNOWN' } }),
+    }));
+    const client = new RazorpayClient({ keyId: 'k', keySecret: 's', fetchImpl });
+    await expect(
+      client.refund('pay_1', { amountPaise: 99900, receipt: 'refund-row-id' }),
     ).rejects.toMatchObject({ code: 'UPSTREAM' });
   });
 });

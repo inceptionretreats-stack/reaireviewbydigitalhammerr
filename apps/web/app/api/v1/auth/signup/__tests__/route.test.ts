@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
   setCookie: vi.fn(),
   recordActivity: vi.fn(),
+  signupAttempt: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({ db: () => ({ transaction: mocks.transaction }) }));
@@ -25,7 +26,11 @@ vi.mock('@/lib/session', () => ({
   setSessionCookie: mocks.setCookie,
   landingPathFor: () => '/onboarding/business',
 }));
-vi.mock('@/lib/rate-limit', () => ({ clientIp: () => '' }));
+vi.mock('@/lib/rate-limit', () => ({
+  clientIp: () => '203.0.113.42',
+  isDenied: (decision: { allowed: boolean }) => !decision.allowed,
+  rateLimiter: () => ({ signupAttempt: mocks.signupAttempt }),
+}));
 vi.mock('@/lib/activity', () => ({ recordActivity: mocks.recordActivity }));
 vi.mock('@/lib/api-error', async () => import('../../../../../../lib/api-error'));
 vi.mock('@/lib/safe-error', async () => import('../../../../../../lib/safe-error'));
@@ -57,6 +62,7 @@ function request(): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.hash.mockResolvedValue('test-hash');
+  mocks.signupAttempt.mockResolvedValue({ allowed: true });
   mocks.settings.mockResolvedValue({});
   mocks.transaction.mockResolvedValue('test-user-id');
   mocks.createSession.mockResolvedValue({ token: 'session-token', expiresAt: new Date() });
@@ -67,6 +73,23 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('signup failure recovery', () => {
+  it('limits valid signup attempts before password hashing or account creation', async () => {
+    mocks.signupAttempt.mockResolvedValueOnce({ allowed: false, retryAfterSeconds: 60 });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('60');
+    expect(await response.json()).toMatchObject({ error: { code: 'AUTH_RATE_LIMITED' } });
+    expect(mocks.signupAttempt).toHaveBeenCalledWith({
+      identifier: 'owner@example.com',
+      ip: '203.0.113.42',
+      pepper: 'test-pepper',
+    });
+    expect(mocks.hash).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   it('keeps the successful signup response', async () => {
     const response = await POST(request());
     expect(response.status).toBe(201);

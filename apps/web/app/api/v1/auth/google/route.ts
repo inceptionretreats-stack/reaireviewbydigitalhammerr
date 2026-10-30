@@ -6,7 +6,11 @@ import { apiError } from '@/lib/api-error';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { verifyCsrf } from '@/lib/csrf';
-import { consumeGoogleChallenge, setGooglePending, verifyGoogleCredential } from '@/lib/google-auth';
+import {
+  consumeGoogleChallenge,
+  setGooglePending,
+  verifyGoogleCredential,
+} from '@/lib/google-auth';
 import { signInGoogleVendor } from '@/lib/google-auth-session';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { recordActivity } from '@/lib/activity';
@@ -37,7 +41,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // Use the nonce as a bounded identity window for malformed credentials. The shared IP-prefix
   // limit still protects against a caller fetching fresh nonces for each attempt.
-  const subject = { identifier: `google:${nonce}`, ip: clientIp(request), pepper: env().HASH_PEPPER };
+  const subject = {
+    identifier: `google:${nonce}`,
+    ip: clientIp(request),
+    pepper: env().HASH_PEPPER,
+  };
   const limiter = rateLimiter();
   const gate = await limiter.loginAttempt(subject);
   if (isDenied(gate)) {
@@ -49,9 +57,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const identity = await verifyGoogleCredential(parsed.data.credential, nonce);
   if (!identity) {
     const failure = await limiter.loginFailure(subject);
-    return apiError('AUTH_INVALID_CREDENTIALS', 'Google sign-in could not be verified. Please try again.', {
-      ...(isDenied(failure) ? { retryAfterSeconds: failure.retryAfterSeconds } : {}),
-    });
+    return apiError(
+      'AUTH_INVALID_CREDENTIALS',
+      'Google sign-in could not be verified. Please try again.',
+      {
+        ...(isDenied(failure) ? { retryAfterSeconds: failure.retryAfterSeconds } : {}),
+      },
+    );
   }
 
   try {
@@ -80,7 +92,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return apiError('AUTH_INVALID_CREDENTIALS', 'This account cannot sign in with Google.');
       }
       await signInGoogleVendor(request, mapped.userId);
-      recordActivity(request, { userId: mapped.userId }, { action: 'auth.login', metadata: { provider: 'google' } });
+      recordActivity(
+        request,
+        { userId: mapped.userId },
+        { action: 'auth.login', metadata: { provider: 'google' } },
+      );
       return NextResponse.json({ next: '/app' }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
@@ -95,7 +111,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .where(and(eq(users.email, identity.email), isNull(users.deletedAt)))
       .limit(1);
 
-    if (existing && (existing.role !== 'BUSINESS_OWNER' || existing.disabledAt || !existing.passwordHash)) {
+    if (
+      existing &&
+      (existing.role !== 'BUSINESS_OWNER' || existing.disabledAt || !existing.passwordHash)
+    ) {
       return apiError(
         'AUTH_INVALID_CREDENTIALS',
         'This email is already associated with another account. Use its original sign-in method.',

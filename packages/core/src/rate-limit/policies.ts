@@ -57,6 +57,12 @@ export interface RateLimitConfig {
   readonly loginIpPrefixWindowMs: number;
   readonly loginFailuresPerIdentityPerDay: number;
 
+  /** Signup attempts count whether account creation succeeds or fails. */
+  readonly signupAttemptsPerIdentity: number;
+  readonly signupIdentityWindowMs: number;
+  readonly signupAttemptsPerIpPrefix: number;
+  readonly signupIpPrefixWindowMs: number;
+
   /**
    * AMENDMENT-027 — admin MFA challenge. Per pending session (the thing being brute-forced),
    * per IP prefix, and a daily cap per account. A six-digit code has a million values; five
@@ -116,6 +122,11 @@ export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   // be 480 guesses a day against one account.
   loginFailuresPerIdentityPerDay: 20,
 
+  signupAttemptsPerIdentity: 5,
+  signupIdentityWindowMs: HOUR_MS,
+  signupAttemptsPerIpPrefix: 30,
+  signupIpPrefixWindowMs: 15 * MINUTE_MS,
+
   mfaFailuresPerSession: 5,
   mfaSessionWindowMs: 15 * MINUTE_MS,
   mfaFailuresPerIpPrefix: 25,
@@ -136,6 +147,8 @@ export interface RateLimitRuleSet {
   readonly loginIdentity: RateLimitRule;
   readonly loginIpPrefix: RateLimitRule;
   readonly loginIdentityDaily: RateLimitRule;
+  readonly signupIdentity: RateLimitRule;
+  readonly signupIpPrefix: RateLimitRule;
   readonly mfaSession: RateLimitRule;
   readonly mfaIpPrefix: RateLimitRule;
   readonly mfaUserDaily: RateLimitRule;
@@ -177,6 +190,20 @@ export function rules(config: RateLimitConfig): RateLimitRuleSet {
       name: 'auth.login_ip_prefix',
       limit: config.loginFailuresPerIpPrefix,
       windowMs: config.loginIpPrefixWindowMs,
+      code: 'AUTH_RATE_LIMITED',
+      enforcement: 'ENFORCE',
+    },
+    signupIdentity: {
+      name: 'auth.signup_identity',
+      limit: config.signupAttemptsPerIdentity,
+      windowMs: config.signupIdentityWindowMs,
+      code: 'AUTH_RATE_LIMITED',
+      enforcement: 'ENFORCE',
+    },
+    signupIpPrefix: {
+      name: 'auth.signup_ip_prefix',
+      limit: config.signupAttemptsPerIpPrefix,
+      windowMs: config.signupIpPrefixWindowMs,
       code: 'AUTH_RATE_LIMITED',
       enforcement: 'ENFORCE',
     },
@@ -311,6 +338,9 @@ export interface PublicGenerationSubject {
   readonly adminThrottle?: AdminThrottle;
 }
 
+/** A cookie-free visitor has no stable session key, but still has a network-level abuse limit. */
+export type CookieFreeGenerationSubject = Omit<PublicGenerationSubject, 'anonymousSessionId'>;
+
 /** AMENDMENT-030: an admin-set ceiling. The expiry is part of the key so a re-applied throttle starts a fresh window. */
 export interface AdminThrottle {
   readonly perHour: number;
@@ -322,6 +352,25 @@ export interface LoginSubject {
   readonly identifier: string;
   readonly ip: string;
   readonly pepper: string;
+}
+
+/** Signup uses the same normalized identifier and privacy-preserving network prefix as login. */
+export function signupAttemptCheck(
+  subject: LoginSubject,
+  config: RateLimitConfig = DEFAULT_RATE_LIMIT_CONFIG,
+): RateLimitCheck {
+  const rule = rules(config);
+  const identity = loginIdentityHash(subject.identifier, subject.pepper);
+  const prefix = ipPrefixHash(subject.ip, subject.pepper);
+
+  return {
+    name: 'signup_attempt',
+    dimensions: [
+      { rule: rule.signupIdentity, key: rateLimitKey(rule.signupIdentity.name, identity) },
+      { rule: rule.signupIpPrefix, key: rateLimitKey(rule.signupIpPrefix.name, prefix) },
+    ],
+    onStoreUnavailable: 'DENY',
+  };
 }
 
 /** The key of the set that tracks distinct sessions per prefix, sizing the adaptive limit. */
@@ -377,6 +426,44 @@ export function publicGenerationCheck(
   return { name: 'public_generation', dimensions, onStoreUnavailable: 'ALLOW' };
 }
 
+/**
+ * A visitor who blocks cookies can still get a draft. Apply the same hashed prefix window as
+ * session-bearing visitors, plus business-level controls. No untrusted client identifier is
+ * substituted for a real session: doing so would let a caller mint new burst/hourly buckets.
+ *
+ * If the edge supplied no valid IP, isolate the unknown-address bucket by business so traffic
+ * to one merchant cannot block another merchant's cookie-free visitors.
+ */
+export function cookieFreeGenerationCheck(
+  subject: CookieFreeGenerationSubject,
+  distinctSessions: number,
+  config: RateLimitConfig = DEFAULT_RATE_LIMIT_CONFIG,
+): RateLimitCheck {
+  const rule = rules(config);
+  const prefix = ipPrefixHash(subject.ip, subject.pepper);
+  const dimensions: RateLimitDimension[] = [
+    {
+      rule: ipPrefixRule(distinctSessions, config),
+      key: subject.ip
+        ? rateLimitKey('public.ip_prefix', prefix)
+        : rateLimitKey('public.ip_prefix_unknown', subject.businessId),
+    },
+  ];
+
+  if (subject.plan === 'PRO') {
+    dimensions.push({
+      rule: rule.fairUse,
+      key: rateLimitKey(rule.fairUse.name, subject.businessId),
+    });
+  }
+
+  if (subject.adminThrottle && subject.adminThrottle.perHour > 0) {
+    dimensions.push(adminThrottleDimension(subject.businessId, subject.adminThrottle));
+  }
+
+  return { name: 'public_generation_cookie_free', dimensions, onStoreUnavailable: 'ALLOW' };
+}
+
 /** AMENDMENT-030: the admin-set hourly ceiling for one business, as a limiter dimension. */
 export function adminThrottleDimension(
   businessId: string,
@@ -391,18 +478,6 @@ export function adminThrottleDimension(
       enforcement: 'ENFORCE',
     },
     key: rateLimitKey('public.business_admin_throttle', businessId, String(throttle.untilMs)),
-  };
-}
-
-/**
- * The throttle alone, for a generation request that carries no anonymous session and so
- * skips the session-keyed check. The ceiling is per business, so it applies either way.
- */
-export function adminThrottleCheck(businessId: string, throttle: AdminThrottle): RateLimitCheck {
-  return {
-    name: 'business_admin_throttle',
-    dimensions: [adminThrottleDimension(businessId, throttle)],
-    onStoreUnavailable: 'ALLOW',
   };
 }
 

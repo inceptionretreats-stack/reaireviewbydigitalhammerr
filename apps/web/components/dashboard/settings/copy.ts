@@ -33,16 +33,20 @@ export function describeSignedOutSessions(count: number): string {
 /**
  * The sentence under "Your password has been changed".
  *
- * `swept` is `sessions_swept` from POST /api/v1/account/password. The password is committed before
- * the sweep and the rotation run, so when that post-commit work fails the endpoint still answers
- * 200 — telling an owner the change failed when their new password is the one that works would send
- * them to /login with the old one. What it must not do is inherit the confirmation's claims: with
- * the sweep unfinished, neither "every other session was signed out" nor "you are still signed in
- * here" is known to be true, so the screen says what it knows and names the button that retries.
+ * `swept` and `retained` reflect the response from POST /api/v1/account/password. Durable writes
+ * now commit together; cookie delivery happens afterward and can still fail. Never claim this
+ * browser stayed signed in when it did not receive the rotated token.
  */
-export function describePasswordChangeSessions(swept: boolean, signedOut: number): string {
+export function describePasswordChangeSessions(
+  swept: boolean,
+  signedOut: number,
+  retained = true,
+): string {
   if (!swept) {
     return 'We could not sign out your other sessions — use “Log out other sessions” below.';
+  }
+  if (!retained) {
+    return `${describeSignedOutSessions(signedOut)} Please sign in again with your new password.`;
   }
   return `${describeSignedOutSessions(signedOut)} You are still signed in here.`;
 }

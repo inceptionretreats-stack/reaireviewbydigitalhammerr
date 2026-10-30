@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { users } from '@ai-review/db';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { passwordResetTokens, users } from '@ai-review/db';
 import { normalizePhone } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
@@ -110,16 +110,47 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
    * silent: the response says so and the screen turns it into a sentence. See concerns.
    */
   try {
-    await database
-      .update(users)
-      .set({
-        fullName: details.fullName,
-        email: details.email,
-        mobile: phone.e164,
-        ...(changingEmail ? { emailVerifiedAt: null } : {}),
-        updatedAt: sql`now()`,
-      })
-      .where(eq(users.id, userId));
+    const changed = await database.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(users)
+        .set({
+          fullName: details.fullName,
+          email: details.email,
+          mobile: phone.e164,
+          ...(changingEmail ? { emailVerifiedAt: null } : {}),
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(users.id, userId),
+            eq(users.email, account.email),
+            account.passwordHash === null
+              ? isNull(users.passwordHash)
+              : eq(users.passwordHash, account.passwordHash),
+            isNull(users.deletedAt),
+          ),
+        )
+        .returning({ id: users.id });
+      if (!updated) return false;
+
+      if (changingEmail) {
+        // A link delivered to the former mailbox must not remain a recovery credential.
+        await tx
+          .update(passwordResetTokens)
+          .set({ usedAt: new Date() })
+          .where(
+            and(
+              eq(passwordResetTokens.userId, userId),
+              isNull(passwordResetTokens.usedAt),
+              gt(passwordResetTokens.expiresAt, new Date()),
+            ),
+          );
+      }
+      return true;
+    });
+    if (!changed) {
+      return apiError('VALIDATION_FAILED', 'Your account changed elsewhere. Please retry.');
+    }
   } catch (error) {
     if (isUniqueViolation(error)) {
       // users.email is the only unique column this statement touches. The owner has to be told the

@@ -13,7 +13,7 @@ import { apiError } from '@/lib/api-error';
 import { verifyCsrf } from '@/lib/csrf';
 import { passwordHasher, SHELL_CATEGORY, shellBusinessName } from '@/lib/auth-helpers';
 import { landingPathFor, sessionService, setSessionCookie } from '@/lib/session';
-import { clientIp } from '@/lib/rate-limit';
+import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { recordActivity } from '@/lib/activity';
 import { isUniqueViolation, safeError } from '@/lib/safe-error';
 
@@ -60,6 +60,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!phone.ok) {
     return apiError('VALIDATION_FAILED', 'Enter a valid 10-digit mobile number.', {
       details: { fields: ['mobile'] },
+    });
+  }
+
+  const signupIp = clientIp(request);
+  const gate = await rateLimiter().signupAttempt({
+    identifier: email,
+    ip: signupIp,
+    pepper: env().HASH_PEPPER,
+  });
+  if (isDenied(gate)) {
+    return apiError('AUTH_RATE_LIMITED', 'Too many signup attempts. Please try again shortly.', {
+      retryAfterSeconds: gate.retryAfterSeconds,
     });
   }
 
@@ -135,7 +147,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   );
 
   try {
-    const signupIp = clientIp(request);
     const session = await sessionService().create({
       userId,
       userAgent: request.headers.get('user-agent'),

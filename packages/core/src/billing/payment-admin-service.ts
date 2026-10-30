@@ -131,6 +131,7 @@ export interface RefundOutcome {
 }
 
 const DEFAULT_LIMIT = 50;
+const REFUND_REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class PaymentAdminService {
   constructor(private readonly db: Database) {}
@@ -359,30 +360,107 @@ export class PaymentAdminService {
           requestedBy: input.actor.userId,
         })
         .returning();
-      return { payment, refund: row!, amount, full: amount === remaining };
+      return { payment, refund: row!, amount };
     });
 
     // Phase 2 — ask Razorpay. Nothing is locked while the network call runs.
     let provider;
     try {
       provider = await input.client.refund(planned.payment.providerPaymentId!, {
-        ...(planned.full ? {} : { amountPaise: planned.amount }),
+        amountPaise: planned.amount,
         receipt: planned.refund.id,
         notes: { payment_id: paymentId, refund_id: planned.refund.id },
       });
     } catch (error) {
       const message =
         error instanceof RazorpayError ? `${error.code}: ${error.message}` : String(error);
-      await this.db
-        .update(paymentRefunds)
-        .set({ status: 'FAILED', error: message.slice(0, 500), processedAt: new Date() })
-        .where(eq(paymentRefunds.id, planned.refund.id));
-      throw new PaymentAdminError('REFUND_FAILED', 'Razorpay did not accept the refund.');
+      const definitiveRejection = error instanceof RazorpayError && error.code === 'REJECTED';
+      const settled = await this.db.transaction(async (tx) => {
+        const payment = await lockPayment(tx, paymentId);
+        const [refund] = await tx
+          .select()
+          .from(paymentRefunds)
+          .where(eq(paymentRefunds.id, planned.refund.id))
+          .for('update')
+          .limit(1);
+        if (refund?.status === 'PENDING' || refund?.status === 'PROCESSED') {
+          const reference = refund.rawReference as Record<string, unknown>;
+          return {
+            refund,
+            payment,
+            revoked: typeof reference?.['revocation_audit_id'] === 'number',
+          };
+        }
+        // A timeout or upstream error may happen after Razorpay accepted the refund. Leave the
+        // request open so a webhook bearing our receipt/notes can complete it exactly once.
+        if (refund?.status === 'REQUESTED' && definitiveRejection) {
+          await tx
+            .update(paymentRefunds)
+            .set({ status: 'FAILED', error: message.slice(0, 500), processedAt: new Date() })
+            .where(eq(paymentRefunds.id, refund.id));
+        }
+        return null;
+      });
+      if (settled) return settled;
+      throw new PaymentAdminError(
+        'REFUND_FAILED',
+        definitiveRejection
+          ? 'Razorpay did not accept the refund.'
+          : 'Razorpay did not confirm the refund. Check its status before trying again.',
+      );
+    }
+
+    if (
+      provider.paymentId !== planned.payment.providerPaymentId ||
+      provider.amountPaise !== planned.amount
+    ) {
+      const settled = await this.db.transaction(async (tx) => {
+        const payment = await lockPayment(tx, paymentId);
+        const [refund] = await tx
+          .select()
+          .from(paymentRefunds)
+          .where(eq(paymentRefunds.id, planned.refund.id))
+          .for('update')
+          .limit(1);
+        if (!refund || refund.paymentId !== payment.id) {
+          throw new PaymentAdminError('NOT_FOUND', 'No such refund request.');
+        }
+        if (refund.status === 'PENDING' || refund.status === 'PROCESSED') {
+          const reference = refund.rawReference as Record<string, unknown>;
+          return {
+            refund,
+            payment,
+            revoked: typeof reference?.['revocation_audit_id'] === 'number',
+          };
+        }
+        if (refund.status === 'REQUESTED') {
+          await tx
+            .update(paymentRefunds)
+            .set({
+              rawReference: sql`${paymentRefunds.rawReference} || ${JSON.stringify({
+                provider_refund_id: provider.id,
+                provider_payment_id: provider.paymentId,
+                provider_amount_paise: provider.amountPaise,
+                provider_status: provider.status,
+                expected_payment_id: planned.payment.providerPaymentId,
+                expected_amount_paise: planned.amount,
+                reconciliation_required: true,
+              })}::jsonb`,
+            })
+            .where(eq(paymentRefunds.id, refund.id));
+        }
+        return null;
+      });
+      if (settled) return settled;
+      throw new PaymentAdminError(
+        'REFUND_FAILED',
+        `Razorpay refund ${provider.id} does not match the requested payment or amount. Check its status and reconcile it before trying again.`,
+      );
     }
 
     // Phase 3 — record what Razorpay said, move the money on our side, audit. The amount is
     // the one decided under the lock; Razorpay's echo is kept beside it for reconciliation.
-    return this.applyRefund({
+    const outcome = await this.applyRefund({
       paymentId,
       refundId: planned.refund.id,
       providerRefundId: provider.id,
@@ -396,6 +474,10 @@ export class PaymentAdminService {
         provider_amount_paise: provider.amountPaise,
       },
     });
+    if (outcome.refund.status === 'FAILED') {
+      throw new PaymentAdminError('REFUND_FAILED', 'Razorpay reported the refund failed.');
+    }
+    return outcome;
   }
 
   /**
@@ -405,6 +487,7 @@ export class PaymentAdminService {
   async applyProviderRefund(input: {
     providerPaymentId: string;
     providerRefundId: string;
+    refundRequestId: string | null;
     amountPaise: number;
     providerStatus: string;
     eventId: string;
@@ -421,62 +504,164 @@ export class PaymentAdminService {
       .where(eq(paymentRefunds.providerRefundId, input.providerRefundId))
       .limit(1);
 
-    if (known && (known.status === 'PROCESSED' || known.status === 'FAILED')) {
-      return { paymentId: payment.id, applied: false };
-    }
     if (known) {
-      // Ours, still pending: only its status moves; the money was counted when we requested it.
-      const status = statusFrom(input.providerStatus);
-      await this.db
-        .update(paymentRefunds)
-        .set({
-          status,
-          processedAt: status === 'PENDING' ? null : new Date(),
-          rawReference: sql`${paymentRefunds.rawReference} || ${JSON.stringify({ webhook_event_id: input.eventId, provider_status: input.providerStatus })}::jsonb`,
+      // Lock in the same order as refund()/applyRefund(). A duplicate failed webhook must not
+      // reverse the amount twice, and the payment, refund and entitlement must move together.
+      return this.db.transaction(async (tx) => {
+        const lockedPayment = await lockPayment(tx, payment.id);
+        const [refund] = await tx
+          .select()
+          .from(paymentRefunds)
+          .where(eq(paymentRefunds.id, known.id))
+          .for('update')
+          .limit(1);
+        if (!refund || refund.paymentId !== lockedPayment.id) return null;
+        if (refund.amountPaise !== input.amountPaise) {
+          throw new Error('Refund webhook amount does not match its local request.');
+        }
+        if (
+          input.refundRequestId &&
+          REFUND_REQUEST_ID.test(input.refundRequestId) &&
+          input.refundRequestId !== refund.id
+        ) {
+          throw new Error('Refund webhook request id conflicts with its provider id.');
+        }
+        if (refund.status === 'PROCESSED' || refund.status === 'FAILED') {
+          return { paymentId: lockedPayment.id, applied: false };
+        }
+        const status = statusFrom(input.providerStatus);
+        // The receipt/notes carry our request id. With that exact match, the webhook can finish
+        // even if the API process died before phase 3. The payment lock holds through accounting.
+        if (
+          refund.status === 'REQUESTED' &&
+          input.refundRequestId === refund.id &&
+          refund.amountPaise === input.amountPaise
+        ) {
+          await this.applyRefund(
+            {
+              paymentId: lockedPayment.id,
+              refundId: refund.id,
+              providerRefundId: input.providerRefundId,
+              amountPaise: refund.amountPaise,
+              providerStatus: input.providerStatus,
+              actor: refund.requestedBy ? { userId: refund.requestedBy } : SYSTEM_ACTOR,
+              reason: refund.reason ?? 'Refund completed from Razorpay webhook',
+              raw: { source: 'webhook', webhook_event_id: input.eventId },
+            },
+            tx,
+          );
+          return { paymentId: lockedPayment.id, applied: true };
+        }
+        // Without a stable request id, wait for phase 3 to stamp/account the row. A 5xx makes
+        // Razorpay redeliver rather than permanently acknowledging an early terminal event.
+        if (refund.status === 'REQUESTED' && status !== 'FAILED') {
+          throw new Error('Refund is still being recorded; retry the webhook.');
+        }
+        await tx
+          .update(paymentRefunds)
+          .set({
+            status,
+            processedAt: status === 'PENDING' ? null : new Date(),
+            rawReference: sql`${paymentRefunds.rawReference} || ${JSON.stringify({ webhook_event_id: input.eventId, provider_status: input.providerStatus })}::jsonb`,
+          })
+          .where(eq(paymentRefunds.id, refund.id));
+        // Only PENDING rows were already counted by applyRefund. A REQUESTED row has not yet
+        // changed the payment and therefore has nothing to reverse.
+        if (status === 'FAILED' && refund.status === 'PENDING') {
+          await this.reverseRefund(tx, lockedPayment, refund);
+        }
+        return { paymentId: lockedPayment.id, applied: true };
+      });
+    }
+    // Another event can reach this branch before the first has inserted its refund. Serialise
+    // the provider-id claim on the payment lock and recheck while holding it, then stamp the
+    // provider id at insert so no second REQUESTED row is stranded by a uniqueness error.
+    const claimed = await this.db.transaction(async (tx) => {
+      await lockPayment(tx, payment.id);
+      const [nowKnown] = await tx
+        .select({ id: paymentRefunds.id })
+        .from(paymentRefunds)
+        .where(eq(paymentRefunds.providerRefundId, input.providerRefundId))
+        .limit(1);
+      if (nowKnown) return { kind: 'known' } as const;
+      if (input.refundRequestId && REFUND_REQUEST_ID.test(input.refundRequestId)) {
+        const [requested] = await tx
+          .select()
+          .from(paymentRefunds)
+          .where(eq(paymentRefunds.id, input.refundRequestId))
+          .for('update')
+          .limit(1);
+        if (requested) {
+          if (
+            requested.paymentId !== payment.id ||
+            requested.amountPaise !== input.amountPaise ||
+            requested.status !== 'REQUESTED' ||
+            requested.providerRefundId !== null
+          ) {
+            throw new Error('Refund webhook does not match its local request.');
+          }
+          await this.applyRefund(
+            {
+              paymentId: payment.id,
+              refundId: requested.id,
+              providerRefundId: input.providerRefundId,
+              amountPaise: requested.amountPaise,
+              providerStatus: input.providerStatus,
+              actor: requested.requestedBy ? { userId: requested.requestedBy } : SYSTEM_ACTOR,
+              reason: requested.reason ?? 'Refund completed from Razorpay webhook',
+              raw: { source: 'webhook', webhook_event_id: input.eventId },
+            },
+            tx,
+          );
+          return { kind: 'applied' } as const;
+        }
+      }
+      // One of ours between phases 2 and 3: the provider id is not stamped yet. Its event
+      // must be retried, or an API response of PENDING can hide a terminal transition.
+      const [inFlight] = await tx
+        .select({ id: paymentRefunds.id })
+        .from(paymentRefunds)
+        .where(
+          and(
+            eq(paymentRefunds.paymentId, payment.id),
+            eq(paymentRefunds.status, 'REQUESTED'),
+            eq(paymentRefunds.amountPaise, input.amountPaise),
+          ),
+        )
+        .limit(1);
+      if (inFlight) return { kind: 'in_flight' } as const;
+      if (statusFrom(input.providerStatus) === 'FAILED') return { kind: 'failed' } as const;
+      const [row] = await tx
+        .insert(paymentRefunds)
+        .values({
+          paymentId: payment.id,
+          providerRefundId: input.providerRefundId,
+          amountPaise: input.amountPaise,
+          status: 'REQUESTED',
+          reason: 'Refund made at Razorpay',
+          requestedBy: null,
         })
-        .where(eq(paymentRefunds.id, known.id));
-      if (status === 'FAILED') await this.reverseRefund(payment.id, known.id, known.amountPaise);
-      return { paymentId: payment.id, applied: true };
-    }
-    if (statusFrom(input.providerStatus) === 'FAILED') {
-      return { paymentId: payment.id, applied: false };
-    }
-    // One of ours between phases 2 and 3 — Razorpay answered the API call and fired the webhook
-    // before the row was stamped with its id. Phase 3 will finish it; counting it here too would
-    // deduct the amount twice.
-    const [inFlight] = await this.db
-      .select({ id: paymentRefunds.id })
-      .from(paymentRefunds)
-      .where(
-        and(
-          eq(paymentRefunds.paymentId, payment.id),
-          eq(paymentRefunds.status, 'REQUESTED'),
-          eq(paymentRefunds.amountPaise, input.amountPaise),
-        ),
-      )
-      .limit(1);
-    if (inFlight) return { paymentId: payment.id, applied: false };
-
-    const [row] = await this.db
-      .insert(paymentRefunds)
-      .values({
-        paymentId: payment.id,
-        amountPaise: input.amountPaise,
-        status: 'REQUESTED',
-        reason: 'Refund made at Razorpay',
-        requestedBy: null,
-      })
-      .returning();
-    await this.applyRefund({
-      paymentId: payment.id,
-      refundId: row!.id,
-      providerRefundId: input.providerRefundId,
-      amountPaise: input.amountPaise,
-      providerStatus: input.providerStatus,
-      actor: SYSTEM_ACTOR,
-      reason: 'Refund made at Razorpay (webhook)',
-      raw: { source: 'webhook', webhook_event_id: input.eventId },
+        .returning({ id: paymentRefunds.id });
+      await this.applyRefund(
+        {
+          paymentId: payment.id,
+          refundId: row!.id,
+          providerRefundId: input.providerRefundId,
+          amountPaise: input.amountPaise,
+          providerStatus: input.providerStatus,
+          actor: SYSTEM_ACTOR,
+          reason: 'Refund made at Razorpay (webhook)',
+          raw: { source: 'webhook', webhook_event_id: input.eventId },
+        },
+        tx,
+      );
+      return { kind: 'applied' } as const;
     });
+    if (claimed.kind === 'known') return this.applyProviderRefund(input);
+    if (claimed.kind === 'in_flight') {
+      throw new Error('Refund is still being recorded; retry the webhook.');
+    }
+    if (claimed.kind === 'failed') return { paymentId: payment.id, applied: false };
     return { paymentId: payment.id, applied: true };
   }
 
@@ -598,19 +783,57 @@ export class PaymentAdminService {
       .where(eq(payments.id, paymentId));
   }
 
-  private async applyRefund(input: {
-    paymentId: string;
-    refundId: string;
-    providerRefundId: string;
-    amountPaise: number;
-    providerStatus: string;
-    actor: AdminActor;
-    reason: string;
-    raw: Record<string, unknown>;
-  }): Promise<RefundOutcome> {
-    return this.db.transaction(async (tx) => {
+  private async applyRefund(
+    input: {
+      paymentId: string;
+      refundId: string;
+      providerRefundId: string;
+      amountPaise: number;
+      providerStatus: string;
+      actor: AdminActor;
+      reason: string;
+      raw: Record<string, unknown>;
+    },
+    db: Executor = this.db,
+  ): Promise<RefundOutcome> {
+    return db.transaction(async (tx) => {
       const payment = await lockPayment(tx, input.paymentId);
+      const [requested] = await tx
+        .select()
+        .from(paymentRefunds)
+        .where(eq(paymentRefunds.id, input.refundId))
+        .for('update')
+        .limit(1);
+      if (!requested || requested.paymentId !== payment.id) {
+        throw new PaymentAdminError('NOT_FOUND', 'No such refund request.');
+      }
+      if (requested.status === 'FAILED') {
+        throw new PaymentAdminError('REFUND_FAILED', 'Razorpay reported the refund failed.');
+      }
+      if (requested.status !== 'REQUESTED') {
+        // A concurrent completion already accounted for this refund.
+        const reference = requested.rawReference as Record<string, unknown>;
+        return {
+          refund: requested,
+          payment,
+          revoked: typeof reference?.['revocation_audit_id'] === 'number',
+        };
+      }
       const status = statusFrom(input.providerStatus);
+      // Razorpay can return a terminal failure in a successful HTTP response. No money moved.
+      if (status === 'FAILED') {
+        const [failed] = await tx
+          .update(paymentRefunds)
+          .set({
+            providerRefundId: input.providerRefundId,
+            status,
+            processedAt: new Date(),
+            rawReference: input.raw,
+          })
+          .where(eq(paymentRefunds.id, input.refundId))
+          .returning();
+        return { refund: failed!, payment, revoked: false };
+      }
       const [refund] = await tx
         .update(paymentRefunds)
         .set({
@@ -621,6 +844,7 @@ export class PaymentAdminService {
         })
         .where(eq(paymentRefunds.id, input.refundId))
         .returning();
+      let completedRefund = refund!;
 
       const refundedPaise = payment.refundedPaise + input.amountPaise;
       const full = refundedPaise >= payment.amountPaise;
@@ -638,18 +862,41 @@ export class PaymentAdminService {
       let revoked = false;
       if (full) {
         const [subscription] = await tx
-          .select({ entitlementNote: subscriptions.entitlementNote, status: subscriptions.status })
+          .select()
           .from(subscriptions)
           .where(eq(subscriptions.businessId, payment.businessId))
+          .for('update')
           .limit(1);
         if (
           subscription?.entitlementNote === `payment:${payment.id}` &&
-          subscription.status !== 'CANCELLED'
+          subscription.entitlementSource === 'PAYMENT' &&
+          (subscription.status === 'PRO_ACTIVE' || subscription.status === 'PAST_DUE')
         ) {
           await new SubscriptionService(tx).revokePro(payment.businessId, {
             actor: input.actor,
             reason: `Full refund of payment ${payment.id}: ${input.reason}`,
           });
+          const [cancellationAudit] = await tx
+            .select({ id: adminAuditLogs.id })
+            .from(adminAuditLogs)
+            .where(
+              and(
+                eq(adminAuditLogs.action, 'business.entitlement.adjust'),
+                eq(adminAuditLogs.targetType, 'subscription'),
+                eq(adminAuditLogs.targetId, subscription.id),
+              ),
+            )
+            .orderBy(desc(adminAuditLogs.id))
+            .limit(1);
+          if (!cancellationAudit) throw new Error('Missing full-refund entitlement audit');
+          const [withAudit] = await tx
+            .update(paymentRefunds)
+            .set({
+              rawReference: sql`${paymentRefunds.rawReference} || ${JSON.stringify({ revocation_audit_id: cancellationAudit.id })}::jsonb`,
+            })
+            .where(eq(paymentRefunds.id, input.refundId))
+            .returning();
+          completedRefund = withAudit!;
           revoked = true;
         }
       }
@@ -673,36 +920,153 @@ export class PaymentAdminService {
           revoked,
         },
       });
-      return { refund: refund!, payment: after!, revoked };
+      return { refund: completedRefund, payment: after!, revoked };
     });
   }
 
   /** A refund Razorpay later failed: the money never left, so the running total comes back. */
-  private async reverseRefund(paymentId: string, refundId: string, amountPaise: number) {
-    await this.db.transaction(async (tx) => {
-      const payment = await lockPayment(tx, paymentId);
-      const refundedPaise = Math.max(0, payment.refundedPaise - amountPaise);
-      await tx
-        .update(payments)
-        .set({
-          refundedPaise,
-          status: payment.status === 'REFUNDED' ? 'CAPTURED' : payment.status,
-          updatedAt: new Date(),
-        })
-        .where(eq(payments.id, paymentId));
-      await new AuditWriter(tx).record({
-        actorUserId: null,
-        actorType: 'SYSTEM',
-        ipHash: null,
-        businessId: payment.businessId,
-        action: 'payment.refund',
-        targetType: 'payment',
-        targetId: paymentId,
-        reason: `Razorpay reported refund ${refundId} failed; amount restored`,
-        before: { refunded_paise: payment.refundedPaise, status: payment.status },
-        after: { refunded_paise: refundedPaise },
-      });
+  private async reverseRefund(tx: Executor, payment: Payment, refund: PaymentRefund) {
+    const refundedPaise = payment.refundedPaise - refund.amountPaise;
+    if (refundedPaise < 0) throw new Error('Pending refund exceeds the payment refund total');
+    const [after] = await tx
+      .update(payments)
+      .set({
+        refundedPaise,
+        refundedAt: refundedPaise === 0 ? null : payment.refundedAt,
+        status: payment.status === 'REFUNDED' ? 'CAPTURED' : payment.status,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.id, payment.id))
+      .returning();
+
+    const restored =
+      payment.status === 'REFUNDED' && (await this.restoreRefundedEntitlement(tx, payment, refund));
+    await new AuditWriter(tx).record({
+      actorUserId: null,
+      actorType: 'SYSTEM',
+      ipHash: null,
+      businessId: payment.businessId,
+      action: 'payment.refund',
+      targetType: 'payment',
+      targetId: payment.id,
+      reason: `Razorpay reported refund ${refund.id} failed; amount restored`,
+      before: { refunded_paise: payment.refundedPaise, status: payment.status },
+      after: { refunded_paise: refundedPaise, status: after!.status, restored },
     });
+  }
+
+  private async restoreRefundedEntitlement(
+    tx: Executor,
+    payment: Payment,
+    refund: PaymentRefund,
+  ): Promise<boolean> {
+    const [subscription] = await tx
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.businessId, payment.businessId))
+      .for('update')
+      .limit(1);
+    if (
+      !subscription ||
+      subscription.status !== 'CANCELLED' ||
+      subscription.entitlementSource !== 'NONE' ||
+      subscription.entitlementNote !== null
+    ) {
+      return false;
+    }
+    const [cancellation] = await tx
+      .select({
+        id: adminAuditLogs.id,
+        reason: adminAuditLogs.reason,
+        beforeState: adminAuditLogs.beforeState,
+        afterState: adminAuditLogs.afterState,
+      })
+      .from(adminAuditLogs)
+      .where(
+        and(
+          eq(adminAuditLogs.action, 'business.entitlement.adjust'),
+          eq(adminAuditLogs.targetType, 'subscription'),
+          eq(adminAuditLogs.targetId, subscription.id),
+        ),
+      )
+      .orderBy(desc(adminAuditLogs.id))
+      .limit(1);
+    if (!cancellation) return false;
+
+    const reference = refund.rawReference as Record<string, unknown>;
+    const recordedAuditId = reference?.['revocation_audit_id'];
+    if (recordedAuditId !== undefined) {
+      if (recordedAuditId !== cancellation.id) return false;
+    } else {
+      // Pending refunds created before revocation_audit_id was recorded need the immutable
+      // payment audit to tie this exact refund to the cancellation.
+      if (!cancellation.reason?.startsWith(`Full refund of payment ${payment.id}:`)) return false;
+    }
+    const [refundAudit] = await tx
+      .select({ afterState: adminAuditLogs.afterState })
+      .from(adminAuditLogs)
+      .where(
+        and(
+          eq(adminAuditLogs.action, 'payment.refund'),
+          eq(adminAuditLogs.targetType, 'payment'),
+          eq(adminAuditLogs.targetId, payment.id),
+          sql`${adminAuditLogs.afterState}->>'refund_id' = ${refund.id}`,
+        ),
+      )
+      .limit(1);
+    const refundAfter = refundAudit?.afterState as Record<string, unknown> | null | undefined;
+    if (refundAfter?.['revoked'] !== true) return false;
+
+    const before = cancellation.beforeState as Record<string, unknown> | null;
+    const after = cancellation.afterState as Record<string, unknown> | null;
+    if (
+      before?.['entitlement_source'] !== 'PAYMENT' ||
+      before['entitlement_note'] !== `payment:${payment.id}` ||
+      (before['status'] !== 'PRO_ACTIVE' && before['status'] !== 'PAST_DUE') ||
+      after?.['status'] !== 'CANCELLED' ||
+      after['entitlement_source'] !== 'NONE' ||
+      after['entitlement_note'] !== null ||
+      before['starts_at'] !== subscription.startsAt?.toISOString() ||
+      before['expires_at'] !== subscription.expiresAt?.toISOString()
+    ) {
+      return false;
+    }
+    const priorStatus = before['status'];
+    const [restored] = await tx
+      .update(subscriptions)
+      .set({
+        status: priorStatus,
+        entitlementSource: 'PAYMENT',
+        entitlementGrantedBy: null,
+        entitlementNote: `payment:${payment.id}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(subscriptions.id, subscription.id))
+      .returning();
+    await new AuditWriter(tx).record({
+      actorUserId: null,
+      actorType: 'SYSTEM',
+      businessId: payment.businessId,
+      action: 'business.entitlement.adjust',
+      targetType: 'subscription',
+      targetId: subscription.id,
+      reason: `Refund ${refund.id} failed; restored the paid period`,
+      before: {
+        status: subscription.status,
+        starts_at: subscription.startsAt,
+        expires_at: subscription.expiresAt,
+        entitlement_source: subscription.entitlementSource,
+        entitlement_note: subscription.entitlementNote,
+      },
+      after: {
+        status: restored!.status,
+        starts_at: restored!.startsAt,
+        expires_at: restored!.expiresAt,
+        entitlement_source: restored!.entitlementSource,
+        entitlement_note: restored!.entitlementNote,
+      },
+    });
+    return true;
   }
 
   private async lastWebhookFor(paymentIds: string[]) {

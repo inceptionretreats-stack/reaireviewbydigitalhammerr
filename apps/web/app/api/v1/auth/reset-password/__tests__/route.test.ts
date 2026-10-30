@@ -8,10 +8,12 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   claim: vi.fn(),
   passwordUpdate: vi.fn(),
+  tokenSweep: vi.fn(),
+  lockUser: vi.fn(),
   revoke: vi.fn(),
   clearCookie: vi.fn(),
   recordActivity: vi.fn(),
-  tx: { update: vi.fn() },
+  tx: { select: vi.fn(), update: vi.fn() },
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -52,18 +54,27 @@ function request(): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.lookup.mockResolvedValue([{ id: 'reset-token-id' }]);
+  mocks.lookup.mockResolvedValue([{ id: 'reset-token-id', userId: 'owner-id' }]);
   mocks.hash.mockResolvedValue('new-password-hash');
   mocks.claim.mockResolvedValue([{ userId: 'owner-id' }]);
   mocks.passwordUpdate.mockResolvedValue(undefined);
+  mocks.tokenSweep.mockResolvedValue(undefined);
+  mocks.lockUser.mockResolvedValue([{ id: 'owner-id' }]);
   mocks.revoke.mockResolvedValue(2);
   mocks.clearCookie.mockResolvedValue(undefined);
   mocks.transaction.mockImplementation(async (work: (tx: unknown) => Promise<unknown>) =>
     work(mocks.tx),
   );
+  mocks.tx.select.mockImplementation(() => ({
+    from: () => ({ where: () => ({ for: () => ({ limit: mocks.lockUser }) }) }),
+  }));
+  let tokenUpdates = 0;
   mocks.tx.update.mockImplementation((table) => {
     if (table === passwordResetTokens) {
-      return { set: () => ({ where: () => ({ returning: mocks.claim }) }) };
+      tokenUpdates += 1;
+      return tokenUpdates === 1
+        ? { set: () => ({ where: () => ({ returning: mocks.claim }) }) }
+        : { set: () => ({ where: mocks.tokenSweep }) };
     }
     if (table === users) return { set: () => ({ where: mocks.passwordUpdate }) };
     throw new Error('Unexpected table');
@@ -83,10 +94,19 @@ describe('password reset security boundary', () => {
     expect(mocks.hash.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.transaction.mock.invocationCallOrder[0]!,
     );
+    expect(mocks.tx.select).toHaveBeenCalledOnce();
+    expect(mocks.lockUser.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.claim.mock.invocationCallOrder[0]!,
+    );
     expect(mocks.tx.update).toHaveBeenNthCalledWith(1, passwordResetTokens);
     expect(mocks.tx.update).toHaveBeenNthCalledWith(2, users);
+    expect(mocks.tx.update).toHaveBeenNthCalledWith(3, passwordResetTokens);
+    expect(mocks.tokenSweep).toHaveBeenCalledOnce();
     expect(mocks.revoke).toHaveBeenCalledWith(mocks.tx, 'owner-id', 'PASSWORD_RESET');
     expect(mocks.passwordUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.tokenSweep.mock.invocationCallOrder[0]!,
+    );
+    expect(mocks.tokenSweep.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.revoke.mock.invocationCallOrder[0]!,
     );
     expect(mocks.revoke.mock.invocationCallOrder[0]).toBeLessThan(
@@ -111,6 +131,34 @@ describe('password reset security boundary', () => {
     expect(mocks.hash).toHaveBeenCalledOnce();
     expect(mocks.tx.update).toHaveBeenCalledOnce();
     expect(mocks.passwordUpdate).not.toHaveBeenCalled();
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.clearCookie).not.toHaveBeenCalled();
+  });
+
+  it('does not claim a token if the account disappeared before the row lock', async () => {
+    mocks.lockUser.mockResolvedValueOnce([]);
+
+    expect((await POST(request())).status).toBe(422);
+    expect(mocks.claim).not.toHaveBeenCalled();
+    expect(mocks.passwordUpdate).not.toHaveBeenCalled();
+  });
+
+  it('rolls the credential change back if sibling-token invalidation fails', async () => {
+    const failure = new Error('reset token sweep failed');
+    mocks.tokenSweep.mockRejectedValueOnce(failure);
+    let transactionRejected = false;
+    mocks.transaction.mockImplementationOnce(async (work: (tx: unknown) => Promise<unknown>) => {
+      try {
+        return await work(mocks.tx);
+      } catch (error) {
+        transactionRejected = true;
+        expect(error).toBe(failure);
+        throw error;
+      }
+    });
+
+    expect((await POST(request())).status).toBe(500);
+    expect(transactionRejected).toBe(true);
     expect(mocks.revoke).not.toHaveBeenCalled();
     expect(mocks.clearCookie).not.toHaveBeenCalled();
   });

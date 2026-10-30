@@ -5,6 +5,7 @@ import { loginRequest } from '@ai-review/contracts';
 import {
   ADMIN_SESSION_TTL_MS,
   MFA_PENDING_TTL_MS,
+  SessionService,
   isAdminRole,
   privacyHash,
 } from '@ai-review/core';
@@ -13,16 +14,10 @@ import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { verifyCsrf } from '@/lib/csrf';
 import { passwordHasher } from '@/lib/auth-helpers';
-import {
-  adminMfaRequired,
-  clearSessionCookie,
-  getSession,
-  nextPathAfterLogin,
-  sessionService,
-  setSessionCookie,
-} from '@/lib/session';
+import { adminMfaRequired, getSession, nextPathAfterLogin, setSessionCookie } from '@/lib/session';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { recordActivity } from '@/lib/activity';
+import { POST as logout } from '../logout/route';
 
 /**
  * POST /api/v1/auth/login — AUTH-02.
@@ -77,11 +72,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const [account] = await database
     .select({
       id: users.id,
-      role: users.role,
       passwordHash: users.passwordHash,
       lockedUntil: users.lockedUntil,
       disabledAt: users.disabledAt,
-      mfaEnabledAt: users.mfaEnabledAt,
     })
     .from(users)
     .where(and(eq(users.email, email), isNull(users.deletedAt)))
@@ -96,7 +89,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const locked = account?.lockedUntil != null && account.lockedUntil.getTime() > Date.now();
   const disabled = account?.disabledAt != null;
 
-  if (!account || !passwordMatches || locked || disabled) {
+  if (!account || !account.passwordHash || !passwordMatches || locked || disabled) {
     const failure = await limiter.loginFailure(subject);
 
     if (account) {
@@ -132,61 +125,90 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // AC-002: a session already present on this browser must not survive authentication.
   const existing = await getSession();
-  if (existing) {
-    await sessionService().revoke(existing.sessionId, 'REPLACED_BY_LOGIN');
+  const mfaRequired = adminMfaRequired();
+  const authenticated = await database.transaction(async (tx) => {
+    // Password changes lock this user row before sweeping sessions. Holding the same lock while
+    // rechecking the credential and issuing a session means either this login commits first and
+    // is swept, or the password change commits first and this stale credential is rejected.
+    const [current] = await tx
+      .select({
+        id: users.id,
+        role: users.role,
+        passwordHash: users.passwordHash,
+        lockedUntil: users.lockedUntil,
+        disabledAt: users.disabledAt,
+        mfaEnabledAt: users.mfaEnabledAt,
+      })
+      .from(users)
+      .where(and(eq(users.id, account.id), eq(users.email, email), isNull(users.deletedAt)))
+      .for('update')
+      .limit(1);
+
+    if (
+      !current ||
+      !current.passwordHash ||
+      current.passwordHash !== account.passwordHash ||
+      current.disabledAt ||
+      (current.lockedUntil && current.lockedUntil.getTime() > Date.now())
+    ) {
+      return null;
+    }
+
+    const service = new SessionService(tx);
+    if (existing) await service.revoke(existing.sessionId, 'REPLACED_BY_LOGIN');
+
+    const session = await service.create({
+      userId: current.id,
+      userAgent: request.headers.get('user-agent'),
+      // Persist only the privacy-preserving hash, never the client address itself.
+      ipHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
+      rememberMe: rememberMe ?? false,
+      // Admin sessions are pending for MFA or bounded to twelve hours when MFA is off.
+      ...(isAdminRole(current.role)
+        ? { ttlMs: mfaRequired ? MFA_PENDING_TTL_MS : ADMIN_SESSION_TTL_MS }
+        : {}),
+    });
+
+    await tx
+      .update(users)
+      .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() })
+      .where(eq(users.id, current.id));
+
+    return { session, role: current.role, mfaEnabledAt: current.mfaEnabledAt };
+  });
+
+  if (!authenticated) {
+    return apiError('AUTH_INVALID_CREDENTIALS', 'That email or password is not correct.');
   }
 
   await limiter.loginSuccess(subject);
-
-  const session = await sessionService().create({
-    userId: account.id,
-    userAgent: request.headers.get('user-agent'),
-    /*
-     * The hash, never the address. `sessions.ip_hash` is char(64) — sized for a SHA-256 digest —
-     * and 13_Security_Privacy_Compliance.md requires privacy-preserving hashes rather than a raw
-     * IP kept for the 30-day life of a session row. Same function the rate limiter uses, so one
-     * address produces one value across the system.
-     */
-    ipHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
-    rememberMe: rememberMe ?? false,
-    // A pending ten-minute session only while a code is still owed; with the switch off the
-    // admin gets the twelve-hour session straight away.
-    ...(isAdminRole(account.role)
-      ? { ttlMs: adminMfaRequired() ? MFA_PENDING_TTL_MS : ADMIN_SESSION_TTL_MS }
-      : {}),
-  });
-
-  await setSessionCookie(session.token, session.expiresAt);
-
-  await database
-    .update(users)
-    .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() })
-    .where(eq(users.id, account.id));
+  await setSessionCookie(authenticated.session.token, authenticated.session.expiresAt);
 
   recordActivity(
     request,
     { userId: account.id },
-    { action: 'auth.login', metadata: { role: account.role, remember_me: rememberMe ?? false } },
+    {
+      action: 'auth.login',
+      metadata: { role: authenticated.role, remember_me: rememberMe ?? false },
+    },
   );
-  const next = nextPathAfterLogin({
-    role: account.role,
-    mfaEnabledAt: account.mfaEnabledAt,
-    mfaVerifiedAt: null,
-  });
+  const next = nextPathAfterLogin(
+    { role: authenticated.role, mfaEnabledAt: authenticated.mfaEnabledAt, mfaVerifiedAt: null },
+    mfaRequired,
+  );
   return NextResponse.json({
     next,
     mfa:
-      !isAdminRole(account.role) || !adminMfaRequired()
+      !isAdminRole(authenticated.role) || !mfaRequired
         ? null
-        : account.mfaEnabledAt
+        : authenticated.mfaEnabledAt
           ? 'challenge'
           : 'enrol',
   });
 }
 
-export async function DELETE(): Promise<NextResponse> {
-  await clearSessionCookie();
-  return new NextResponse(null, { status: 204 });
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
+  return logout(request);
 }
 
 /**

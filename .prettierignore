@@ -5,6 +5,9 @@ coverage/
 pnpm-lock.yaml
 drizzle/
 
+# Vendored agent skills are maintained outside this repository.
+.agents/skills/
+
 # The delivered spec pack is a frozen contract — never reformat it.
 docs/spec/
 

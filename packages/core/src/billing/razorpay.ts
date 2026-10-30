@@ -178,8 +178,12 @@ export class RazorpayClient {
       const text = await response.text();
       if (!response.ok) {
         // The body can quote our request; only the status and Razorpay's error code go on.
+        // A 408/429 may arrive after the provider accepted a refund. Keep the local request
+        // open for webhook reconciliation instead of treating those responses as rejection.
         throw new RazorpayError(
-          response.status >= 500 ? 'UPSTREAM' : 'REJECTED',
+          response.status === 408 || response.status === 429 || response.status >= 500
+            ? 'UPSTREAM'
+            : 'REJECTED',
           `razorpay ${path.split('/')[1] ?? 'api'} api answered ${response.status} (${errorCode(text)})`,
         );
       }
@@ -286,6 +290,8 @@ export interface RazorpayWebhookEvent {
   errorDescription: string | null;
   /** On refund.* events (AMENDMENT-029). */
   refundId: string | null;
+  /** Our payment_refunds.id, echoed in the refund receipt or notes when we initiated it. */
+  refundRequestId: string | null;
   refundAmountPaise: number | null;
   refundStatus: string | null;
   /** The payment's running refunded total, when the payment entity carries it. */
@@ -312,6 +318,11 @@ export function parseWebhookEvent(rawBody: string): RazorpayWebhookEvent | null 
   const payment = entity('payment');
   const order = entity('order');
   const refund = entity('refund');
+  const refundNotes = refund?.['notes'];
+  const notes =
+    typeof refundNotes === 'object' && refundNotes !== null && !Array.isArray(refundNotes)
+      ? (refundNotes as Record<string, unknown>)
+      : null;
   const str = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v : null);
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   return {
@@ -323,6 +334,7 @@ export function parseWebhookEvent(rawBody: string): RazorpayWebhookEvent | null 
     errorCode: str(payment?.['error_code']),
     errorDescription: str(payment?.['error_description']),
     refundId: str(refund?.['id']),
+    refundRequestId: str(notes?.['refund_id']) ?? str(refund?.['receipt']),
     refundAmountPaise: num(refund?.['amount']),
     refundStatus: str(refund?.['status']),
     amountRefundedPaise: num(payment?.['amount_refunded']),

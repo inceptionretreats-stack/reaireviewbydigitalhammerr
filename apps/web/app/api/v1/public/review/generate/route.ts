@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
+import { and, eq } from 'drizzle-orm';
 import { aiGenerations, analyticsEvents } from '@ai-review/db';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
@@ -18,19 +19,21 @@ import {
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
 import { validateSelectedServices } from '@/lib/customer-services';
 
-const requestSchema = z.object({
-  slug: z.string().min(1).max(160).optional(),
-  qr_code: z.string().min(1).max(160).optional(),
-  previous_generation_id: z.uuid().optional(),
-  selected_services: z.unknown().optional(),
-});
+const requestSchema = z
+  .strictObject({
+    slug: z.string().min(1).max(160).optional(),
+    qr_code: z.string().min(1).max(160).optional(),
+    previous_generation_id: z.uuid().optional(),
+    selected_services: z.unknown().optional(),
+  })
+  .refine(({ slug, qr_code }) => Boolean(slug || qr_code));
 
 /**
  * POST /api/v1/public/review/generate — REV-01 and Flow D.
  *
  * The ordering carries the acceptance criteria: quota is reserved inside the generator before
- * the provider call (AC-013), released on failure (AC-014), and the quality gate's internal
- * retry sits inside that one reservation so two provider calls remain one customer generation.
+ * the provider call (AC-013), released on generation or draft-save failure (AC-014), and the
+ * quality gate's internal retry sits inside that one reservation.
  *
  * The tenant is resolved server-side from the public slug or QR code. It is never taken from
  * the request body — doing so let a caller pass any business id and consume that business's
@@ -106,52 +109,61 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const selection = validateSelectedServices(body.selected_services, context.business.services);
   if (!selection.ok) return apiError('VALIDATION_FAILED', selection.message);
 
-  // AC-032, and before anything expensive: a denied request must not reach the provider, and
-  // must not consume the free quota either. Four dimensions in one atomic decision — session
-  // burst, session hourly, adaptive IP prefix, and paid abuse observation for Pro tenants.
-  if (session) {
-    const decision = await rateLimiter().publicGeneration({
+  // AC-032, before quota/provider work: session-bearing visitors have burst, hourly and
+  // adaptive network limits. Cookie-free visitors have no stable session identity, but still
+  // share the privacy-hashed network window and any business-level controls. Blocking cookies
+  // must not become a way to bypass the limiter or prevent a genuine customer from drafting.
+  const limitSubject = {
+    businessId,
+    ip: clientIp(request),
+    pepper: env().HASH_PEPPER,
+    plan: await loadPlan(database, businessId),
+    adminThrottle: controls.throttle,
+  };
+  const decision = session
+    ? await rateLimiter().publicGeneration({
+        ...limitSubject,
+        anonymousSessionId: session.sessionId,
+      })
+    : await rateLimiter().cookieFreeGeneration(limitSubject);
+  if (isDenied(decision)) {
+    await recordEvent(database, {
       businessId,
-      anonymousSessionId: session.sessionId,
-      ip: clientIp(request),
-      pepper: env().HASH_PEPPER,
-      plan: await loadPlan(database, businessId),
-      adminThrottle: controls.throttle,
+      sessionId: session?.sessionId ?? null,
+      qrCodeId,
+      name: 'ai_generate_failure',
+      properties: { error_class: decision.code, provider: 'rate_limit' },
     });
 
-    if (isDenied(decision)) {
-      await recordEvent(database, {
-        businessId,
-        sessionId: session.sessionId,
-        qrCodeId,
-        name: 'ai_generate_failure',
-        properties: { error_class: decision.code, provider: 'rate_limit' },
-      });
-
-      return apiError(
-        decision.code,
-        'You have requested several drafts already. Please wait a moment and try again.',
-        { retryAfterSeconds: decision.retryAfterSeconds },
-      );
-    }
+    return apiError(
+      decision.code,
+      'You have requested several drafts already. Please wait a moment and try again.',
+      { retryAfterSeconds: decision.retryAfterSeconds },
+    );
   }
 
-  // AMENDMENT-030: the per-business ceiling holds for a caller with no anonymous session too
-  // (the check above is keyed by session and skipped without one).
-  if (!session && controls.throttle !== undefined) {
-    const decision = await rateLimiter().businessThrottle(businessId, controls.throttle);
-    if (isDenied(decision)) {
-      return apiError(
-        decision.code,
-        'You have requested several drafts already. Please wait a moment and try again.',
-        { retryAfterSeconds: decision.retryAfterSeconds },
-      );
-    }
+  // A parent is only meaningful for this browser's existing draft. Match all three identifiers
+  // after rate limiting but before reserving quota or calling the provider; the FK checks only id.
+  if (body.previous_generation_id) {
+    if (!session) return apiError('VALIDATION_FAILED', 'Invalid previous draft.');
+    const [parent] = await database
+      .select({ id: aiGenerations.id })
+      .from(aiGenerations)
+      .where(
+        and(
+          eq(aiGenerations.id, body.previous_generation_id),
+          eq(aiGenerations.businessId, businessId),
+          eq(aiGenerations.anonymousSessionId, session.sessionId),
+        ),
+      )
+      .limit(1);
+    if (!parent) return apiError('VALIDATION_FAILED', 'Invalid previous draft.');
   }
 
   const previousDrafts = session ? await loadPreviousDrafts(database, session.sessionId) : [];
   const provider = selectProvider(providerKeys());
   const generator = buildGenerator(database, provider);
+  let generationId: string | null = null;
 
   const outcome = await generator.generate({
     businessId,
@@ -168,6 +180,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
     promptVersion: context.promptVersion,
     timeoutMs: env().AI_REQUEST_TIMEOUT_MS,
+    persistDraft: async (draft) => {
+      const [row] = await database
+        .insert(aiGenerations)
+        .values({
+          businessId,
+          anonymousSessionId: session?.sessionId ?? null,
+          qrCodeId,
+          reviewModeId: context.reviewModeId,
+          parentGenerationId: body.previous_generation_id ?? null,
+          promptVersionId: draft.promptVersionId,
+          model: draft.model,
+          generationNumber: previousDrafts.length + 1,
+          reviewText: draft.reviewText,
+          inputTokens: draft.inputTokens,
+          outputTokens: draft.outputTokens,
+          providerRequestId: draft.providerRequestId,
+          similarityScore: draft.similarityScore.toFixed(4),
+          countedTowardQuota: draft.countedTowardQuota,
+        })
+        .returning({ id: aiGenerations.id });
+
+      if (!row) throw new Error('Draft insert returned no row');
+      generationId = row.id;
+    },
   });
 
   if (!outcome.ok) {
@@ -200,28 +236,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { draft } = outcome;
-
-  const [row] = await database
-    .insert(aiGenerations)
-    .values({
-      businessId,
-      anonymousSessionId: session?.sessionId ?? null,
-      qrCodeId,
-      reviewModeId: context.reviewModeId,
-      parentGenerationId: body.previous_generation_id ?? null,
-      promptVersionId: draft.promptVersionId,
-      model: draft.model,
-      generationNumber: previousDrafts.length + 1,
-      reviewText: draft.reviewText,
-      inputTokens: draft.inputTokens,
-      outputTokens: draft.outputTokens,
-      providerRequestId: draft.providerRequestId,
-      similarityScore: draft.similarityScore.toFixed(4),
-      countedTowardQuota: draft.countedTowardQuota,
-    })
-    .returning({ id: aiGenerations.id });
-
-  if (!row) return apiError('INTERNAL_ERROR', 'Could not save your draft. Please try again.');
+  if (!generationId)
+    return apiError('INTERNAL_ERROR', 'Could not save your draft. Please try again.');
 
   await recordEvent(database, {
     businessId,
@@ -229,7 +245,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     qrCodeId,
     name: 'ai_generate_success',
     properties: {
-      generation_id: row.id,
+      generation_id: generationId,
       model: draft.model,
       latency_ms: draft.latencyMs,
       quota_type: draft.quotaType,
@@ -238,7 +254,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   });
 
   return NextResponse.json({
-    generation_id: row.id,
+    generation_id: generationId,
     review_text: draft.reviewText,
     prompt_version: context.promptVersion.version,
     selected_services: selection.services,
@@ -261,6 +277,8 @@ function failureResponse(code: string): NextResponse {
         'AI_OUTPUT_REJECTED',
         'We could not produce a suitable draft. Please try again.',
       );
+    case 'DRAFT_PERSISTENCE_FAILED':
+      return apiError('INTERNAL_ERROR', 'Could not save your draft. Please try again.');
     case 'BUSINESS_NOT_ACTIVE':
     case 'SUBSCRIPTION_NOT_ACTIVE':
       return apiError('BUSINESS_NOT_ACTIVE', 'This review page is not available.');

@@ -87,7 +87,10 @@ describe('vendor Google sign-in', () => {
   });
 
   it('requires password proof for an existing password account', async () => {
-    mocks.queryResults = [[], [{ id: 'user-1', role: 'BUSINESS_OWNER', passwordHash: 'hash', disabledAt: null }]];
+    mocks.queryResults = [
+      [],
+      [{ id: 'user-1', role: 'BUSINESS_OWNER', passwordHash: 'hash', disabledAt: null }],
+    ];
     const response = await POST(request());
     expect(await response.json()).toEqual({ next: '/signup/google' });
     expect(mocks.setPending).toHaveBeenCalledWith(expect.objectContaining({ flow: 'link' }));
@@ -95,13 +98,17 @@ describe('vendor Google sign-in', () => {
   });
 
   it('signs in a previously linked vendor by Google subject', async () => {
-    mocks.queryResults = [[{
-      userId: 'user-1',
-      role: 'BUSINESS_OWNER',
-      disabledAt: null,
-      deletedAt: null,
-      lockedUntil: null,
-    }]];
+    mocks.queryResults = [
+      [
+        {
+          userId: 'user-1',
+          role: 'BUSINESS_OWNER',
+          disabledAt: null,
+          deletedAt: null,
+          lockedUntil: null,
+        },
+      ],
+    ];
     const response = await POST(request());
     expect(await response.json()).toEqual({ next: '/app' });
     expect(mocks.signIn).toHaveBeenCalledWith(expect.anything(), 'user-1');
@@ -109,13 +116,17 @@ describe('vendor Google sign-in', () => {
   });
 
   it('does not allow an admin to bypass password/MFA through Google', async () => {
-    mocks.queryResults = [[{
-      userId: 'admin-1',
-      role: 'SUPER_ADMIN',
-      disabledAt: null,
-      deletedAt: null,
-      lockedUntil: null,
-    }]];
+    mocks.queryResults = [
+      [
+        {
+          userId: 'admin-1',
+          role: 'SUPER_ADMIN',
+          disabledAt: null,
+          deletedAt: null,
+          lockedUntil: null,
+        },
+      ],
+    ];
     const response = await POST(request());
     expect(response.status).toBe(401);
     expect(mocks.signIn).not.toHaveBeenCalled();

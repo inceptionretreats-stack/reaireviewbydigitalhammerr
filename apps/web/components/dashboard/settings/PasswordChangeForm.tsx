@@ -93,12 +93,10 @@ export function PasswordChangeForm() {
 
   const changed = state.status === 'success';
   const signedOut = readCount(state, 'other_sessions_signed_out');
-  /*
-   * The password is committed before the sweep and the rotation, so the endpoint answers 200 with
-   * `sessions_swept: false` when that post-commit work failed. Read here rather than assumed: the
-   * confirmation below would otherwise claim a sweep that did not happen.
-   */
+  // A successful response confirms the transaction's sweep. Cookie delivery remains a separate
+  // step, so read both fields before describing this browser's session.
   const swept = readBoolean(state, 'sessions_swept');
+  const retained = readBoolean(state, 'session_retained');
 
   /* Every field this form has is always on screen, so only `body` and an unattached failure land
      in the banner — but the test is still intersection, not emptiness. See `unattachedFailure`. */
@@ -137,7 +135,7 @@ export function PasswordChangeForm() {
               <p className="font-semibold">
                 <span aria-hidden="true">{'✓'}</span> Your password has been changed
               </p>
-              <p className="mt-1">{describePasswordChangeSessions(swept, signedOut)}</p>
+              <p className="mt-1">{describePasswordChangeSessions(swept, signedOut, retained)}</p>
             </>
           )}
         </div>

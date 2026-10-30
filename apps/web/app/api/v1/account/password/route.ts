@@ -1,14 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { users } from '@ai-review/db';
-import { privacyHash, validatePasswordStrength } from '@ai-review/core';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { passwordResetTokens, users } from '@ai-review/db';
+import { privacyHash, SessionService, validatePasswordStrength } from '@ai-review/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { apiError } from '@/lib/api-error';
 import { requireTenant } from '@/lib/require-tenant';
 import { passwordHasher } from '@/lib/auth-helpers';
 import { clientIp, isDenied, rateLimiter } from '@/lib/rate-limit';
-import { sessionService, setSessionCookie } from '@/lib/session';
+import { setSessionCookie } from '@/lib/session';
 import { parsePasswordChange } from '../schema';
 import { countOtherLiveSessions, reportableRevoked } from '../session-count';
 import { recordActivity } from '@/lib/activity';
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { details: { fields: ['current_password'] } },
     );
   }
+  const currentPasswordHash = account.passwordHash;
 
   /*
    * The limiter, on the same windows as POST /auth/login.
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const hasher = passwordHasher();
-  const matches = await hasher.verify(account.passwordHash, currentPassword);
+  const matches = await hasher.verify(currentPasswordHash, currentPassword);
   if (!matches) {
     const failure = await limiter.loginFailure(subject);
     // 401 / AUTH_INVALID_CREDENTIALS per 23_API_Error_Codes.md. The session is untouched: this
@@ -136,89 +137,75 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const passwordHash = await hasher.hash(newPassword);
 
-  let changed: { id: string }[];
+  let change: {
+    rotated: { token: string; expiresAt: Date };
+    signedOut: number;
+  } | null;
   try {
-    /*
-     * A conditional UPDATE, not a plain one: the WHERE still carries the hash that was just
-     * verified, so if a concurrent request changed the password in between, this one affects no
-     * rows instead of overwriting a change it never saw. Same reasoning as the single-use claim in
-     * /auth/reset-password — the check and the write have to be one step to mean anything.
-     */
-    changed = await database
-      .update(users)
-      .set({
-        passwordHash,
-        // A password change is also the recovery path for an account that locked itself out with
-        // failed logins, and the owner has just proved they hold the credential.
-        failedLoginCount: 0,
-        lockedUntil: null,
-        updatedAt: sql`now()`,
-      })
-      .where(and(eq(users.id, userId), eq(users.passwordHash, account.passwordHash)))
-      .returning({ id: users.id });
+    // All durable credential and session writes share a transaction. A failed sweep or rotation
+    // must leave the old password and sessions intact, so the owner can retry safely.
+    change = await database.transaction(async (tx) => {
+      // The verified hash is a compare-and-swap guard against another credential change.
+      const [changed] = await tx
+        .update(users)
+        .set({
+          passwordHash,
+          failedLoginCount: 0,
+          lockedUntil: null,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(users.id, userId),
+            eq(users.passwordHash, currentPasswordHash),
+            isNull(users.deletedAt),
+          ),
+        )
+        .returning({ id: users.id });
+      if (!changed) return null;
+
+      const liveBefore = await countOtherLiveSessions(tx, userId, sessionId);
+      // A previously emailed reset link must not undo this credential change later.
+      await tx
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(
+          and(
+            eq(passwordResetTokens.userId, userId),
+            isNull(passwordResetTokens.usedAt),
+            gt(passwordResetTokens.expiresAt, new Date()),
+          ),
+        );
+
+      const service = new SessionService(tx);
+      const revoked = await service.revokeAllForUser(userId, 'PASSWORD_CHANGED', sessionId);
+      const rotated = await service.rotate(sessionId, {
+        userId,
+        userAgent: request.headers.get('user-agent'),
+        ipHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
+        // The old session row does not record remember-me; use the shorter default lifetime.
+      });
+      return { rotated, signedOut: reportableRevoked(liveBefore, revoked) };
+    });
   } catch (error) {
     console.error('[account] password change failed', safeError(error));
     return apiError('INTERNAL_ERROR', 'We could not change your password. Please try again.');
   }
 
-  if (changed.length === 0) {
+  if (!change) {
     // The password moved under this request. Reported as a plain conflict rather than as a wrong
     // password, because the caller's input was right and retrying is the correct advice.
     return apiError('VALIDATION_FAILED', 'Your password was just changed elsewhere. Please retry.');
   }
 
-  /*
-   * Order matters, and it is: sweep, then rotate.
-   *
-   * `revokeAllForUser` excepts the CURRENT session id, so this revokes every other session while
-   * leaving the caller signed in. Rotating first would create a new session that the sweep could
-   * not except — `rotate` returns a token, not an id — and the owner would be signed out of the
-   * browser they just changed their password in.
-   *
-   * `rotate` then issues a fresh identifier and revokes the one that carried this request, so a
-   * token captured before the change cannot be used after it. Cookies are writable here because
-   * this is a route handler; a Server Component could not do this half.
-   *
-   * Guarded, because the password is already committed above.
-   *
-   * Everything from here on is post-commit work, and an unguarded throw would leave Next to answer
-   * a bare 500 — which `use-settings-submit.ts` cannot parse, so it reports `NETWORK`, "Could not
-   * reach the server". The owner would be told the change failed while their new password is the
-   * one that works, and would then try the old one at /login and be refused. A 200 that says what
-   * did and did not happen is the only honest answer once the credential has been replaced, and it
-   * is why the sibling sweep in sessions/revoke-others/route.ts is wrapped too.
-   *
-   * Null means the sweep or the rotation did not complete. It is not narrowed further on purpose:
-   * `rotate` creates the new row before revoking the old one, so a throw inside it can leave either
-   * one or two sessions live, and the response must not imply a precision the state does not have.
-   */
-  let sweep: { signedOut: number } | null = null;
+  // Only browser cookie delivery remains after commit. Its failure cannot restore the old
+  // password or old sessions; tell the owner to sign in with the new password in that case.
+  let sessionRetained = true;
   try {
-    const service = sessionService();
-    const liveBefore = await countOtherLiveSessions(database, userId, sessionId);
-    const revoked = await service.revokeAllForUser(userId, 'PASSWORD_CHANGED', sessionId);
-
-    const rotated = await service.rotate(sessionId, {
-      userId,
-      userAgent: request.headers.get('user-agent'),
-      /*
-       * A privacy-preserving hash, never the address itself. `sessions.ip_hash` is char(64) —
-       * sized for a SHA-256 digest — and 13_Security_Privacy_Compliance.md requires
-       * privacy-preserving hashes rather than a raw IP retained for the 30-day life of a session
-       * row. `privacyHash` is the same function `packages/core/src/rate-limit/policies.ts` uses,
-       * so one address produces one value across the system.
-       */
-      ipHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
-      // Deliberately not carried over from the old session. `sessions` stores no "remember me"
-      // flag, so it cannot be read back; defaulting to the shorter lifetime is the safer of the
-      // two guesses, and the cost of guessing wrong is one sign-in.
-    });
-    await setSessionCookie(rotated.token, rotated.expiresAt);
-
-    sweep = { signedOut: reportableRevoked(liveBefore, revoked) };
+    await setSessionCookie(change.rotated.token, change.rotated.expiresAt);
   } catch (error) {
-    // AC-030: never log a statement message or its parameters, which may include the new hash.
-    console.error('[account] session sweep after password change failed', safeError(error));
+    sessionRetained = false;
+    console.error('[account] password change cookie update failed', safeError(error));
   }
 
   recordActivity(
@@ -228,23 +215,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       action: 'auth.password.change',
       targetType: 'user',
       targetId: userId,
-      metadata: { other_sessions_signed_out: sweep?.signedOut ?? 0 },
+      metadata: { other_sessions_signed_out: change.signedOut },
     },
   );
   return NextResponse.json({
-    message: sweep
+    message: sessionRetained
       ? 'Your password has been changed.'
-      : 'Your password has been changed, but we could not sign out your other sessions.',
-    // SET-01-02: the sweep has to have visible effect, and this is that effect for the sessions
-    // the owner cannot see. See ../session-count.ts for why this is not the raw revoked-row count.
-    other_sessions_signed_out: sweep?.signedOut ?? 0,
-    /*
-     * Whether the sweep actually ran, so the screen can drop its "every other session was signed
-     * out, and you are still signed in here" sentence instead of asserting it on faith. Reported
-     * positively — an older client reading a missing field as false errs towards telling the owner
-     * to sweep again, which is the harmless direction.
-     */
-    sessions_swept: sweep !== null,
+      : 'Your password has been changed. Please sign in again with your new password.',
+    other_sessions_signed_out: change.signedOut,
+    sessions_swept: true,
+    session_retained: sessionRetained,
   });
 }
 

@@ -51,10 +51,8 @@ describe('describeSignedOutSessions', () => {
 /**
  * The half of POST /api/v1/account/password that an owner can see.
  *
- * The password is committed before the sweep and the rotation run, so those can fail with the
- * credential already replaced. The endpoint reports that as `sessions_swept: false` on a 200, and
- * these tests pin the only thing that must not happen next: the screen claiming a sweep, or claiming
- * this browser is still signed in, on a request where neither is known.
+ * The password, reset-token invalidation and session rotation commit together. Cookie delivery
+ * can fail afterward; the copy must never claim that browser stayed signed in without the token.
  */
 describe('describePasswordChangeSessions', () => {
   it('reports the sweep and the kept session when the sweep completed', () => {
@@ -65,6 +63,13 @@ describe('describePasswordChangeSessions', () => {
 
   it('is honest about a completed sweep that had nothing to sign out', () => {
     expect(describePasswordChangeSessions(true, 0)).toMatch(/no other sessions to sign out/i);
+  });
+
+  it('prompts sign-in when the rotated cookie could not be delivered', () => {
+    const line = describePasswordChangeSessions(true, 2, false);
+    expect(line).toMatch(/2 other sessions were signed out/);
+    expect(line).toMatch(/sign in again with your new password/);
+    expect(line).not.toMatch(/still signed in/);
   });
 
   it('claims no sweep when the sweep did not finish', () => {

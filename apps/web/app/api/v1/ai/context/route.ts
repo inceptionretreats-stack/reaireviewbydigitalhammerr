@@ -56,6 +56,12 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   const auth = await requireTenant(request);
   if (!auth.ok) return auth.response;
 
+  // Owners configure AI context during onboarding, so DRAFT may write too. A suspended or
+  // closed business cannot change the context that future customer drafts would use.
+  if (auth.context.status !== 'DRAFT' && auth.context.status !== 'ACTIVE') {
+    return apiError('BUSINESS_NOT_ACTIVE', 'This business is not active.');
+  }
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -81,7 +87,17 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   const { businessId, session } = auth.context;
   const database = db();
 
-  await database.transaction(async (tx) => {
+  const saved = await database.transaction(async (tx) => {
+    // Serialize against an admin suspending/closing the business. The status returned by
+    // requireTenant may have changed while the request body was being parsed.
+    const [business] = await tx
+      .select({ status: businesses.status })
+      .from(businesses)
+      .where(eq(businesses.id, businessId))
+      .for('update')
+      .limit(1);
+    if (!business || (business.status !== 'DRAFT' && business.status !== 'ACTIVE')) return false;
+
     await tx
       .insert(aiBusinessContexts)
       .values({
@@ -127,7 +143,10 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       .update(businesses)
       .set({ configVersion: Date.now(), updatedAt: new Date() })
       .where(eq(businesses.id, businessId));
+    return true;
   });
+
+  if (!saved) return apiError('BUSINESS_NOT_ACTIVE', 'This business is not active.');
 
   recordActivity(
     request,

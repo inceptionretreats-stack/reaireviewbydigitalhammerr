@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
+import { analyticsEvents } from '@ai-review/db';
 import { db } from '@/lib/db';
 import { loadPublicServices, resolveBySlug } from '@/lib/public-business';
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
@@ -29,6 +30,22 @@ export default async function SlugReviewPage({ params }: { params: Promise<{ slu
     new Request('https://internal', { headers: await headers() }),
     config.businessId,
   );
+  if (session) {
+    try {
+      await database.insert(analyticsEvents).values({
+        businessId: config.businessId,
+        anonymousSessionId: session.sessionId,
+        eventName: 'review_page_view',
+        properties: {
+          business_id: config.businessId,
+          anonymous_session_id: session.sessionId,
+        },
+      });
+    } catch {
+      // Analytics failure must not prevent the customer from using the review page.
+    }
+  }
+
   const [services, existingDraft] = await Promise.all([
     loadPublicServices(database, config.businessId),
     session ? loadLatestDraft(database, session.sessionId) : Promise.resolve(null),

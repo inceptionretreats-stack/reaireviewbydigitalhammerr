@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import {
   businesses,
   payments,
@@ -29,8 +29,9 @@ import {
  * signature and made idempotent by the event id. Both of the last two land in `settle`, which
  * marks the payment CAPTURED and activates Pro through the same `SubscriptionService` an admin
  * grant uses — so whichever arrives first activates, and the second one finds a CAPTURED row and
- * does nothing. That is what AC-015's "idempotent" means in practice: a redelivered webhook, or a
- * webhook racing the browser, never grants a second year.
+ * does nothing. A late callback after a full refund likewise finds REFUNDED and cannot reinstate
+ * Pro. That is what AC-015's "idempotent" means in practice: a redelivered webhook, or a webhook
+ * racing the browser, never grants a second year.
  *
  * The subscription row's status is never touched during checkout. A business renewing early is
  * still on Pro while it pays; a status of CHECKOUT_PENDING would have taken that away.
@@ -210,7 +211,25 @@ export class CheckoutService {
           outcome: outcome.status,
           ...(paymentRowId ? { paymentId: paymentRowId } : {}),
         })
-        .where(eq(paymentWebhookEvents.id, ledgerId));
+        .where(
+          and(
+            eq(paymentWebhookEvents.id, ledgerId),
+            outcome.status === 'duplicate'
+              ? or(
+                  isNull(paymentWebhookEvents.processedAt),
+                  // A retry that finds the effect already applied may clear its earlier error.
+                  // It must not replace a clean processed result from the original worker.
+                  isNotNull(paymentWebhookEvents.processingError),
+                )
+              : or(
+                  isNull(paymentWebhookEvents.processedAt),
+                  isNotNull(paymentWebhookEvents.processingError),
+                  // A concurrent duplicate can finish before the original worker. Its actual
+                  // result, including an error that needs a retry, replaces that provisional label.
+                  eq(paymentWebhookEvents.outcome, 'duplicate'),
+                ),
+          ),
+        );
       return outcome;
     };
     const paymentRowFor = async (orderId: string | null, providerPaymentId: string | null) => {
@@ -286,6 +305,7 @@ export class CheckoutService {
         const applied = await new PaymentAdminService(this.db).applyProviderRefund({
           providerPaymentId: event.paymentId,
           providerRefundId: event.refundId,
+          refundRequestId: event.refundRequestId,
           amountPaise: event.refundAmountPaise ?? 0,
           providerStatus: event.refundStatus ?? event.event.replace('refund.', ''),
           eventId: providerEventId,
@@ -343,7 +363,8 @@ export class CheckoutService {
 
   /**
    * One place that turns a paid order into a Pro year, exactly once. The payment row is locked;
-   * a CAPTURED row returns without activating — that is the idempotency AC-015 asks for.
+   * a CAPTURED or fully REFUNDED row returns without activating. A late capture notification
+   * must never undo a completed refund or grant another paid period.
    *
    * Public so an admin can reconcile a payment Razorpay captured but never told us about
    * (AMENDMENT-029): the same path, the same checks, the same invoice.
@@ -372,7 +393,9 @@ export class CheckoutService {
       if (input.amountPaise !== null && input.amountPaise !== payment.amountPaise) {
         throw new CheckoutError('AMOUNT_MISMATCH', 'paid amount does not match the order');
       }
-      if (payment.status === 'CAPTURED') return { payment, activated: false };
+      if (payment.status === 'CAPTURED' || payment.status === 'REFUNDED') {
+        return { payment, activated: false };
+      }
 
       const [captured] = await tx
         .update(payments)

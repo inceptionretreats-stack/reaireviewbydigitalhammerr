@@ -22,7 +22,12 @@ describe('PaymentAdminService', () => {
 
   /** A Razorpay whose answers a test can script per endpoint. */
   const fake = (script: {
-    refund?: (body: Record<string, unknown>) => Record<string, unknown> | { status: number };
+    refund?: (
+      body: Record<string, unknown>,
+    ) =>
+      | Record<string, unknown>
+      | { status: number }
+      | Promise<Record<string, unknown> | { status: number }>;
     orderPayments?: () => unknown[];
   }) =>
     new RazorpayClient({
@@ -45,7 +50,7 @@ describe('PaymentAdminService', () => {
         }
         if (/\/payments\/[^/]+\/refund$/.test(url)) {
           const body = JSON.parse(init.body ?? '{}') as Record<string, unknown>;
-          const answer = script.refund?.(body) ?? {
+          const answer = (await script.refund?.(body)) ?? {
             id: `rfnd_${randomUUID().slice(0, 10)}`,
             payment_id: url.split('/')[5],
             amount: body['amount'] ?? 99900,
@@ -182,13 +187,40 @@ describe('PaymentAdminService', () => {
       amountPaise: 10_000,
       client: fake({}),
     });
+    const fullRefundBody: Record<string, unknown>[] = [];
     const outcome = await service.refund(payment.id, {
       actor,
       reason: 'Customer asked to cancel within the cooling-off period',
-      client: fake({}),
+      client: fake({
+        refund: (body) => {
+          fullRefundBody.push(body);
+          return {
+            id: `rfnd_${randomUUID().slice(0, 10)}`,
+            payment_id: payment.providerPaymentId,
+            amount: body['amount'],
+            status: 'processed',
+          };
+        },
+      }),
     });
+    expect(fullRefundBody[0]?.['amount']).toBe(89_900);
     expect(outcome.revoked).toBe(true);
     expect(outcome.payment).toMatchObject({ status: 'REFUNDED', refundedPaise: 99_900 });
+    expect(await subscription()).toMatchObject({ status: 'CANCELLED', entitlement_note: null });
+    // A valid but late checkout callback must not turn refunded money back into Pro access.
+    const replay = await new CheckoutService(db).completeCheckout({
+      businessId,
+      orderId: payment.providerOrderId!,
+      paymentId: payment.providerPaymentId!,
+      signature: signCheckout(
+        payment.providerOrderId!,
+        payment.providerPaymentId!,
+        secrets.keySecret,
+      ),
+      secrets,
+    });
+    expect(replay.activated).toBe(false);
+    expect(replay.payment).toMatchObject({ status: 'REFUNDED', refundedPaise: 99_900 });
     expect(await subscription()).toMatchObject({ status: 'CANCELLED', entitlement_note: null });
     const { rows } = await pool.query(
       `SELECT action FROM admin_audit_logs WHERE business_id = $1 ORDER BY id`,
@@ -203,6 +235,178 @@ describe('PaymentAdminService', () => {
     await expect(
       service.refund(payment.id, { actor, reason: 'again', client: fake({}) }),
     ).rejects.toMatchObject({ code: 'STATE_INVALID' });
+  });
+
+  it('does not revoke Pro or count a refund Razorpay immediately reports as failed', async () => {
+    const payment = await paidYear();
+    await expect(
+      new PaymentAdminService(db).refund(payment.id, {
+        actor,
+        reason: 'customer request',
+        client: fake({
+          refund: () => ({
+            id: `rfnd_failed_${randomUUID().slice(0, 8)}`,
+            payment_id: payment.providerPaymentId,
+            amount: 99_900,
+            status: 'failed',
+          }),
+        }),
+      }),
+    ).rejects.toMatchObject({ code: 'REFUND_FAILED' });
+
+    const { rows } = await pool.query(
+      `SELECT p.status, p.refunded_paise, r.status AS refund_status
+       FROM payments p JOIN payment_refunds r ON r.payment_id = p.id WHERE p.id = $1`,
+      [payment.id],
+    );
+    expect(rows[0]).toMatchObject({
+      status: 'CAPTURED',
+      refunded_paise: 0,
+      refund_status: 'FAILED',
+    });
+    expect((await subscription()).status).toBe('PRO_ACTIVE');
+  });
+
+  it('keeps an unconfirmed refund request open for a later exact-receipt webhook', async () => {
+    const payment = await paidYear();
+    await expect(
+      new PaymentAdminService(db).refund(payment.id, {
+        actor,
+        reason: 'customer request',
+        client: fake({
+          refund: async () => {
+            throw new Error('connection closed before a response');
+          },
+        }),
+      }),
+    ).rejects.toMatchObject({ code: 'REFUND_FAILED' });
+    const { rows } = await pool.query(
+      `SELECT p.status, p.refunded_paise, r.status AS refund_status
+       FROM payments p JOIN payment_refunds r ON r.payment_id = p.id WHERE p.id = $1`,
+      [payment.id],
+    );
+    expect(rows[0]).toMatchObject({
+      status: 'CAPTURED',
+      refunded_paise: 0,
+      refund_status: 'REQUESTED',
+    });
+    expect((await subscription()).status).toBe('PRO_ACTIVE');
+  });
+
+  it('does not overwrite a webhook-completed refund after losing the API response', async () => {
+    const payment = await paidYear();
+    const checkout = new CheckoutService(db);
+    const providerRefundId = `rfnd_lost_${randomUUID().slice(0, 8)}`;
+    const outcome = await new PaymentAdminService(db).refund(payment.id, {
+      actor,
+      reason: 'customer request',
+      client: fake({
+        refund: async (body) => {
+          const rawBody = JSON.stringify({
+            event: 'refund.processed',
+            payload: {
+              refund: {
+                entity: {
+                  id: providerRefundId,
+                  payment_id: payment.providerPaymentId,
+                  amount: 99_900,
+                  status: 'processed',
+                  receipt: body['receipt'],
+                  notes: { refund_id: body['receipt'] },
+                },
+              },
+            },
+          });
+          expect(
+            (
+              await checkout.handleWebhook({
+                rawBody,
+                signature: signWebhookBody(rawBody, secrets.webhookSecret),
+                eventId: `evt_payadmin_${randomUUID()}`,
+                secrets,
+              })
+            ).status,
+          ).toBe('processed');
+          throw new Error('connection closed after the refund');
+        },
+      }),
+    });
+    expect(outcome.refund.status).toBe('PROCESSED');
+    expect(outcome.payment).toMatchObject({ status: 'REFUNDED', refundedPaise: 99_900 });
+    expect(outcome.revoked).toBe(true);
+    expect((await subscription()).status).toBe('CANCELLED');
+  });
+
+  it('restores the same paid period and quota once when a full pending refund later fails', async () => {
+    const payment = await paidYear();
+    await pool.query('UPDATE subscriptions SET pro_generations_used = 37 WHERE business_id = $1', [
+      businessId,
+    ]);
+    const { rows: originalPeriod } = await pool.query(
+      'SELECT starts_at, expires_at FROM subscriptions WHERE business_id = $1',
+      [businessId],
+    );
+    const pending = await new PaymentAdminService(db).refund(payment.id, {
+      actor,
+      reason: 'customer request',
+      client: fake({
+        refund: () => ({
+          id: `rfnd_pending_${randomUUID().slice(0, 8)}`,
+          payment_id: payment.providerPaymentId,
+          amount: 99_900,
+          status: 'pending',
+        }),
+      }),
+    });
+    expect(pending.payment.status).toBe('REFUNDED');
+    expect((await subscription()).status).toBe('CANCELLED');
+
+    const rawBody = JSON.stringify({
+      event: 'refund.failed',
+      payload: {
+        refund: {
+          entity: {
+            id: pending.refund.providerRefundId,
+            payment_id: payment.providerPaymentId,
+            amount: 99_900,
+            status: 'failed',
+          },
+        },
+        payment: {
+          entity: {
+            id: payment.providerPaymentId,
+            order_id: payment.providerOrderId,
+            amount: 99_900,
+            status: 'captured',
+          },
+        },
+      },
+    });
+    const checkout = new CheckoutService(db);
+    const failed = () =>
+      checkout.handleWebhook({
+        rawBody,
+        signature: signWebhookBody(rawBody, secrets.webhookSecret),
+        eventId: `evt_payadmin_${randomUUID()}`,
+        secrets,
+      });
+    expect((await failed()).status).toBe('processed');
+    expect((await failed()).status).toBe('duplicate');
+    const { rows } = await pool.query(
+      `SELECT p.status, p.refunded_paise, s.status AS subscription_status,
+              s.entitlement_note, s.pro_generations_used, s.starts_at, s.expires_at
+       FROM payments p JOIN subscriptions s ON s.business_id = p.business_id WHERE p.id = $1`,
+      [payment.id],
+    );
+    expect(rows[0]).toMatchObject({
+      status: 'CAPTURED',
+      refunded_paise: 0,
+      subscription_status: 'PRO_ACTIVE',
+      entitlement_note: `payment:${payment.id}`,
+      pro_generations_used: 37,
+    });
+    expect(rows[0].starts_at).toEqual(originalPeriod[0].starts_at);
+    expect(rows[0].expires_at).toEqual(originalPeriod[0].expires_at);
   });
 
   it('a full refund of a payment that no longer funds the period leaves Pro alone', async () => {
@@ -263,6 +467,41 @@ describe('PaymentAdminService', () => {
     });
     expect(again.refund.status).toBe('PROCESSED');
   });
+
+  it.each(['amount', 'payment'] as const)(
+    'leaves a refund open when Razorpay echoes the wrong %s',
+    async (mismatch) => {
+      const payment = await paidYear();
+      const providerRefundId = `rfnd_${randomUUID().slice(0, 10)}`;
+      await expect(
+        new PaymentAdminService(db).refund(payment.id, {
+          actor,
+          reason: 'full refund',
+          client: fake({
+            refund: () => ({
+              id: providerRefundId,
+              payment_id: mismatch === 'payment' ? 'pay_other' : payment.providerPaymentId,
+              amount: mismatch === 'amount' ? 89_900 : 99_900,
+              status: 'processed',
+            }),
+          }),
+        }),
+      ).rejects.toMatchObject({ code: 'REFUND_FAILED' });
+      const { rows } = await pool.query(
+        `SELECT r.status, r.raw_reference, p.refunded_paise
+         FROM payment_refunds r JOIN payments p ON p.id = r.payment_id
+         WHERE r.payment_id = $1`,
+        [payment.id],
+      );
+      expect(rows[0]).toMatchObject({ status: 'REQUESTED', refunded_paise: 0 });
+      expect(rows[0].raw_reference).toMatchObject({
+        provider_refund_id: providerRefundId,
+        reconciliation_required: true,
+      });
+      expect((await subscription()).status).toBe('PRO_ACTIVE');
+      expect(await auditActions(payment.id)).toEqual([]);
+    },
+  );
 
   it('a refund webhook is applied once, whether ours (by id) or made at the dashboard', async () => {
     const payment = await paidYear();
@@ -341,6 +580,181 @@ describe('PaymentAdminService', () => {
     ]);
     const ledger = await service.listWebhookEvents({ eventType: 'refund.processed' });
     expect(ledger.rows.find((r) => r.paymentId === payment.id)?.outcome).toBe('processed');
+  });
+
+  it.each([false, true])(
+    'retries a processed webhook that arrives before phase 3 (provider id stamped: %s)',
+    async (stampProviderId) => {
+      const payment = await paidYear();
+      const checkout = new CheckoutService(db);
+      const providerRefundId = `rfnd_early_${randomUUID().slice(0, 8)}`;
+      const eventId = `evt_payadmin_${randomUUID()}`;
+      const rawBody = JSON.stringify({
+        event: 'refund.processed',
+        payload: {
+          refund: {
+            entity: {
+              id: providerRefundId,
+              payment_id: payment.providerPaymentId,
+              amount: 99_900,
+              status: 'processed',
+            },
+          },
+        },
+      });
+      const webhook = {
+        rawBody,
+        signature: signWebhookBody(rawBody, secrets.webhookSecret),
+        eventId,
+        secrets,
+      };
+      let earlyError: unknown;
+      const outcome = await new PaymentAdminService(db).refund(payment.id, {
+        actor,
+        reason: 'customer request',
+        client: fake({
+          refund: async (body) => {
+            if (stampProviderId) {
+              await pool.query('UPDATE payment_refunds SET provider_refund_id = $1 WHERE id = $2', [
+                providerRefundId,
+                body['receipt'],
+              ]);
+            }
+            try {
+              await checkout.handleWebhook(webhook);
+            } catch (error) {
+              earlyError = error;
+            }
+            return {
+              id: providerRefundId,
+              payment_id: payment.providerPaymentId,
+              amount: 99_900,
+              status: 'pending',
+            };
+          },
+        }),
+      });
+      expect(earlyError).toBeInstanceOf(Error);
+      expect(outcome.refund.status).toBe('PENDING');
+      const { rows: firstDelivery } = await pool.query(
+        'SELECT outcome, processing_error FROM payment_webhook_events WHERE provider_event_id = $1',
+        [eventId],
+      );
+      expect(firstDelivery[0].processing_error).toContain('still being recorded');
+
+      // The same event ID is replayable despite its recorded first failure. The terminal
+      // status wins over the earlier API response, and the amount is still counted once.
+      expect((await checkout.handleWebhook(webhook)).status).toBe('processed');
+      expect((await checkout.handleWebhook(webhook)).status).toBe('duplicate');
+      const { rows } = await pool.query(
+        `SELECT p.status, p.refunded_paise, r.status AS refund_status
+         FROM payments p JOIN payment_refunds r ON r.payment_id = p.id WHERE p.id = $1`,
+        [payment.id],
+      );
+      expect(rows[0]).toMatchObject({
+        status: 'REFUNDED',
+        refunded_paise: 99_900,
+        refund_status: 'PROCESSED',
+      });
+      expect((await subscription()).status).toBe('CANCELLED');
+      const { rows: lastDelivery } = await pool.query(
+        'SELECT outcome, processing_error FROM payment_webhook_events WHERE provider_event_id = $1',
+        [eventId],
+      );
+      expect(lastDelivery[0]).toMatchObject({ outcome: 'processed', processing_error: null });
+    },
+  );
+
+  it('finishes an accepted refund from its receipt after the API process dies before phase 3', async () => {
+    const payment = await paidYear();
+    const requestId = randomUUID();
+    const providerRefundId = `rfnd_recover_${randomUUID().slice(0, 8)}`;
+    await pool.query(
+      `INSERT INTO payment_refunds (id, payment_id, amount_paise, status, reason, requested_by)
+       VALUES ($1, $2, 99900, 'REQUESTED', 'customer request', $3)`,
+      [requestId, payment.id, adminId],
+    );
+    const rawBody = JSON.stringify({
+      event: 'refund.processed',
+      payload: {
+        refund: {
+          entity: {
+            id: providerRefundId,
+            payment_id: payment.providerPaymentId,
+            amount: 99_900,
+            status: 'processed',
+            receipt: requestId,
+            notes: { refund_id: requestId },
+          },
+        },
+      },
+    });
+    const result = await new CheckoutService(db).handleWebhook({
+      rawBody,
+      signature: signWebhookBody(rawBody, secrets.webhookSecret),
+      eventId: `evt_payadmin_${randomUUID()}`,
+      secrets,
+    });
+    expect(result.status).toBe('processed');
+    const { rows } = await pool.query(
+      `SELECT p.status, p.refunded_paise, r.status AS refund_status, r.provider_refund_id
+       FROM payments p JOIN payment_refunds r ON r.payment_id = p.id WHERE p.id = $1`,
+      [payment.id],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      status: 'REFUNDED',
+      refunded_paise: 99_900,
+      refund_status: 'PROCESSED',
+      provider_refund_id: providerRefundId,
+    });
+    expect((await subscription()).status).toBe('CANCELLED');
+  });
+
+  it('claims two simultaneous dashboard events for one refund only once', async () => {
+    const payment = await paidYear();
+    const providerRefundId = `rfnd_double_${randomUUID().slice(0, 8)}`;
+    const rawBody = JSON.stringify({
+      event: 'refund.processed',
+      payload: {
+        refund: {
+          entity: {
+            id: providerRefundId,
+            payment_id: payment.providerPaymentId,
+            amount: 10_000,
+            status: 'processed',
+          },
+        },
+      },
+    });
+    const webhook = () => ({
+      rawBody,
+      signature: signWebhookBody(rawBody, secrets.webhookSecret),
+      eventId: `evt_payadmin_${randomUUID()}`,
+      secrets,
+    });
+    const checkout = new CheckoutService(db);
+    const deliveries = [webhook(), webhook()];
+    const attempts = await Promise.allSettled(
+      deliveries.map((event) => checkout.handleWebhook(event)),
+    );
+    for (const [index, attempt] of attempts.entries()) {
+      if (attempt.status === 'rejected') {
+        expect(attempt.reason).toBeInstanceOf(Error);
+        expect((await checkout.handleWebhook(deliveries[index]!)).status).toBe('duplicate');
+      }
+    }
+    const { rows } = await pool.query(
+      `SELECT r.status, r.provider_refund_id, p.refunded_paise
+       FROM payment_refunds r JOIN payments p ON p.id = r.payment_id WHERE p.id = $1`,
+      [payment.id],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      status: 'PROCESSED',
+      provider_refund_id: providerRefundId,
+      refunded_paise: 10_000,
+    });
   });
 
   it('reconciles a captured-but-unsettled order through the same path as checkout', async () => {

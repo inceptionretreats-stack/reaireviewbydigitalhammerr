@@ -6,13 +6,12 @@ const mocks = vi.hoisted(() => ({
   lookup: vi.fn(),
   insert: vi.fn(),
   send: vi.fn(),
+  transaction: vi.fn(),
+  tx: { select: vi.fn(), insert: vi.fn() },
 }));
 
 vi.mock('@/lib/db', () => ({
-  db: () => ({
-    select: () => ({ from: () => ({ where: () => ({ limit: mocks.lookup }) }) }),
-    insert: () => ({ values: mocks.insert }),
-  }),
+  db: () => ({ transaction: mocks.transaction }),
 }));
 vi.mock('@/lib/env', () => ({
   env: () => ({ HASH_PEPPER: 'test-pepper', APP_BASE_URL: 'https://app.example' }),
@@ -51,6 +50,13 @@ beforeEach(() => {
   mocks.lookup.mockResolvedValue([{ id: 'owner-id', passwordHash: 'stored-password-hash' }]);
   mocks.insert.mockResolvedValue(undefined);
   mocks.send.mockResolvedValue(undefined);
+  mocks.transaction.mockImplementation(async (work: (tx: unknown) => Promise<unknown>) =>
+    work(mocks.tx),
+  );
+  mocks.tx.select.mockImplementation(() => ({
+    from: () => ({ where: () => ({ for: () => ({ limit: mocks.lookup }) }) }),
+  }));
+  mocks.tx.insert.mockImplementation(() => ({ values: mocks.insert }));
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 
@@ -62,6 +68,10 @@ describe('forgot-password neutral failures', () => {
     expect(response.status).toBe(202);
     expect(mocks.insert).toHaveBeenCalledOnce();
     expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.tx.select).toHaveBeenCalledOnce();
+    expect(mocks.lookup.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.insert.mock.invocationCallOrder[0]!,
+    );
   });
 
   it('does not issue a reset for a Google-only account without a password', async () => {

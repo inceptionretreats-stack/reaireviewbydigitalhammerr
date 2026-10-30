@@ -57,33 +57,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (isDenied(gate)) return accepted();
 
     const database = db();
-    const [account] = await database
-      .select({ id: users.id, passwordHash: users.passwordHash })
-      .from(users)
-      .where(and(eq(users.email, email), isNull(users.deletedAt)))
-      .limit(1);
+    const issued = await database.transaction(async (tx) => {
+      // Serialize issuance with password and email changes, which lock this user row before
+      // invalidating outstanding links. Otherwise a link could appear just after their sweep.
+      const [account] = await tx
+        .select({ id: users.id, passwordHash: users.passwordHash })
+        .from(users)
+        .where(and(eq(users.email, email), isNull(users.deletedAt)))
+        .for('update')
+        .limit(1);
 
-    // A Google-only account has no local password to reset. In particular, Google may not be
-    // authoritative for an external mailbox that has since changed hands. Keep the same neutral
-    // response as an unknown address, without creating a recovery path around the Google subject.
-    if (!account?.passwordHash) return accepted();
+      // A Google-only account has no local password to reset. In particular, Google may not be
+      // authoritative for an external mailbox that has since changed hands.
+      if (!account?.passwordHash) return null;
 
-    const { token, tokenHash } = issueToken();
-
-    await database.insert(passwordResetTokens).values({
-      userId: account.id,
-      tokenHash,
-      expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-      // The column is a hash (13_Security): never the address itself.
-      requestedIpHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
+      const { token, tokenHash } = issueToken();
+      await tx.insert(passwordResetTokens).values({
+        userId: account.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
+        requestedIpHash: ip ? privacyHash(ip, env().HASH_PEPPER) : null,
+      });
+      return { userId: account.id, token };
     });
+    if (!issued) return accepted();
 
     const resetUrl = new URL(
-      `/reset-password?token=${encodeURIComponent(token)}`,
+      `/reset-password?token=${encodeURIComponent(issued.token)}`,
       env().APP_BASE_URL,
     ).toString();
 
-    recordActivity(request, { userId: account.id }, { action: 'auth.password.reset.request' });
+    recordActivity(request, { userId: issued.userId }, { action: 'auth.password.reset.request' });
     await mailer().send(passwordResetEmail(email, resetUrl));
   } catch (error) {
     // Logged, not surfaced. The user is told the same thing either way (AUTH-03-01), so this

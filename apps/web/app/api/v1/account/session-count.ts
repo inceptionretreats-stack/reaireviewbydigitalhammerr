@@ -1,5 +1,6 @@
 import { and, count, eq, gt, isNull, ne } from 'drizzle-orm';
-import { sessions, type Database } from '@ai-review/db';
+import { sessions } from '@ai-review/db';
+import type { Executor } from '@ai-review/core';
 
 /**
  * The session-count arithmetic behind SET-01-02, "session revocation works".
@@ -25,7 +26,7 @@ import { sessions, type Database } from '@ai-review/db';
  * that requires a second sign-in mid-request; overstating would be the worse direction.
  */
 export async function countOtherLiveSessions(
-  database: Database,
+  database: Executor,
   userId: string,
   currentSessionId: string,
   now: Date = new Date(),

@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDatabase, type Database } from '@ai-review/db';
 import { CheckoutError, CheckoutService } from '../../billing/checkout-service';
+import { PaymentAdminService } from '../../billing/payment-admin-service';
 import { RazorpayClient, signCheckout, signWebhookBody } from '../../billing/razorpay';
 import { PlatformSettingsService } from '../../platform/settings';
 
@@ -219,6 +220,139 @@ describe('CheckoutService', () => {
     const [row] = await service.history(businessId);
     expect(row).toMatchObject({ status: 'CAPTURED', providerPaymentId: razorpayPaymentId });
     expect((await subscription()).status).toBe('PRO_ACTIVE');
+  });
+
+  it('keeps the applied ledger outcome when a concurrent copy finishes as duplicate', async () => {
+    const service = new CheckoutService(db);
+    const started = await service.startCheckout({
+      businessId,
+      client: fakeRazorpay(),
+      amountPaise: 99900,
+    });
+    const providerPaymentId = `pay_${randomUUID().slice(0, 12)}`;
+    await service.completeCheckout({
+      businessId,
+      orderId: started.orderId,
+      paymentId: providerPaymentId,
+      signature: signCheckout(started.orderId, providerPaymentId, secrets.keySecret),
+      secrets,
+    });
+    const providerEventId = `evt_checkout_test_${randomUUID()}`;
+    const rawBody = JSON.stringify({
+      event: 'refund.processed',
+      payload: {
+        refund: {
+          entity: {
+            id: `rfnd_${randomUUID().slice(0, 10)}`,
+            payment_id: providerPaymentId,
+            amount: 100,
+            status: 'processed',
+          },
+        },
+      },
+    });
+    const webhook = {
+      rawBody,
+      signature: signWebhookBody(rawBody, secrets.webhookSecret),
+      eventId: providerEventId,
+      secrets,
+    };
+    let firstEntered!: () => void;
+    let secondEntered!: () => void;
+    let releaseSecond!: () => void;
+    const firstStarted = new Promise<void>((resolve) => (firstEntered = resolve));
+    const secondStarted = new Promise<void>((resolve) => (secondEntered = resolve));
+    const secondCanFinish = new Promise<void>((resolve) => (releaseSecond = resolve));
+    const apply = vi.spyOn(PaymentAdminService.prototype, 'applyProviderRefund');
+    apply
+      .mockImplementationOnce(async () => {
+        firstEntered();
+        await secondStarted;
+        return { paymentId: started.paymentId, applied: true };
+      })
+      .mockImplementationOnce(async () => {
+        secondEntered();
+        await secondCanFinish;
+        return { paymentId: started.paymentId, applied: false };
+      });
+    try {
+      const first = service.handleWebhook(webhook);
+      await firstStarted;
+      const second = service.handleWebhook(webhook);
+      await secondStarted;
+      expect((await first).status).toBe('processed');
+      releaseSecond();
+      expect((await second).status).toBe('duplicate');
+      const { rows } = await pool.query(
+        'SELECT outcome, processing_error FROM payment_webhook_events WHERE provider_event_id = $1',
+        [providerEventId],
+      );
+      expect(rows[0]).toMatchObject({ outcome: 'processed', processing_error: null });
+    } finally {
+      releaseSecond();
+      apply.mockRestore();
+    }
+  });
+
+  it('clears a retryable ledger error when redelivery finds the refund already accounted for', async () => {
+    const service = new CheckoutService(db);
+    const started = await service.startCheckout({
+      businessId,
+      client: fakeRazorpay(),
+      amountPaise: 99900,
+    });
+    const providerPaymentId = `pay_${randomUUID().slice(0, 12)}`;
+    await service.completeCheckout({
+      businessId,
+      orderId: started.orderId,
+      paymentId: providerPaymentId,
+      signature: signCheckout(started.orderId, providerPaymentId, secrets.keySecret),
+      secrets,
+    });
+    const providerEventId = `evt_checkout_test_${randomUUID()}`;
+    const rawBody = JSON.stringify({
+      event: 'refund.processed',
+      payload: {
+        refund: {
+          entity: {
+            id: `rfnd_${randomUUID().slice(0, 10)}`,
+            payment_id: providerPaymentId,
+            amount: 100,
+            status: 'processed',
+          },
+        },
+      },
+    });
+    const webhook = {
+      rawBody,
+      signature: signWebhookBody(rawBody, secrets.webhookSecret),
+      eventId: providerEventId,
+      secrets,
+    };
+    const apply = vi.spyOn(PaymentAdminService.prototype, 'applyProviderRefund');
+    apply
+      .mockRejectedValueOnce(new Error('temporary failure before local settlement'))
+      .mockResolvedValueOnce({ paymentId: started.paymentId, applied: false });
+    try {
+      await expect(service.handleWebhook(webhook)).rejects.toThrow('temporary failure');
+      const first = await pool.query(
+        'SELECT outcome, processing_error FROM payment_webhook_events WHERE provider_event_id = $1',
+        [providerEventId],
+      );
+      expect(first.rows[0]).toMatchObject({ outcome: 'failed' });
+      expect(first.rows[0].processing_error).toContain('temporary failure');
+
+      expect((await service.handleWebhook(webhook)).status).toBe('duplicate');
+      const second = await pool.query(
+        'SELECT outcome, processing_error FROM payment_webhook_events WHERE provider_event_id = $1',
+        [providerEventId],
+      );
+      expect(second.rows[0]).toMatchObject({ outcome: 'duplicate', processing_error: null });
+      expect((await service.handleWebhook(webhook)).status).toBe('duplicate');
+      expect(apply).toHaveBeenCalledTimes(2);
+    } finally {
+      apply.mockRestore();
+    }
   });
 
   it('refuses a forged or mismatched callback without touching the entitlement', async () => {

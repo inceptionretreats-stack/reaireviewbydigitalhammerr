@@ -374,6 +374,60 @@ describe('store unavailable', () => {
   });
 });
 
+describe('signup attempts', () => {
+  const subject = { identifier: 'owner@example.com', ip: '203.0.113.10', pepper: PEPPER };
+
+  it('limits repeated attempts at one email, including successful attempts', async () => {
+    const limiter = new RateLimiter(new MemoryRateLimitStore(), { now: clock().now });
+
+    for (
+      let attempt = 0;
+      attempt < DEFAULT_RATE_LIMIT_CONFIG.signupAttemptsPerIdentity;
+      attempt += 1
+    ) {
+      expect((await limiter.signupAttempt(subject)).allowed).toBe(true);
+    }
+    expect(await limiter.signupAttempt(subject)).toMatchObject({
+      allowed: false,
+      code: 'AUTH_RATE_LIMITED',
+      dimension: 'auth.signup_identity',
+    });
+  });
+
+  it('limits changing-email attempts from one network prefix', async () => {
+    const limiter = new RateLimiter(new MemoryRateLimitStore(), { now: clock().now });
+
+    for (
+      let attempt = 0;
+      attempt < DEFAULT_RATE_LIMIT_CONFIG.signupAttemptsPerIpPrefix;
+      attempt += 1
+    ) {
+      expect(
+        (await limiter.signupAttempt({ ...subject, identifier: `owner${attempt}@example.com` }))
+          .allowed,
+      ).toBe(true);
+    }
+    expect(
+      await limiter.signupAttempt({ ...subject, identifier: 'another@example.com' }),
+    ).toMatchObject({
+      allowed: false,
+      code: 'AUTH_RATE_LIMITED',
+      dimension: 'auth.signup_ip_prefix',
+    });
+  });
+
+  it('fails closed if the store is unavailable', async () => {
+    const limiter = new RateLimiter(brokenStore, { now: clock().now });
+
+    expect(await limiter.signupAttempt(subject)).toMatchObject({
+      allowed: false,
+      code: 'AUTH_RATE_LIMITED',
+      degraded: true,
+      retryAfterSeconds: DEGRADED_RETRY_AFTER_SECONDS,
+    });
+  });
+});
+
 describe('login failures (AC-002 / AUTH-02-02)', () => {
   const subject = { identifier: 'owner@example.com', ip: '203.0.113.10', pepper: PEPPER };
 
@@ -505,6 +559,53 @@ describe('public generation (09 abuse controls)', () => {
     ipPrefixBaseLimit: 1000,
     ipPrefixCeiling: 1000,
   };
+
+  it('bounds a cookie-free loop using the shared network-prefix window', async () => {
+    const config: RateLimitConfig = {
+      ...DEFAULT_RATE_LIMIT_CONFIG,
+      ipPrefixBaseLimit: 2,
+      ipPrefixPerSessionLimit: 0,
+      ipPrefixCeiling: 2,
+    };
+    const limiter = new RateLimiter(new MemoryRateLimitStore(), { now: clock().now, config });
+    const cookieFree = {
+      businessId: subject.businessId,
+      ip: subject.ip,
+      pepper: subject.pepper,
+      plan: subject.plan,
+    };
+
+    expect((await limiter.cookieFreeGeneration(cookieFree)).allowed).toBe(true);
+    expect((await limiter.cookieFreeGeneration(cookieFree)).allowed).toBe(true);
+    expect(await limiter.cookieFreeGeneration(cookieFree)).toMatchObject({
+      allowed: false,
+      code: 'PUBLIC_RATE_LIMITED',
+      dimension: 'public.ip_prefix',
+    });
+  });
+
+  it('counts session-bearing and cookie-free visitors against the same network window', async () => {
+    const config: RateLimitConfig = {
+      ...DEFAULT_RATE_LIMIT_CONFIG,
+      ipPrefixBaseLimit: 2,
+      ipPrefixPerSessionLimit: 0,
+      ipPrefixCeiling: 2,
+    };
+    const limiter = new RateLimiter(new MemoryRateLimitStore(), { now: clock().now, config });
+    const cookieFree = {
+      businessId: subject.businessId,
+      ip: subject.ip,
+      pepper: subject.pepper,
+      plan: subject.plan,
+    };
+
+    expect((await limiter.publicGeneration(subject)).allowed).toBe(true);
+    expect((await limiter.cookieFreeGeneration(cookieFree)).allowed).toBe(true);
+    expect(await limiter.cookieFreeGeneration(cookieFree)).toMatchObject({
+      allowed: false,
+      dimension: 'public.ip_prefix',
+    });
+  });
 
   it('caps an anonymous session at ten generations an hour for one business', async () => {
     const time = clock();

@@ -100,6 +100,8 @@ function scaledConfig(): RateLimitConfig {
     loginFailuresPerIdentity: scale(DEFAULT_RATE_LIMIT_CONFIG.loginFailuresPerIdentity),
     loginFailuresPerIpPrefix: scale(DEFAULT_RATE_LIMIT_CONFIG.loginFailuresPerIpPrefix),
     loginFailuresPerIdentityPerDay: scale(DEFAULT_RATE_LIMIT_CONFIG.loginFailuresPerIdentityPerDay),
+    signupAttemptsPerIdentity: scale(DEFAULT_RATE_LIMIT_CONFIG.signupAttemptsPerIdentity),
+    signupAttemptsPerIpPrefix: scale(DEFAULT_RATE_LIMIT_CONFIG.signupAttemptsPerIpPrefix),
     mfaFailuresPerSession: scale(DEFAULT_RATE_LIMIT_CONFIG.mfaFailuresPerSession),
     mfaFailuresPerIpPrefix: scale(DEFAULT_RATE_LIMIT_CONFIG.mfaFailuresPerIpPrefix),
     mfaFailuresPerUserPerDay: scale(DEFAULT_RATE_LIMIT_CONFIG.mfaFailuresPerUserPerDay),

@@ -3,13 +3,14 @@ import {
   ipSessionSetKey,
   loginFailureCheck,
   loginSuccessCheck,
+  signupAttemptCheck,
   mfaFailureCheck,
   mfaSuccessCheck,
-  adminThrottleCheck,
-  type AdminThrottle,
+  cookieFreeGenerationCheck,
   publicFeedbackCheck,
   publicGenerationCheck,
   sessionMember,
+  type CookieFreeGenerationSubject,
   type LoginSubject,
   type MfaSubject,
   type PublicFeedbackSubject,
@@ -136,9 +137,19 @@ export class RateLimiter {
     return this.consume(publicGenerationCheck(subject, distinctSessions, this.config));
   }
 
-  /** AMENDMENT-030: the admin throttle on its own, for a request with no anonymous session. */
-  businessThrottle(businessId: string, throttle: AdminThrottle): Promise<RateLimitDecision> {
-    return this.consume(adminThrottleCheck(businessId, throttle));
+  /**
+   * Cookie-free customers retain the review flow but not an unlimited paid-generation path.
+   * A fixed synthetic member contributes at most one to a network's adaptive allowance;
+   * unlike a per-request ID it cannot inflate the prefix ceiling by itself.
+   */
+  async cookieFreeGeneration(subject: CookieFreeGenerationSubject): Promise<RateLimitDecision> {
+    const distinctSessions = subject.ip
+      ? await this.countDistinctSessions(
+          { ...subject, anonymousSessionId: 'cookie-free-visitor' },
+          this.clock(),
+        )
+      : 1;
+    return this.consume(cookieFreeGenerationCheck(subject, distinctSessions, this.config));
   }
 
   /** Private-feedback submission (E8-02). Two dimensions, one atomic decision. */
@@ -162,6 +173,11 @@ export class RateLimiter {
    */
   loginSuccess(subject: LoginSubject): Promise<void> {
     return this.forgive(loginSuccessCheck(subject, this.config));
+  }
+
+  /** Counts every valid signup request before the password hash and account writes. */
+  signupAttempt(subject: LoginSubject): Promise<RateLimitDecision> {
+    return this.consume(signupAttemptCheck(subject, this.config));
   }
 
   /** AMENDMENT-027: inspected before a code is checked, so a locked session never reaches the HMAC. */

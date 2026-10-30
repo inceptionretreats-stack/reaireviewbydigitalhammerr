@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ipPrefixHash } from '../../auth/tokens';
 import {
   adaptiveIpPrefixLimit,
+  cookieFreeGenerationCheck,
   DEFAULT_RATE_LIMIT_CONFIG,
   ipSessionSetKey,
   looksLikeIpAddress,
@@ -10,6 +11,7 @@ import {
   publicGenerationCheck,
   rateLimitKey,
   RateLimitKeyError,
+  signupAttemptCheck,
   type PublicGenerationSubject,
   type RateLimitConfig,
 } from '../policies';
@@ -67,6 +69,30 @@ describe('key construction (13_Security_Privacy_Compliance.md)', () => {
     );
 
     for (const key of keys) {
+      expect(key).not.toContain('owner@example.com');
+      expect(key).not.toContain('203.0.113');
+    }
+  });
+
+  it('keys signup attempts on normalized email and hashed network prefix', () => {
+    const first = signupAttemptCheck({
+      identifier: ' Owner@Example.COM ',
+      ip: '203.0.113.42',
+      pepper: PEPPER,
+    });
+    const same = signupAttemptCheck({
+      identifier: 'owner@example.com',
+      ip: '203.0.113.200',
+      pepper: PEPPER,
+    });
+
+    expect(keysOf(first)).toEqual(keysOf(same));
+    expect(first.dimensions.map((dimension) => dimension.rule.name)).toEqual([
+      'auth.signup_identity',
+      'auth.signup_ip_prefix',
+    ]);
+    expect(first.onStoreUnavailable).toBe('DENY');
+    for (const key of keysOf(first)) {
       expect(key).not.toContain('owner@example.com');
       expect(key).not.toContain('203.0.113');
     }
@@ -173,5 +199,55 @@ describe('composed public check', () => {
 
     expect(hourly?.rule.limit).toBe(10);
     expect(hourly?.rule.windowMs).toBe(60 * 60 * 1000);
+  });
+});
+
+describe('cookie-free public check', () => {
+  it('shares the privacy-hashed network window with session-bearing visitors', () => {
+    const withCookie = publicGenerationCheck(subject, 1);
+    const withoutCookie = cookieFreeGenerationCheck(
+      { businessId: subject.businessId, ip: subject.ip, pepper: subject.pepper, plan: 'FREE' },
+      1,
+    );
+
+    expect(withoutCookie.dimensions.map((dimension) => dimension.rule.name)).toEqual([
+      'public.ip_prefix',
+    ]);
+    expect(withoutCookie.dimensions[0]?.key).toBe(withCookie.dimensions[2]?.key);
+    expect(withoutCookie.dimensions[0]?.key).not.toContain(subject.ip);
+  });
+
+  it('retains Pro observation and an enforced admin throttle without a cookie', () => {
+    const withoutCookie = cookieFreeGenerationCheck(
+      {
+        businessId: subject.businessId,
+        ip: subject.ip,
+        pepper: subject.pepper,
+        plan: 'PRO',
+        adminThrottle: { perHour: 5, untilMs: 1_800_000_000_000 },
+      },
+      1,
+    );
+    expect(withoutCookie.dimensions.map((dimension) => dimension.rule.name)).toEqual([
+      'public.ip_prefix',
+      'public.business_fair_use',
+      'public.business_admin_throttle',
+    ]);
+    expect(withoutCookie.dimensions[1]?.rule.enforcement).toBe('OBSERVE');
+    expect(withoutCookie.dimensions[2]?.rule.enforcement).toBe('ENFORCE');
+  });
+
+  it('keeps an unknown network bucket local to one business', () => {
+    const noNetwork = {
+      businessId: subject.businessId,
+      ip: '',
+      pepper: subject.pepper,
+      plan: 'FREE' as const,
+    };
+    const first = cookieFreeGenerationCheck(noNetwork, 1);
+    const second = cookieFreeGenerationCheck({ ...noNetwork, businessId: 'another-business' }, 1);
+
+    expect(first.dimensions[0]?.key).not.toBe(second.dimensions[0]?.key);
+    expect(first.dimensions[0]?.key).not.toContain('203.0.113');
   });
 });

@@ -65,7 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // optimization: the conditional UPDATE below must still re-check all three conditions,
     // because the link can expire or be claimed while hashing is in progress.
     const [candidate] = await database
-      .select({ id: passwordResetTokens.id })
+      .select({ id: passwordResetTokens.id, userId: passwordResetTokens.userId })
       .from(passwordResetTokens)
       .where(
         and(
@@ -83,6 +83,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // fails, the transaction restores the old password and leaves the link usable for a retry.
     // In particular, never commit a new password while another device's old session stays live.
     userId = await database.transaction(async (tx) => {
+      // The same user-row lock is taken by reset-link issuance. One of these operations must
+      // finish first, so a concurrent request cannot leave a pre-change link usable.
+      const [account] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.id, candidate.userId), isNull(users.deletedAt)))
+        .for('update')
+        .limit(1);
+      if (!account) return null;
+
       const claimed = await tx
         .update(passwordResetTokens)
         .set({ usedAt: new Date() })
@@ -108,6 +118,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           updatedAt: sql`now()`,
         })
         .where(eq(users.id, row.userId));
+
+      // The redeemed link and every sibling link expire together with the credential change.
+      await tx
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(
+          and(
+            eq(passwordResetTokens.userId, row.userId),
+            isNull(passwordResetTokens.usedAt),
+            gt(passwordResetTokens.expiresAt, new Date()),
+          ),
+        );
 
       // Use the transaction executor, NOT the process-wide session service/connection.
       await new SessionService(tx).revokeAllForUser(row.userId, 'PASSWORD_RESET');
