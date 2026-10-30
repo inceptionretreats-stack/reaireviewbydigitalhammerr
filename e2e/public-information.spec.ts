@@ -29,7 +29,7 @@ const health = new WeakMap<BrowserContext, { errors: string[]; mutations: string
 
 test.use({ baseURL: ORIGIN, storageState: { cookies: [], origins: [] } });
 
-test.beforeEach(async ({ context, page }, testInfo) => {
+test.beforeEach(async ({ context, page }) => {
   const problems = { errors: [] as string[], mutations: [] as string[] };
   health.set(context, problems);
   const observed = new WeakSet<Page>();
@@ -39,14 +39,6 @@ test.beforeEach(async ({ context, page }, testInfo) => {
     target.on('pageerror', (error) => problems.errors.push(error.message));
     target.on('console', (message) => {
       if (!['error', 'warning'].includes(message.type())) return;
-      if (
-        message.type() === 'warning' &&
-        message.text().startsWith('Image with src "/marketing/ai-review-robot-mascot.png"') &&
-        message.text().includes('Largest Contentful Paint')
-      ) {
-        testInfo.annotations.push({ type: 'existing-image-advisory', description: message.text() });
-        return;
-      }
       problems.errors.push(`${message.type()}: ${message.text()}`);
     });
   };

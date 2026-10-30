@@ -36,5 +36,3 @@ export function RobotClaimBand() {
     </section>
   );
 }
-
-export { ROBOT_IMAGE };

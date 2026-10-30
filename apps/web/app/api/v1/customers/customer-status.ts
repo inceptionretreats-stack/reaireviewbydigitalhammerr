@@ -91,10 +91,6 @@ export function isObservedStatus(status: CustomerStatus): boolean {
   return AUTHORITY[status] === 'OBSERVED';
 }
 
-export function isOwnerSettableStatus(status: CustomerStatus): boolean {
-  return AUTHORITY[status] === 'OWNER_SETTABLE';
-}
-
 /**
  * Narrows an arbitrary string — a value read back from the database in a context where the driver
  * types it loosely, or one arriving from an API response on the client — to the enum.

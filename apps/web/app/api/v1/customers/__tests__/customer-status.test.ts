@@ -5,7 +5,6 @@ import {
   OWNER_SETTABLE_STATUSES,
   isCustomerStatus,
   isObservedStatus,
-  isOwnerSettableStatus,
   isOwnerSettableStatusValue,
   statusAuthority,
 } from '../customer-status';
@@ -48,7 +47,7 @@ describe('who may write a customer status', () => {
     // REQ-01 writes it by preparing a message. Relabelling a row is not preparing one, so it is not
     // offered — but it is not an observation either, so it does not freeze the field.
     expect(statusAuthority('MESSAGE_PREPARED')).toBe('OWNER_ACTION');
-    expect(isOwnerSettableStatus('MESSAGE_PREPARED')).toBe(false);
+    expect(statusAuthority('MESSAGE_PREPARED')).not.toBe('OWNER_SETTABLE');
     expect(isObservedStatus('MESSAGE_PREPARED')).toBe(false);
   });
 
@@ -59,7 +58,7 @@ describe('who may write a customer status', () => {
       expect(statusAuthority(status)).toBe('OWNER_SETTABLE');
     }
     for (const status of CUSTOMER_STATUS_ORDER) {
-      expect(isOwnerSettableStatus(status)).toBe(
+      expect(statusAuthority(status) === 'OWNER_SETTABLE').toBe(
         (OWNER_SETTABLE_STATUSES as readonly string[]).includes(status),
       );
     }

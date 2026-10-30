@@ -485,9 +485,7 @@
 }
 
 .secondaryButton,
-.primaryButton,
-.retryButton,
-.manualLink {
+.primaryButton {
   display: inline-flex;
   width: 100%;
   min-width: 0;
@@ -510,9 +508,7 @@
     border-color 150ms ease;
 }
 
-.secondaryButton:hover,
-.retryButton:hover,
-.manualLink:hover {
+.secondaryButton:hover {
   border-color: #1967d2;
   background: #f5f9ff;
 }
@@ -539,8 +535,7 @@
   cursor: not-allowed;
 }
 
-.secondaryButton:disabled,
-.retryButton:disabled {
+.secondaryButton:disabled {
   border-color: #d9e3f0;
   background: #f8faff;
   color: #65758b;
@@ -723,17 +718,6 @@
   line-height: 1.6;
 }
 
-.readyState {
-  margin: 0;
-  color: #65758b;
-  font-size: 15px;
-  line-height: 1.65;
-}
-
-.manualLink {
-  margin-top: 12px;
-}
-
 .unavailable {
   padding: 32px 24px;
   text-align: center;
@@ -824,9 +808,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .secondaryButton,
-  .primaryButton,
-  .retryButton,
-  .manualLink {
+  .primaryButton {
     transition: none;
   }
 

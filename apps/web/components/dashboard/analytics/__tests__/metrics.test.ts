@@ -4,7 +4,6 @@ import {
   assembleTrend,
   buildFunnel,
   FUNNEL_STEPS,
-  funnelStepLabel,
   pendingRollupGap,
   REPORTED_EVENTS,
   toSeries,
@@ -42,7 +41,6 @@ describe('funnel definition', () => {
     expect(terminal?.event).toBe('google_open');
     // The exact phrase 18_UI_UX_Design_System_Brief.md requires.
     expect(terminal?.label).toBe('Google review page opened');
-    expect(funnelStepLabel('google_open')).toBe('Google review page opened');
   });
 
   it('never claims a review was left, posted or completed (AC-025, DASH-01-02)', () => {

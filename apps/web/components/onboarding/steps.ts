@@ -58,25 +58,6 @@ export interface OnboardingProgress {
 }
 
 /**
- * What publishing actually requires — and nothing more.
- *
- * POST /api/v1/business/publish demands business details and a Google review link. Contact links
- * (ONB-03) and AI context (ONB-04) are genuinely optional: ONB-03 ships a "Skip optional" button,
- * and neither step blocks publish.
- */
-export function canPublish(progress: OnboardingProgress): boolean {
-  return progress.hasBusinessDetails && progress.hasReviewLink;
-}
-
-/** Publish requirements still outstanding, in wizard order, for a "what is missing" list. */
-export function missingPublishRequirements(progress: OnboardingProgress): OnboardingStep[] {
-  const missing: OnboardingStep[] = [];
-  if (!progress.hasBusinessDetails) missing.push(stepById('business'));
-  if (!progress.hasReviewLink) missing.push(stepById('review-link'));
-  return missing;
-}
-
-/**
  * The first step still genuinely blocking progress.
  *
  * Only publish prerequisites are considered. An earlier version walked every step in order and

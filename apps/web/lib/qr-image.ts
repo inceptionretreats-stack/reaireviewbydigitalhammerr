@@ -30,7 +30,7 @@ export const QUIET_ZONE_MODULES = 4;
 
 /**
  * A server-fixed size — the client cannot ask for a larger one, so no single request can be turned
- * into an expensive raster (pngjs cost grows with the pixel count). At 300 DPI this prints ~87mm
+ * into an expensive raster (raster cost grows with the pixel count). At 300 DPI this prints ~87mm
  * square, a correct counter-standee QR. Anything larger should use the SVG, which is
  * resolution-independent and is the reason the vector format is offered at all.
  */
@@ -58,16 +58,6 @@ export async function renderQrSvg(payload: string): Promise<string> {
   // sensible size instead of 41 pixels across when the owner double-clicks it.
   return QRCode.toString(payload, {
     type: 'svg',
-    errorCorrectionLevel: ERROR_CORRECTION,
-    margin: QUIET_ZONE_MODULES,
-    width: IMAGE_WIDTH_PX,
-    color: PRINT_COLORS,
-  });
-}
-
-export async function renderQrPng(payload: string): Promise<Buffer> {
-  return QRCode.toBuffer(payload, {
-    type: 'png',
     errorCorrectionLevel: ERROR_CORRECTION,
     margin: QUIET_ZONE_MODULES,
     width: IMAGE_WIDTH_PX,

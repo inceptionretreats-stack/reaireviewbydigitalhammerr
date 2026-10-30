@@ -21,12 +21,6 @@ export type PropertyValue = string | number | boolean | null;
 export type EventPayload<E extends EventName> = Record<EventRequiredProps[E], PropertyValue> &
   Partial<Record<EventOptionalProps[E], PropertyValue>>;
 
-export interface AnalyticsEventInput<E extends EventName = EventName> {
-  name: E;
-  properties: EventPayload<E>;
-  occurredAt?: Date;
-}
-
 /**
  * Validates a payload against the taxonomy at runtime.
  *
