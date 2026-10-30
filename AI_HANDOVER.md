@@ -1,5 +1,33 @@
 # Ai Review by Digital Hammerr — AI project handover
 
+**Owner mobile app, mobile API access and the September/October fixes are live: 30 October 2026.**
+Branch `codex/recover-2026-09-24-1312` (pushed; `main` still holds the unmerged 24–25 September
+restructure). Production deployment `dpl_GXPx3F8puPbG5brUbVvp4P4jJEXN` is READY and promoted to
+`aireview.digitalhammerr.com`. It is the first CLI build in `sin1` (`vercel deploy --prod --skip-domain
+--regions sin1`, smoke-tested with `vercel curl`, then `vercel promote`); earlier CLI builds ran in
+`iad1`. Previous production, for rollback: `dpl_9jjN2p4wG3hu2kcL2DAPi7oJn2AR`
+(`ai-review-n7w1ryycx-…`). What shipped:
+
+- The 25 September account/billing/generation fixes and the 3 October Ai draft changes (section 17).
+  The database integration suite passes in full (13 files, 108 tests) when sessions run in UTC like
+  Supabase. On the local embedded Postgres, which runs in Asia/Kolkata, the cron maintenance test
+  fails with an overlapping-partition error; run it with `PGOPTIONS="-c timezone=UTC"`.
+- `apps/web/lib/mobile-client.ts`: the API also accepts `X-Client: ai-review-mobile` and
+  `Authorization: Bearer <session token>` for the Flutter app. With `X-Client`, login, signup and
+  password change return the token in the body. New reads: `GET /api/v1/account`,
+  `GET /api/v1/review-requests`, and `enabled`/`kind` on `GET /api/v1/business/review-destination`.
+- App Links: `public/.well-known/assetlinks.json` (upload key only, so far) makes `/app` dashboard
+  links open the Android app.
+- Unused media (about 24 MB), dependencies, CSS (about 3,000 lines) and components removed, matching
+  `main`'s verified clean-up 6906c14 wherever this branch had not diverged.
+
+The Flutter owner app is in `apps/mobile`: see `apps/mobile/README.md` (running, auth, release,
+signing, App Links, the in-app purchase switch) and `apps/mobile/store/listing.md` (Play listing).
+The Play upload keystore is outside the repo in `%USERPROFILE%\.android-keys`; back it up.
+Local-only notes: the root `.env` `GEMINI_API_KEY` is rejected by Google (401), so local Ai previews
+fail. `APP_BASE_URL` still points at an expired `dev:up` quick tunnel. Port 3000 was taken by
+another project, so the local web server ran on 3100.
+
 **Pricing details update: 24 September 2026.** Both Free and Pro card `Show more`
 links now lead to the same `/legal/pricing` page. It presents both plans together
 and a side-by-side comparison table below their details. The old
@@ -102,7 +130,7 @@ Read this file before changing the project. Then inspect the relevant current so
 | Vercel project                               | `ai-review-dh` in the existing Inception account; verify actual linkage before any further deployment                                                                                       |
 | Deployment account preference                | The user explicitly requested the **Inception** account. Do not deploy to another account by default.                                                                                       |
 | Historical Git snapshot at original handover | Branch `main`; commit observed on 18 September: `4c370b8` — `Release latest website, review video, and dashboard updates`                                                                   |
-| Important status                             | Preserve the substantial dirty worktree. Latest vendor-UI production deployment is `dpl_6UUKfgDMrXF19uGGc2bSCf9xrVPC`, promoted on 23 September; it retains the completed Supabase cutover. |
+| Important status                             | Work is committed on `codex/recover-2026-09-24-1312`. Latest production deployment is `dpl_GXPx3F8puPbG5brUbVvp4P4jJEXN`, promoted on 30 October 2026 (see the top of this file); it retains the completed Supabase cutover. |
 
 ### First instructions for the next Ai
 
@@ -567,7 +595,7 @@ The footer's policy links are separate from the three primary marketing navigati
 
 ## 17. Known issues and unfinished work
 
-These are **source-level findings or explicitly unresolved operational decisions**, not proof of a live exploit. Re-check current code, reproduce safely and obtain approval before changing behaviour. The 25 September 2026 maintenance changes below are local only: they have not been deployed or verified against the owner’s database.
+These are **source-level findings or explicitly unresolved operational decisions**, not proof of a live exploit. Re-check current code, reproduce safely and obtain approval before changing behaviour. The 25 September 2026 maintenance changes below were committed and deployed to production on 30 October 2026 (see the top of this file). Their database integration tests passed in UTC sessions.
 
 ### Billing and quota — high priority before claiming launch readiness
 
@@ -580,8 +608,7 @@ These are **source-level findings or explicitly unresolved operational decisions
 4. Later CRM statuses (`AI_GENERATED`, `REVIEW_COPIED`, `GOOGLE_OPENED`, `PRIVATE_FEEDBACK`) are defined, but no production status writers were found. Current automatic status updates cover preparation, manual sent marking and tracked-link clicking.
 5. Existing tracked request tokens have no expiry column; the public resolver does not check a linked contact's soft deletion. Do not promise deleting a contact immediately revokes every previously sent link.
 
-**Locally addressed on 25 September, pending database/live verification:** settlement no longer reactivates a fully refunded payment; failed pending refunds restore the prior paid period only when the matching audit proves the refund caused cancellation; password changes sweep and rotate sessions in the credential transaction; credential/email changes invalidate outstanding reset tokens; signup has an application limiter; legacy login DELETE now delegates to durable CSRF-checked logout; slug review records `review_page_view` (it already restored drafts); public generation validates its request and parent ownership; Ai context writes lock and recheck business status; cookie-free generation is rate-limited. None of these local changes should be described as already live.
-
+**Addressed on 25 September, live since 30 October 2026:** settlement no longer reactivates a fully refunded payment; failed pending refunds restore the prior paid period only when the matching audit proves the refund caused cancellation; password changes sweep and rotate sessions in the credential transaction; credential/email changes invalidate outstanding reset tokens; signup has an application limiter; legacy login DELETE now delegates to durable CSRF-checked logout; slug review records `review_page_view` (it already restored drafts); public generation validates its request and parent ownership; Ai context writes lock and recheck business status; cookie-free generation is rate-limited.
 ### Owner/operations decisions still pending
 
 - Exact Pro refund window, eligibility and processing deadline. The public page says these are unconfirmed; do not invent an automatic refund or blanket no-refund rule.
